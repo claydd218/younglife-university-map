@@ -10,7 +10,7 @@ const CONFIG = {
   // Google Sheets: File > Share > Publish to web > select the Ministries
   // sheet/tab > CSV > Publish, then paste the generated link below.
   // Leave as-is to keep using the local sample data in /data.
-  MINISTRIES_CSV_URL: 'data/ministries-sample.csv',
+  MINISTRIES_CSV_URL: 'data/ministries.csv',
 
   // Same idea, for the country -> division lookup table below. Most sites
   // will never need to change this from the bundled file, but it can also
