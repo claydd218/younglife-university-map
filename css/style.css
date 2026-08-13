@@ -1,0 +1,759 @@
+:root {
+  --parchment: #f1e6cd;
+  --ocean: #c9d3c2;
+  --ink: #3b2a1a;
+  --ink-soft: #6b5a44;
+  --card-bg: #f7efdc;
+  --border-soft: rgba(59, 42, 26, 0.25);
+  /* Exposed so JS can read the notch/rounded-corner safe area on the sides
+     (landscape iPhone in particular) — env() itself isn't readable from JS. */
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+* { box-sizing: border-box; }
+
+/* Replace the browser's default blue focus ring with a subtler ink-toned
+   one, and only show it for keyboard navigation (not mouse clicks). */
+*:focus {
+  outline: 2px solid rgba(59, 42, 26, 0.55);
+  outline-offset: 1px;
+}
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+html, body {
+  height: 100%;
+  height: 100dvh;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  font-family: 'EB Garamond', Georgia, serif;
+  color: var(--ink);
+  background: var(--ocean);
+}
+
+h1, h2, h3, .legend-label, .cluster-badge {
+  font-family: 'Cinzel', 'Times New Roman', serif;
+}
+
+/* ---------- Header ---------- */
+
+.site-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 900;
+  text-align: center;
+  padding: max(14px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 10px max(20px, env(safe-area-inset-left));
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(241, 230, 205, 0.92) 0%, rgba(241, 230, 205, 0) 100%);
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: clamp(18px, 3vw, 30px);
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+}
+
+/* Temporary — bumped on each change so you can confirm your phone actually
+   reloaded the latest version rather than showing a cached page. Remove
+   once we're done debugging. */
+.debug-build {
+  display: inline-block;
+  font-family: -apple-system, sans-serif;
+  font-size: 11px;
+  letter-spacing: normal;
+  font-weight: normal;
+  vertical-align: middle;
+  color: #a33;
+  background: #fff;
+  border: 1px solid #a33;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 6px;
+}
+
+/* ---------- Map ---------- */
+
+#map {
+  position: absolute;
+  /* Kept just inside the decorative frame's border+outline rings below, so
+     the body's ocean-colored background shows through as solid "matting"
+     instead of the map bleeding through the transparent gap between them. */
+  top: max(11px, env(safe-area-inset-top));
+  left: max(11px, env(safe-area-inset-left));
+  right: max(11px, env(safe-area-inset-right));
+  bottom: max(11px, env(safe-area-inset-bottom));
+  background: var(--ocean);
+}
+
+.leaflet-container {
+  background: var(--ocean);
+  font-family: 'EB Garamond', Georgia, serif;
+}
+
+/* #map has no z-index of its own, so without this its popups stack below
+   .site-header (900) regardless of Leaflet's internal pane order (700). */
+.leaflet-popup-pane {
+  z-index: 1000 !important;
+}
+
+.ocean-label {
+  background: transparent;
+  border: none;
+  pointer-events: none;
+}
+
+.ocean-label span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1.1;
+  font-family: 'Pinyon Script', cursive;
+  font-size: 18px;
+  color: #5c7267;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  letter-spacing: 0.03em;
+}
+
+.country-tooltip {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-style: italic;
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  color: var(--ink);
+  box-shadow: 1px 1px 3px rgba(0,0,0,0.25);
+}
+
+/* ---------- Decorative frame & texture ---------- */
+
+.frame-border {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  border: 2px solid var(--ink);
+  outline: 1px solid var(--ink-soft);
+  outline-offset: 4px;
+  pointer-events: none;
+  z-index: 950;
+}
+
+.paper-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 400;
+  opacity: 0.06;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+.compass-rose {
+  display: none;
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 500;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* ---------- Legend ---------- */
+
+.legend {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 900;
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+  padding: 10px 14px 8px;
+  max-width: 240px;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
+}
+
+.legend-swipe-zone {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.legend-swipe-zone:active {
+  cursor: grabbing;
+}
+
+.legend-handle {
+  width: 34px;
+  height: 4px;
+  margin: 0 auto 6px;
+  background: var(--ink-soft);
+  border-radius: 2px;
+  opacity: 0.45;
+}
+
+.legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 6px;
+}
+
+.legend.legend-collapsed .legend-header {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.legend-title {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.legend-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: var(--parchment);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  cursor: pointer;
+}
+
+.legend-toggle:hover {
+  background: var(--card-bg);
+}
+
+.legend-toggle .chevron-icon {
+  transition: transform 0.2s ease;
+}
+
+.legend.legend-collapsed .legend-toggle .chevron-icon {
+  transform: rotate(180deg);
+}
+
+.legend-body h3 {
+  margin: 12px 0 8px;
+  font-size: 13px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 5px;
+  font-family: 'Cinzel', serif;
+}
+
+.legend-body h3:first-child {
+  margin-top: 10px;
+}
+
+.legend.legend-collapsed {
+  padding-bottom: 10px;
+}
+
+.legend.legend-collapsed .legend-body {
+  display: none;
+}
+
+.legend-body {
+  /* Same fix as the popup: on a short viewport (e.g. phone landscape) the
+     full division + stage list can be taller than the screen. Cap it and
+     scroll internally instead of letting it run off-screen. */
+  max-height: 50vh;
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+
+.legend ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legend li {
+  margin: 4px 0;
+}
+
+.legend-division-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.legend-label {
+  letter-spacing: 0.01em;
+}
+
+/* ---------- Status banner ---------- */
+
+.status-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+  padding: 12px 20px;
+  font-style: italic;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+}
+
+.status-banner.status-error {
+  color: #7a1f1f;
+  border-color: #7a1f1f;
+}
+
+/* ---------- Pin shapes ---------- */
+
+.ministry-marker {
+  background: transparent;
+  border: none;
+}
+
+.pin-shape {
+  display: block;
+  width: 16px;
+  height: 16px;
+  background: var(--pin-color);
+  border: 1.5px solid var(--ink);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.45);
+}
+
+.pin-dot {
+  /* A filled circle reads visually heavier than a star of the same
+     bounding box (the star's points leave more background showing
+     through), so it's sized down a bit to look balanced against it. */
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin: 3px;
+}
+
+.pin-star {
+  background: var(--pin-color);
+  border: none;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.45));
+}
+
+.legend .pin-shape {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.legend .pin-dot {
+  width: 8px;
+  height: 8px;
+  margin: 2.5px;
+}
+
+.color-swatch {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  flex: 0 0 auto;
+}
+
+.legend-stage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+/* ---------- Clusters ---------- */
+
+.ministry-cluster {
+  background: transparent;
+}
+
+.cluster-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--cluster-color);
+  border: 2px solid var(--ink);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.55);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* ---------- Popups ---------- */
+
+.leaflet-popup-content-wrapper {
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.35);
+}
+
+.leaflet-popup-content {
+  margin: 0;
+  width: 380px !important;
+  /* A popup taller than the viewport can't be fully auto-panned into view,
+     and on iOS Safari that seems to trip the address bar's show/hide (which
+     fires a resize we listen for elsewhere to keep the map sized correctly)
+     right as the popup is opening, dismissing it. Capping the height and
+     scrolling internally avoids ever hitting that case. */
+  max-height: 70vh;
+  max-height: 70dvh;
+  overflow-y: auto;
+  /* A scrollable box sitting inside a pannable map is a known source of
+     touch-gesture ambiguity on iOS Safari — it can misjudge a finger drag
+     meant to scroll the popup as a drag meant to pan the map underneath,
+     and mishandling that is a common cause of a popup dismissing itself
+     mid-touch. This tells the browser a vertical drag here always means
+     "scroll this box," never "pan the map." */
+  touch-action: pan-y;
+}
+
+.leaflet-popup-tip {
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+}
+
+/* Leaflet's own rule is ".leaflet-container a.leaflet-popup-close-button"
+   (two classes + a tag) — a plain ".leaflet-popup-close-button" loses to
+   that on specificity regardless of source order, so match it exactly. */
+.leaflet-container a.leaflet-popup-close-button {
+  top: 10px;
+  right: 10px;
+  color: var(--ink-soft);
+  font-family: 'EB Garamond', Georgia, serif;
+}
+
+.popup-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-photo {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.popup-photo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fallback-color);
+  color: var(--ink);
+}
+
+.popup-photo-fallback span {
+  font-family: 'Cinzel', serif;
+  font-size: 22px;
+  text-align: center;
+  padding: 0 16px;
+  opacity: 0.8;
+}
+
+.popup-body {
+  padding: 14px 16px 16px;
+}
+
+.popup-header-body {
+  padding-bottom: 10px;
+}
+
+.popup-body h3 {
+  margin: 0 0 4px;
+  font-size: 21px;
+  color: var(--ink);
+}
+
+.popup-staff {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.popup-staff-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 0;
+}
+
+.popup-staff-item:first-child {
+  padding-top: 0;
+}
+
+.popup-staff-photo {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--ink);
+  flex: 0 0 auto;
+}
+
+.popup-staff-photo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fallback-color);
+  color: var(--ink);
+}
+
+.popup-staff-photo-fallback span {
+  font-family: 'Cinzel', serif;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.popup-staff-text {
+  display: flex;
+  flex-direction: column;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.staff-name {
+  font-weight: 600;
+}
+
+.staff-title {
+  color: var(--ink-soft);
+  font-style: italic;
+  font-size: 14px;
+}
+
+.popup-universities {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--border-soft);
+  font-size: 16px;
+}
+
+.popup-universities li {
+  margin: 3px 0;
+}
+
+.university-year {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.popup-blurb-body {
+  padding: 12px 16px 0;
+}
+
+/* Leaflet's own stylesheet sets ".leaflet-popup-content p { margin: 18px 0 }"
+   at higher specificity than a single class, which was silently winning over
+   margin:0 below and throwing off the top/bottom balance. */
+.popup-card .popup-blurb {
+  margin: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 16px;
+  line-height: 1.5;
+  font-style: italic;
+  color: var(--ink);
+}
+
+/* ---------- Leaflet control chrome (zoom + search), matched to the legend ---------- */
+
+.leaflet-bar {
+  border: 1px solid var(--ink) !important;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.25) !important;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background-color: var(--card-bg);
+  color: var(--ink);
+  border-bottom-color: var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leaflet-bar a:hover {
+  background-color: var(--parchment);
+}
+
+/* Fixed rather than safe-area-based on purpose: the safe-area inset changes
+   a lot between portrait (bottom inset, for the home indicator) and
+   landscape (right inset, for the notch), which made these controls sit at
+   a different distance from the corner depending on orientation. A plain
+   fixed margin keeps them in the same spot always. */
+.leaflet-right .leaflet-control {
+  margin-right: 16px;
+}
+
+.leaflet-bottom.leaflet-right .leaflet-control:last-child {
+  margin-bottom: 16px;
+}
+
+/* ---------- Country directory ---------- */
+
+.directory-control-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.directory-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(30, 22, 12, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.directory-modal[hidden] {
+  display: none;
+}
+
+.directory-card {
+  width: min(480px, 92vw);
+  max-height: min(640px, 86vh);
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+  box-shadow: 3px 3px 14px rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px;
+}
+
+.directory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 8px;
+}
+
+.directory-header h2 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: 0.04em;
+}
+
+.directory-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.directory-search {
+  margin: 12px 0 8px;
+  padding: 7px 10px;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 16px;
+  border: 1px solid var(--border-soft);
+  background: var(--parchment);
+  color: var(--ink);
+}
+
+.directory-search:focus {
+  outline: 1px solid var(--ink);
+}
+
+.directory-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.directory-group {
+  margin-bottom: 10px;
+}
+
+.directory-group h3 {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 10px 0 4px;
+  font-family: 'Cinzel', serif;
+}
+
+.directory-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.directory-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(59,42,26,0.08);
+  text-align: left;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 16px;
+  color: var(--ink);
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.directory-link:hover {
+  background: var(--parchment);
+}
+
+.directory-count {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 640px) {
+  .legend {
+    max-width: 168px;
+    padding: 8px 10px 6px;
+    font-size: 13px;
+  }
+  .compass-rose {
+    width: 80px;
+    height: 80px;
+  }
+  .site-header h1 {
+    font-size: 16px;
+  }
+  .leaflet-popup-content {
+    width: 300px !important;
+  }
+}
