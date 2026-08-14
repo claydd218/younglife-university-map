@@ -609,13 +609,18 @@ h1, h2, h3, .legend-label, .cluster-badge {
    a lot between portrait (bottom inset, for the home indicator) and
    landscape (right inset, for the notch), which made these controls sit at
    a different distance from the corner depending on orientation. A plain
-   fixed margin keeps them in the same spot always. */
+   fixed margin keeps them in the same spot always.
+
+   The value is 5px, not the legend's 16px, because these controls live
+   inside #map, which is already inset 11px from the viewport on its own
+   (the decorative frame gap) — 11 + 5 = 16px from the viewport, matching
+   the legend's fixed-positioned 16px offset from the opposite corner. */
 .leaflet-right .leaflet-control {
-  margin-right: 16px;
+  margin-right: 5px;
 }
 
 .leaflet-bottom.leaflet-right .leaflet-control:last-child {
-  margin-bottom: 16px;
+  margin-bottom: 5px;
 }
 
 /* ---------- Country directory ---------- */
