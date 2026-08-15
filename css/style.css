@@ -61,24 +61,6 @@ h1, h2, h3, .legend-label, .cluster-badge {
   text-shadow: 0 1px 0 rgba(255,255,255,0.4);
 }
 
-/* Temporary — bumped on each change so you can confirm your phone actually
-   reloaded the latest version rather than showing a cached page. Remove
-   once we're done debugging. */
-.debug-build {
-  display: inline-block;
-  font-family: -apple-system, sans-serif;
-  font-size: 11px;
-  letter-spacing: normal;
-  font-weight: normal;
-  vertical-align: middle;
-  color: #a33;
-  background: #fff;
-  border: 1px solid #a33;
-  border-radius: 3px;
-  padding: 1px 5px;
-  margin-left: 6px;
-}
-
 /* ---------- Map ---------- */
 
 #map {
