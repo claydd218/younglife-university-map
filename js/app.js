@@ -488,6 +488,48 @@ function wireDirectoryControls() {
   });
 }
 
+// Staff photos in popups are tiny (58px); this shows an enlarged version near
+// the cursor on hover. Uses delegated listeners on `document` rather than
+// binding per-photo, since popup content is created/destroyed by Leaflet on
+// the fly. Rendered as one reused fixed-position element (see .photo-preview
+// in style.css) instead of expanding the thumbnail in place, because
+// .leaflet-popup-content clips overflow and would crop anything larger than
+// the popup itself.
+function wirePhotoPreview() {
+  const preview = document.getElementById('photo-preview');
+  const SIZE = 200;
+  const GAP = 12;
+
+  function show(img) {
+    const rect = img.getBoundingClientRect();
+    let left = rect.right + GAP;
+    if (left + SIZE > window.innerWidth - 8) left = rect.left - GAP - SIZE;
+    left = Math.max(8, Math.min(left, window.innerWidth - SIZE - 8));
+    const top = Math.max(8, Math.min(
+      rect.top + rect.height / 2 - SIZE / 2,
+      window.innerHeight - SIZE - 8,
+    ));
+    preview.src = img.currentSrc || img.src;
+    preview.style.left = `${left}px`;
+    preview.style.top = `${top}px`;
+    preview.classList.add('visible');
+  }
+
+  function hide() {
+    preview.classList.remove('visible');
+  }
+
+  document.addEventListener('mouseover', (e) => {
+    const img = e.target.closest('img.popup-staff-photo');
+    if (img) show(img);
+  });
+  document.addEventListener('mouseout', (e) => {
+    if (e.target.closest('img.popup-staff-photo')) hide();
+  });
+  map.on('popupclose', hide);
+  map.on('movestart', hide);
+}
+
 async function init() {
   showStatus('Loading ministries…');
   try {
@@ -583,6 +625,7 @@ async function init() {
     wireLegendToggle();
     buildCountryDirectory(ministryRows);
     wireDirectoryControls();
+    wirePhotoPreview();
 
     if (unmatchedCountries.size) {
       console.warn(

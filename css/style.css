@@ -517,6 +517,32 @@ h1, h2, h3, .legend-label, .cluster-badge {
   object-fit: cover;
   border: 1.5px solid var(--ink);
   flex: 0 0 auto;
+  cursor: pointer;
+}
+
+/* Enlarged preview shown on hover of a .popup-staff-photo. Rendered as a
+   single fixed-position element reused across every photo (JS repositions
+   and re-sources it) rather than nested in the popup, since
+   .leaflet-popup-content clips overflow and would crop anything that tried
+   to expand outward from inside it. */
+.photo-preview {
+  position: fixed;
+  z-index: 1200;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 12px rgba(0,0,0,0.4);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.photo-preview.visible {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .popup-staff-photo-fallback {
