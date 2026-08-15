@@ -424,10 +424,12 @@ h1, h2, h3, .legend-label, .cluster-badge {
    (two classes + a tag) — a plain ".leaflet-popup-close-button" loses to
    that on specificity regardless of source order, so match it exactly. */
 .leaflet-container a.leaflet-popup-close-button {
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  font: 26px/32px 'EB Garamond', Georgia, serif;
   color: var(--ink-soft);
-  font-family: 'EB Garamond', Georgia, serif;
 }
 
 .popup-card {
