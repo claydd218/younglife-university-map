@@ -522,12 +522,18 @@ function wirePhotoPreview() {
     activeImg = null;
   }
 
-  document.addEventListener('mouseover', (e) => {
+  // Real mouse hover only (not 'mouseover'/'mouseout' — iOS synthesizes
+  // those right after a touch tap to support legacy hover handlers, which
+  // was re-triggering show() the instant a press-and-hold below released.
+  // Pointer Events don't have that legacy synthesis, so scoping to
+  // pointerType 'mouse' here fully separates the two input paths.
+  document.addEventListener('pointerover', (e) => {
+    if (e.pointerType !== 'mouse') return;
     const img = e.target.closest('img.popup-staff-photo');
     if (img) { show(img); activeImg = img; }
   });
-  document.addEventListener('mouseout', (e) => {
-    if (e.target.closest('img.popup-staff-photo')) hide();
+  document.addEventListener('pointerout', (e) => {
+    if (e.pointerType === 'mouse' && e.target.closest('img.popup-staff-photo')) hide();
   });
   // iOS/touch has no hover, so this is press-and-hold instead: show on
   // touchstart, hide on release wherever it happens (touchend/touchcancel,
