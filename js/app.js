@@ -515,16 +515,33 @@ function wirePhotoPreview() {
     preview.classList.add('visible');
   }
 
+  let activeImg = null;
+
   function hide() {
     preview.classList.remove('visible');
+    activeImg = null;
   }
 
   document.addEventListener('mouseover', (e) => {
     const img = e.target.closest('img.popup-staff-photo');
-    if (img) show(img);
+    if (img) { show(img); activeImg = img; }
   });
   document.addEventListener('mouseout', (e) => {
     if (e.target.closest('img.popup-staff-photo')) hide();
+  });
+  // iOS/touch has no hover, so a tap toggles the preview instead — show it
+  // on first tap of a photo, hide on a second tap of the same photo or a
+  // tap anywhere else (including the map underneath, since .photo-preview
+  // has pointer-events: none and lets taps pass through to whatever's below).
+  document.addEventListener('click', (e) => {
+    const img = e.target.closest('img.popup-staff-photo');
+    if (img) {
+      e.stopPropagation();
+      if (activeImg === img) hide();
+      else { show(img); activeImg = img; }
+      return;
+    }
+    hide();
   });
   map.on('popupclose', hide);
   map.on('movestart', hide);
