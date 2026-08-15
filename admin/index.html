@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — YoungLife University International Ministries</title>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 980px;
+    margin: 32px auto;
+    padding: 0 20px 80px;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #ddd;
+  }
+  .tab-btn {
+    font: inherit;
+    font-size: 14px;
+    padding: 10px 16px;
+    border: none;
+    background: none;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn.active { color: #1a1a1a; border-bottom-color: #1a1a1a; font-weight: 600; }
+  .tab-panel[hidden] { display: none; }
+
+  .banner {
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  .banner.info { background: #eef4fb; border: 1px solid #bcd6ef; color: #1a4b7a; }
+  .banner.error { background: #fdecea; border: 1px solid #f3b6b0; color: #8a2c22; }
+  .banner.conflict { background: #fff6e5; border: 1px solid #f0d488; color: #7a5a1a; }
+  .banner button {
+    font: inherit;
+    font-size: 13px;
+    margin-left: 10px;
+    padding: 4px 10px;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  .banner[hidden] { display: none; }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .btn {
+    font: inherit;
+    font-size: 14px;
+    padding: 8px 14px;
+    border: 1px solid #1a1a1a;
+    border-radius: 5px;
+    background: #1a1a1a;
+    color: #fff;
+    cursor: pointer;
+  }
+  .btn:hover { background: #333; }
+  .btn.secondary { background: #fff; color: #1a1a1a; }
+  .btn.secondary:hover { background: #f0f0f0; }
+  .btn.danger { background: #a33; border-color: #a33; }
+  .btn.danger:hover { background: #8a2c22; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px; font-size: 13.5px; border-bottom: 1px solid #eee; }
+  th { background: #f4f4f4; font-weight: 600; color: #444; }
+  tr:last-child td { border-bottom: none; }
+  td.actions { white-space: nowrap; text-align: right; }
+  td.actions button { margin-left: 6px; }
+  .btn-small { font-size: 12.5px; padding: 5px 10px; }
+
+  dialog#ministry-dialog {
+    width: min(640px, 92vw);
+    max-height: 88vh;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0;
+  }
+  dialog#ministry-dialog::backdrop { background: rgba(0,0,0,0.4); }
+  .dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #eee;
+  }
+  .dialog-header h2 { font-size: 17px; margin: 0; }
+  .dialog-body { padding: 16px 20px; overflow-y: auto; max-height: calc(88vh - 130px); }
+  .dialog-footer { padding: 14px 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 8px; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
+  .field input[type="text"], .field input[type="number"], .field textarea, .field input[list] {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    padding: 7px 9px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+  .field textarea { min-height: 70px; resize: vertical; }
+  .field-error { color: #a33; font-size: 12.5px; margin-top: 3px; }
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1; }
+
+  .repeatable-group { border: 1px solid #e5e5e5; border-radius: 6px; padding: 10px; margin-bottom: 8px; }
+  .repeatable-item { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed #eee; }
+  .repeatable-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .repeatable-item .field { flex: 1; margin-bottom: 0; }
+  .repeatable-item .remove-row { flex: 0 0 auto; margin-top: 22px; }
+
+  .photo-widget {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px dashed #ccc;
+    border-radius: 6px;
+    padding: 8px;
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: #666;
+  }
+  .photo-widget.dragover { background: #eef4fb; border-color: #7aa8d8; }
+  .photo-widget img.photo-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 1px solid #ccc; flex: 0 0 auto; }
+  .photo-widget .photo-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #eee; flex: 0 0 auto; }
+  .photo-widget input[type="file"] { font-size: 12px; }
+
+  /* --- Images tab --- */
+  .summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  .guidance {
+    background: #eef4fb;
+    border: 1px solid #bcd6ef;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #1a4b7a;
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .filter-toggle {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #666;
+  }
+  .filter-toggle.on.status-missing { border-color: #c0392b; color: #c0392b; background: #fdecea; }
+  .filter-toggle.on.status-low { border-color: #b8860b; color: #8a6500; background: #fff6e5; }
+  .filter-toggle.on.status-good { border-color: #1e7a3c; color: #1e7a3c; background: #eafaf0; }
+
+  h2.division { font-size: 17px; margin: 26px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #1a1a1a; }
+  h3.country { font-size: 14.5px; margin: 16px 0 6px; color: #333; }
+  ul.entry-list { list-style: none; margin: 0 0 4px; padding: 0; font-size: 13.5px; }
+  ul.entry-list li.entry { padding: 6px 0; border-bottom: 1px solid #eee; }
+  .entry-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .entry-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+  .status-dot.status-missing { background: #c0392b; }
+  .status-dot.status-low { background: #d4a017; }
+  .status-dot.status-good { background: #2e8b45; }
+  .who { color: #1a1a1a; }
+  .who .role { color: #888; font-style: italic; margin-left: 4px; }
+  .who-btn { background: none; border: none; padding: 0; font: inherit; cursor: pointer; text-align: left; }
+  .who-btn:hover .who { text-decoration: underline; }
+  .kind-tag { display: inline-block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #888; width: 42px; flex: 0 0 auto; }
+  .dims { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; color: #888; margin-left: 8px; }
+  .entry-actions { flex: 0 0 auto; display: flex; gap: 6px; }
+  .preview img { display: block; max-width: 200px; max-height: 140px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; margin: 8px 0 2px; }
+  #images-report .entry[data-status="missing"].hide-status,
+  #images-report .entry[data-status="low"].hide-status,
+  #images-report .entry[data-status="good"].hide-status { display: none; }
+
+  .status-text { color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+
+  <h1>Admin</h1>
+  <p class="subtitle">
+    Edit ministry data and staff/city photos. Every save here is a real
+    commit to the site's GitHub repo, same as any other change — nothing is
+    stored separately from what the public map reads.
+  </p>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="tabs">
+    <button type="button" class="tab-btn active" data-tab="ministries">Ministries</button>
+    <button type="button" class="tab-btn" data-tab="images">Images</button>
+  </div>
+
+  <section id="tab-ministries" class="tab-panel">
+    <div class="toolbar">
+      <span id="ministries-count" class="status-text"></span>
+      <button type="button" class="btn" id="add-ministry-btn">+ Add new ministry</button>
+    </div>
+    <table id="ministries-table">
+      <thead>
+        <tr>
+          <th>City</th>
+          <th>Country</th>
+          <th>Staff</th>
+          <th>Opened</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="ministries-tbody"></tbody>
+    </table>
+  </section>
+
+  <section id="tab-images" class="tab-panel" hidden>
+    <div class="guidance" id="images-guidance"></div>
+    <div class="summary" id="images-summary">
+      <span class="status-text">Checking images…</span>
+    </div>
+    <div class="filter-bar" id="images-filter-bar"></div>
+    <div id="images-report"></div>
+  </section>
+
+  <dialog id="ministry-dialog">
+    <form id="ministry-form" method="dialog">
+      <div class="dialog-header">
+        <h2 id="dialog-title">Add ministry</h2>
+        <button type="button" class="btn secondary btn-small" id="dialog-close-btn">Close</button>
+      </div>
+      <div class="dialog-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="field-city">City</label>
+            <input type="text" id="field-city" required>
+          </div>
+          <div class="field">
+            <label for="field-country">Country</label>
+            <input type="text" id="field-country" list="country-list" required>
+            <datalist id="country-list"></datalist>
+            <div class="field-error" id="country-error" hidden></div>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="field-lat">Latitude</label>
+            <input type="number" step="any" id="field-lat" required>
+          </div>
+          <div class="field">
+            <label for="field-lng">Longitude</label>
+            <input type="number" step="any" id="field-lng" required>
+          </div>
+          <div class="field">
+            <label for="field-date-opened">Date opened</label>
+            <input type="text" id="field-date-opened" placeholder="e.g. 2025">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>City photo</label>
+          <div class="photo-widget" id="city-photo-widget" data-kind="city"></div>
+        </div>
+
+        <div class="field">
+          <label>Staff</label>
+          <div class="repeatable-group" id="staff-group"></div>
+          <button type="button" class="btn secondary btn-small" id="add-staff-btn">+ Add staff member</button>
+        </div>
+
+        <div class="field">
+          <label>Universities</label>
+          <div class="repeatable-group" id="universities-group"></div>
+          <button type="button" class="btn secondary btn-small" id="add-university-btn">+ Add university</button>
+        </div>
+
+        <div class="field">
+          <label for="field-blurb">Blurb</label>
+          <textarea id="field-blurb"></textarea>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button type="button" class="btn secondary" id="dialog-cancel-btn">Cancel</button>
+        <button type="button" class="btn" id="dialog-save-btn">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="../js/utils.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
