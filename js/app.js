@@ -529,19 +529,20 @@ function wirePhotoPreview() {
   document.addEventListener('mouseout', (e) => {
     if (e.target.closest('img.popup-staff-photo')) hide();
   });
-  // iOS/touch has no hover, so a tap toggles the preview instead — show it
-  // on first tap of a photo, hide on a second tap of the same photo or a
-  // tap anywhere else (including the map underneath, since .photo-preview
-  // has pointer-events: none and lets taps pass through to whatever's below).
-  document.addEventListener('click', (e) => {
+  // iOS/touch has no hover, so this is press-and-hold instead: show on
+  // touchstart, hide on release wherever it happens (touchend/touchcancel,
+  // not just over the photo). Scoped to pointerType 'touch' so it doesn't
+  // also fire on desktop mouse clicks, which already show/hide via hover.
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
     const img = e.target.closest('img.popup-staff-photo');
-    if (img) {
-      e.stopPropagation();
-      if (activeImg === img) hide();
-      else { show(img); activeImg = img; }
-      return;
-    }
-    hide();
+    if (img) { show(img); activeImg = img; }
+  });
+  document.addEventListener('pointerup', (e) => {
+    if (e.pointerType === 'touch') hide();
+  });
+  document.addEventListener('pointercancel', (e) => {
+    if (e.pointerType === 'touch') hide();
   });
   map.on('popupclose', hide);
   map.on('movestart', hide);
