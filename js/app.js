@@ -522,34 +522,36 @@ function wirePhotoPreview() {
     activeImg = null;
   }
 
-  // Real mouse hover only (not 'mouseover'/'mouseout' — iOS synthesizes
-  // those right after a touch tap to support legacy hover handlers, which
-  // was re-triggering show() the instant a press-and-hold below released.
-  // Pointer Events don't have that legacy synthesis, so scoping to
-  // pointerType 'mouse' here fully separates the two input paths.
-  document.addEventListener('pointerover', (e) => {
-    if (e.pointerType !== 'mouse') return;
-    const img = e.target.closest('img.popup-staff-photo');
-    if (img) { show(img); activeImg = img; }
-  });
-  document.addEventListener('pointerout', (e) => {
-    if (e.pointerType === 'mouse' && e.target.closest('img.popup-staff-photo')) hide();
-  });
-  // iOS/touch has no hover, so this is press-and-hold instead: show on
-  // touchstart, hide on release wherever it happens (touchend/touchcancel,
-  // not just over the photo). Scoped to pointerType 'touch' so it doesn't
-  // also fire on desktop mouse clicks, which already show/hide via hover.
-  document.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'touch') return;
-    const img = e.target.closest('img.popup-staff-photo');
-    if (img) { show(img); activeImg = img; }
-  });
-  document.addEventListener('pointerup', (e) => {
-    if (e.pointerType === 'touch') hide();
-  });
-  document.addEventListener('pointercancel', (e) => {
-    if (e.pointerType === 'touch') hide();
-  });
+  // Touch and mouse get entirely separate, non-overlapping listener sets,
+  // decided once here rather than filtered per-event by pointerType. iOS's
+  // touch-to-click emulation fires synthetic hover events that (in testing)
+  // still reported as pointerType 'mouse', defeating that filtering — so
+  // instead a touch-capable device simply never registers a hover listener
+  // at all, leaving nothing for the emulation to trigger.
+  const isTouch = matchMedia('(hover: none), (pointer: coarse)').matches;
+
+  if (isTouch) {
+    // Tap to show, tap again (or tap elsewhere) to dismiss. Press-and-hold
+    // was tried first, but holding past iOS's long-press threshold pops up
+    // Safari's own "Save Image" callout on top of the preview.
+    document.addEventListener('click', (e) => {
+      const img = e.target.closest('img.popup-staff-photo');
+      if (img) {
+        if (activeImg === img) hide();
+        else { show(img); activeImg = img; }
+        return;
+      }
+      hide();
+    });
+  } else {
+    document.addEventListener('mouseover', (e) => {
+      const img = e.target.closest('img.popup-staff-photo');
+      if (img) { show(img); activeImg = img; }
+    });
+    document.addEventListener('mouseout', (e) => {
+      if (e.target.closest('img.popup-staff-photo')) hide();
+    });
+  }
   map.on('popupclose', hide);
   map.on('movestart', hide);
 }

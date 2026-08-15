@@ -518,6 +518,10 @@ h1, h2, h3, .legend-label, .cluster-badge {
   border: 1.5px solid var(--ink);
   flex: 0 0 auto;
   cursor: pointer;
+  /* Without this, holding a tap on iOS (even briefly, reaching for a
+     press-and-hold interaction) can trigger Safari's built-in "Save Image"
+     callout menu on top of our own preview. */
+  -webkit-touch-callout: none;
 }
 
 /* Enlarged preview shown on hover of a .popup-staff-photo. Rendered as a
