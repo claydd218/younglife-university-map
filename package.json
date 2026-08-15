@@ -1,11 +1,11 @@
 {
   "name": "younglife-university-map",
   "private": true,
-  "description": "Dev tooling only — the site itself has no build step. wrangler runs the admin CMS's Cloudflare Pages Functions locally; production deploys still serve the raw repo unchanged (see admin/SETUP.md).",
+  "description": "Dev tooling only — the site itself has no build step. wrangler runs the admin CMS Worker locally (see wrangler.toml, admin/SETUP.md); production deploys still serve the rest of the repo as static assets unchanged.",
   "devDependencies": {
-    "wrangler": "^4"
+    "wrangler": "^4.123.0"
   },
   "scripts": {
-    "dev": "wrangler pages dev . --compatibility-date=2024-09-23"
+    "dev": "wrangler dev"
   }
 }

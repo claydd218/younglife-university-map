@@ -1,9 +1,9 @@
 // Routes /admin/api/upload — add or replace a staff/city photo.
-// Deletion is functions/admin/api/photos/[slug].js.
+// Deletion is worker/routes/photo.js.
 
-import { listDir, deleteFile, putFileBase64, ConflictError } from '../../_lib/github.js';
-import { slugify } from '../../_lib/text.js';
-import { jsonResponse, errorResponse, committerFromRequest } from '../../_lib/http.js';
+import { listDir, deleteFile, putFileBase64, ConflictError } from '../lib/github.js';
+import { slugify } from '../lib/text.js';
+import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
 
 const IMAGES_DIR = 'images';
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB — defense in depth; the client is

@@ -1,12 +1,15 @@
 // Routes /admin/api/ministries — list all ministries (GET) and create a new
-// one (POST). Editing/deleting a specific row is
-// functions/admin/api/ministries/[id].js.
+// one (POST). Editing/deleting a specific row is worker/routes/ministry-detail.js.
+// Dispatched by worker/index.js's router, which builds the same
+// {request, env, params} shape Cloudflare Pages Functions used to provide
+// automatically — kept so this handler code didn't need to change when the
+// project turned out to be a Worker-with-assets deployment, not Pages.
 
-import { getFile, putFile, ConflictError } from '../../_lib/github.js';
-import { parseCsv, stringifyCsv } from '../../_lib/csv.js';
-import { ValidationError } from '../../_lib/text.js';
-import { jsonResponse, errorResponse, committerFromRequest, CONFLICT_MESSAGE } from '../../_lib/http.js';
-import { MINISTRIES_PATH, HEADER, loadDivisions, rowToApi, rowFromBody, maxId } from '../../_lib/ministries.js';
+import { getFile, putFile, ConflictError } from '../lib/github.js';
+import { parseCsv, stringifyCsv } from '../lib/csv.js';
+import { ValidationError } from '../lib/text.js';
+import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
+import { MINISTRIES_PATH, HEADER, loadDivisions, rowToApi, rowFromBody, maxId } from '../lib/ministries.js';
 
 export async function onRequestGet({ env }) {
   const file = await getFile(env, MINISTRIES_PATH);
@@ -37,14 +40,13 @@ export async function onRequestPost({ request, env }) {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  // Re-fetch fresh right before writing — the concurrency contract every
-  // write endpoint shares. If the caller's last-seen sha doesn't match,
-  // reject before ever attempting the GitHub write.
+  // Fetched for content (need every existing row to compute the new id and
+  // append to it), not to pre-check sha — see the longer note in
+  // ministry-detail.js's onRequestPut for why that pre-check was removed
+  // (GitHub read-after-write lag caused real false-positive 409s). GitHub's
+  // own write-time sha check on the putFile call below is authoritative.
   const file = await getFile(env, MINISTRIES_PATH);
   if (!file) return errorResponse(500, 'data/ministries.csv not found in the repo');
-  if (body.sha && body.sha !== file.sha) {
-    return errorResponse(409, CONFLICT_MESSAGE, { error: 'conflict' });
-  }
 
   const { rows } = parseCsv(file.content);
 
@@ -63,7 +65,7 @@ export async function onRequestPost({ request, env }) {
   let result;
   try {
     result = await putFile(env, MINISTRIES_PATH, newCsv, {
-      sha: file.sha,
+      sha: body.sha || file.sha,
       message: `Add ministry: ${newRow.city}, ${newRow.country}`,
       ...committerFromRequest(request),
     });

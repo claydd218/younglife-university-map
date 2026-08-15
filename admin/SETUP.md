@@ -11,23 +11,23 @@ Cloudflare dashboard → **Zero Trust** → **Access** → **Applications** → 
 - **Policy:** an "Emails" rule listing the exact addresses allowed to edit (start with `claydd@gmail.com`; add others as needed later — no code change required, just edit the policy)
 - **Identity provider:** "One-time PIN" (email OTP) — Zero Trust's default, needs no separate SSO setup, good fit for a small group
 
-Once saved, Cloudflare's own login page fronts every request under `/admin*` — there's no way to reach the admin tool or its API without passing that gate first. It also passes through a `Cf-Access-Authenticated-User-Email` header, which the Functions use as the GitHub commit author, so `git log` shows who made each change without any user-accounts code of our own.
+Once saved, Cloudflare's own login page fronts every request under `/admin*` — there's no way to reach the admin tool or its API without passing that gate first. It also passes through a `Cf-Access-Authenticated-User-Email` header, which the Worker uses as the GitHub commit author, so `git log` shows who made each change without any user-accounts code of our own.
 
-## 2. Environment variables (Cloudflare Pages project → Settings → Environment variables)
+## 2. Environment variables (this is a Worker, not classic Pages)
 
-| Name | Value | Scope |
+This site turned out to be deployed as a **Cloudflare Worker with static assets** (confirmed via the dashboard — the project lives under Workers & Pages, URL path `.../workers/services/view/younglife-university-map/...`), not a classic Pages project. That means env vars/secrets are set on the **Worker**, not on a "Pages project" screen:
+
+Cloudflare dashboard → **Workers & Pages** → **younglife-university-map** → **Settings** → **Variables and Secrets**.
+
+| Name | Value | Type |
 |---|---|---|
-| `GITHUB_TOKEN` | A fine-grained GitHub PAT scoped to **only** `claydd218/younglife-university-map`, permission **Contents: Read and write** | **Production only** — leave unset for Preview, see below |
-| `GITHUB_OWNER` | `claydd218` | Production + Preview |
-| `GITHUB_REPO` | `younglife-university-map` | Production + Preview |
-| `GITHUB_BRANCH` | `main` | Production + Preview |
+| `GITHUB_TOKEN` | A fine-grained GitHub PAT scoped to **only** `claydd218/younglife-university-map`, permission **Contents: Read and write** | Secret (encrypted) |
+| `GITHUB_OWNER` | `claydd218` | Plain text |
+| `GITHUB_REPO` | `younglife-university-map` | Plain text |
+| `GITHUB_BRANCH` | `main` | Plain text |
 
-**Why `GITHUB_TOKEN` is Production-only:** Cloudflare Pages spins up a preview deployment for every branch automatically. If a write-capable token were available there too, any preview URL (including from an unmerged/unreviewed branch) could commit real changes to `main`. Leaving it unset means the admin tool simply can't write from a preview URL — which is fine, previews aren't where it's meant to be used.
+**Worth double-checking when you set this up:** confirm whether this dashboard's variables apply only to the production deployment or also to preview/branch builds (Workers' preview-environment model isn't identical to classic Pages, and this repo doesn't define named `[env.*]` sections in `wrangler.toml` to separate them explicitly). If preview builds get the same `GITHUB_TOKEN`, a pushed-but-unmerged branch could write real commits to `main` — if that's the case, avoid pushing admin-tool changes to branches other than `main` until that's resolved, rather than relying on the token being scoped away.
 
 ## 3. Build settings (only matters because this branch adds `package.json`)
 
-Pages project → **Settings** → **Builds & deployments**. Confirm:
-- **Build command:** *(none)*
-- **Build output directory:** `/`
-
-`package.json` here is dev tooling only (`wrangler`, for running the admin Functions locally) — the site itself still has no build step. If Cloudflare's framework auto-detection tries to run `npm install && npm run build` because a `package.json` now exists, it'll fail (no `build` script) and the deploy will show as failed. If that happens, just set Build command to empty explicitly in this screen and redeploy.
+Verify in **Settings** → **Build**: since this repo now has a `wrangler.toml`, Cloudflare's git integration should deploy via `wrangler deploy` automatically — no `npm run build` step should be needed or triggered. `package.json` here is dev tooling only (`wrangler`, for running the admin Worker locally via `npm run dev`); the site itself still has no build step beyond what `wrangler deploy` does on its own.

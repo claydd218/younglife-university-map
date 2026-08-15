@@ -1,8 +1,8 @@
 // Routes /admin/api/photos/:slug — remove a staff/city photo. Powers the
-// Images tab's "Remove" action. Add/replace is functions/admin/api/upload.js.
+// Images tab's "Remove" action. Add/replace is worker/routes/upload.js.
 
-import { listDir, deleteFile, ConflictError } from '../../../_lib/github.js';
-import { jsonResponse, errorResponse, committerFromRequest } from '../../../_lib/http.js';
+import { listDir, deleteFile, ConflictError } from '../lib/github.js';
+import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
 
 const IMAGES_DIR = 'images';
 
