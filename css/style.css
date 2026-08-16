@@ -107,6 +107,27 @@ h1, h2, h3, .legend-label, .cluster-badge {
   letter-spacing: 0.03em;
 }
 
+/* Country names, shown past COUNTRY_LABEL_MIN_ZOOM for countries with a
+   ministry pin (js/app.js's addCountryLabels). */
+.country-name-label {
+  background: transparent;
+  border: none;
+  pointer-events: none;
+}
+
+.country-name-label span {
+  display: block;
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.55);
+}
+
 .country-tooltip {
   font-family: 'EB Garamond', Georgia, serif;
   font-style: italic;

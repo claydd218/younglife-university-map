@@ -14,6 +14,7 @@ const state = {
   geoLayer: null,
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
+  countryLabelGroup: null, // L.layerGroup of country-name labels, shown past a zoom threshold
 };
 
 const map = L.map('map', {
@@ -271,6 +272,41 @@ function addOceanLabels() {
       keyboard: false,
     }).addTo(map);
   }
+}
+
+// One label per country that has at least one ministry pin, placed at that
+// country's polygon bounding-box center (not a true geometric centroid —
+// simple, and matches how OCEAN_LABELS are just reasonable hand-picked
+// points rather than anything more precise). For an archipelago/multi-part
+// country (e.g. the Philippines, Indonesia) that box center can land in
+// open water between land masses; no override list for that yet since it
+// hasn't been checked against every ministry country.
+function addCountryLabels() {
+  state.countryLabelGroup = L.layerGroup();
+  state.geoLayer.eachLayer((layer) => {
+    const name = normalizeCountryName(layer.feature.properties.name);
+    if (!state.countriesWithVisiblePins.has(name)) return;
+    const center = layer.getBounds().getCenter();
+    L.marker(center, {
+      icon: L.divIcon({
+        className: 'country-name-label',
+        html: `<span>${escapeHtml(name)}</span>`,
+        iconSize: [160, 20],
+        iconAnchor: [80, 10],
+      }),
+      interactive: false,
+      keyboard: false,
+    }).addTo(state.countryLabelGroup);
+  });
+  updateCountryLabelVisibility();
+  map.on('zoomend', updateCountryLabelVisibility);
+}
+
+function updateCountryLabelVisibility() {
+  const shouldShow = map.getZoom() >= CONFIG.COUNTRY_LABEL_MIN_ZOOM;
+  const isShown = map.hasLayer(state.countryLabelGroup);
+  if (shouldShow && !isShown) state.countryLabelGroup.addTo(map);
+  else if (!shouldShow && isShown) map.removeLayer(state.countryLabelGroup);
 }
 
 function refreshCountryStyles() {
@@ -647,6 +683,7 @@ async function init() {
 
     recomputeCountriesWithVisiblePins(ministryRows);
     refreshCountryStyles();
+    addCountryLabels();
     buildLegend();
     wireLegendToggle();
     buildCountryDirectory(ministryRows);
