@@ -31,8 +31,13 @@ function jsonError(status, message) {
 }
 
 // Paths reachable without a session — everything else under /admin/ is
-// gated below.
-const PUBLIC_ADMIN_PATHS = new Set(['/admin/login.html', '/admin/api/login', '/admin/api/logout']);
+// gated below. Cloudflare's asset serving 307-redirects requests for a
+// literal *.html file to the extensionless path (found in production:
+// /admin/login.html -> /admin/login), so both forms need to be public or
+// the canonical redirect target gets treated as protected and bounces
+// straight back to the .html form — an infinite redirect loop, which is
+// exactly what happened before this was two entries instead of one.
+const PUBLIC_ADMIN_PATHS = new Set(['/admin/login.html', '/admin/login', '/admin/api/login', '/admin/api/logout']);
 
 export default {
   async fetch(request, env, ctx) {
@@ -44,7 +49,9 @@ export default {
       const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/');
       if (isAdminPath && !PUBLIC_ADMIN_PATHS.has(pathname) && !(await hasValidSession(request, env))) {
         if (pathname.startsWith('/admin/api/')) return jsonError(401, 'Not logged in');
-        return Response.redirect(new URL('/admin/login.html', request.url), 302);
+        // The extensionless path, not /admin/login.html directly — skips
+        // the extra 307 hop from Cloudflare's own *.html canonicalization.
+        return Response.redirect(new URL('/admin/login', request.url), 302);
       }
 
       if (pathname === '/admin/api/login' && method === 'POST') return await login(request, env);

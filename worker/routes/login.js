@@ -10,7 +10,7 @@ export async function login(request, env) {
   const password = form.get('password');
 
   if (!checkPassword(password, env.ADMIN_SHARED_PASSWORD)) {
-    return Response.redirect(new URL('/admin/login.html?error=1', request.url), 302);
+    return Response.redirect(new URL('/admin/login?error=1', request.url), 302);
   }
 
   const cookie = await createSessionCookie(env);
@@ -23,6 +23,6 @@ export async function login(request, env) {
 export async function logout(request) {
   return new Response(null, {
     status: 302,
-    headers: { Location: '/admin/login.html', 'Set-Cookie': clearSessionCookie() },
+    headers: { Location: '/admin/login', 'Set-Cookie': clearSessionCookie() },
   });
 }
