@@ -46,6 +46,20 @@ export default {
     const { method } = request;
 
     try {
+      // TEMPORARY — diagnosing why ADMIN_SHARED_PASSWORD isn't matching on
+      // the deployed preview. Reports presence/length only, never actual
+      // secret values. Remove once resolved.
+      if (pathname === '/admin/api/debug-env') {
+        return new Response(JSON.stringify({
+          GITHUB_TOKEN: typeof env.GITHUB_TOKEN === 'string' ? `present, ${env.GITHUB_TOKEN.length} chars` : 'MISSING',
+          GITHUB_OWNER: env.GITHUB_OWNER || 'MISSING',
+          GITHUB_REPO: env.GITHUB_REPO || 'MISSING',
+          GITHUB_BRANCH: env.GITHUB_BRANCH || 'MISSING',
+          ADMIN_SHARED_PASSWORD: typeof env.ADMIN_SHARED_PASSWORD === 'string' ? `present, ${env.ADMIN_SHARED_PASSWORD.length} chars` : 'MISSING',
+          ADMIN_SESSION_SECRET: typeof env.ADMIN_SESSION_SECRET === 'string' ? `present, ${env.ADMIN_SESSION_SECRET.length} chars` : 'MISSING',
+        }), { headers: { 'Content-Type': 'application/json' } });
+      }
+
       const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/');
       if (isAdminPath && !PUBLIC_ADMIN_PATHS.has(pathname) && !(await hasValidSession(request, env))) {
         if (pathname.startsWith('/admin/api/')) return jsonError(401, 'Not logged in');
