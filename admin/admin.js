@@ -450,10 +450,6 @@ function addStaffRow(prefill = {}) {
   photoWidget.className = 'photo-widget';
   item.appendChild(photoWidget);
 
-  const separator = document.createElement('hr');
-  separator.className = 'row-separator';
-  item.appendChild(separator);
-
   item.appendChild(makeRemoveButton({
     danger: true,
     confirmMessage: 'Remove this staff member? This can’t be undone after you save the ministry.',
