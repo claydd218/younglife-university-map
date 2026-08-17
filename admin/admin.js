@@ -279,6 +279,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
       zoomRow.hidden = true;
     }
   });
+  zoomImg.addEventListener('click', () => { zoomRow.hidden = true; });
 
   // Exposed on the DOM node (rather than returned) so code outside the
   // async findExistingImageUrl().then(wireWidget) chain — e.g. the Close
