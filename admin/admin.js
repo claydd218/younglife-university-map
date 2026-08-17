@@ -496,7 +496,6 @@ function openDialog(row) {
   $('field-country').value = row ? row.country : '';
   $('field-lat').value = row ? row.lat : '';
   $('field-lng').value = row ? row.lng : '';
-  $('field-date-opened').value = row ? row.date_opened : '';
   $('field-blurb').value = row ? row.blurb : '';
 
   $('staff-group').innerHTML = '';
@@ -529,6 +528,21 @@ function collectRepeatable(group, nameField, metaField) {
     [nameField]: item.querySelector('.row-name').value.trim(),
     [metaField]: item.querySelector('.row-meta').value.trim(),
   })).filter((entry) => entry[nameField]);
+}
+
+// There's no standalone "date opened" field anymore — it's derived from
+// the ministry's own data instead of asking for it twice. A university's
+// Year field isn't always a year (it's whatever's in that entry's last
+// parens, e.g. "UNHAS" is an abbreviation, not a year — see rowToApi/
+// rowFromBody in worker/lib/ministries.js), so this only counts entries
+// that actually parse as a plausible year and takes the earliest one.
+// computeStage() in js/app.js already treats a blank value as
+// "established", same as it always has for ministries with no date.
+function deriveDateOpened(universities) {
+  const years = universities
+    .map((u) => parseInt(u.year, 10))
+    .filter((y) => Number.isInteger(y) && y > 1900 && y < 2200);
+  return years.length ? String(Math.min(...years)) : '';
 }
 
 // Mirrors the server's assertNoParens rule for instant feedback — the
@@ -590,16 +604,17 @@ async function reconcileAllPhotos() {
 async function saveMinistry() {
   if (!validateNoParensInForm()) return;
 
+  const universities = collectRepeatable($('universities-group'), 'name', 'year');
   const body = {
     sha: state.sha,
     city: $('field-city').value.trim(),
     country: $('field-country').value.trim(),
     lat: $('field-lat').value.trim(),
     lng: $('field-lng').value.trim(),
-    date_opened: $('field-date-opened').value.trim(),
+    date_opened: deriveDateOpened(universities),
     blurb: $('field-blurb').value.trim(),
     staff: collectRepeatable($('staff-group'), 'name', 'role'),
-    universities: collectRepeatable($('universities-group'), 'name', 'year'),
+    universities,
   };
 
   if (body.country && !state.divisionByCountry.has(body.country)) {
