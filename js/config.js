@@ -35,9 +35,9 @@ const CONFIG = {
   MAX_ZOOM: 10,
 
   // Country name labels (added for countries with a ministry site) only
-  // show once zoomed in this far — at the world-view starting zoom there
-  // isn't room to fit ~35 country names without them overlapping.
-  COUNTRY_LABEL_MIN_ZOOM: 4,
+  // show once zoomed in this far — countries are close enough together
+  // that even medium zoom had labels overrunning their neighbors.
+  COUNTRY_LABEL_MIN_ZOOM: 7,
 };
 
 // Decorative ocean name labels, styled in a script font like an antique atlas.

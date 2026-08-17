@@ -274,6 +274,26 @@ function addOceanLabels() {
   }
 }
 
+// Greedy word-wrap so a long name (e.g. "United Republic of Tanzania")
+// doesn't run past its country's borders — breaks into "\n"-joined lines,
+// same convention OCEAN_LABELS already uses for its hand-typed line breaks.
+function wrapLabelText(text, maxLineLength = 16) {
+  const words = text.split(' ');
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxLineLength && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.join('\n');
+}
+
 // One label per country that has at least one ministry pin, placed at that
 // country's polygon bounding-box center (not a true geometric centroid —
 // simple, and matches how OCEAN_LABELS are just reasonable hand-picked
@@ -287,12 +307,13 @@ function addCountryLabels() {
     const name = normalizeCountryName(layer.feature.properties.name);
     if (!state.countriesWithVisiblePins.has(name)) return;
     const center = layer.getBounds().getCenter();
+    const lines = wrapLabelText(name).split('\n').map(escapeHtml).join('<br>');
     L.marker(center, {
       icon: L.divIcon({
         className: 'country-name-label',
-        html: `<span>${escapeHtml(name)}</span>`,
-        iconSize: [160, 20],
-        iconAnchor: [80, 10],
+        html: `<span>${lines}</span>`,
+        iconSize: [140, 44],
+        iconAnchor: [70, 22],
       }),
       interactive: false,
       keyboard: false,
