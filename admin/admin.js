@@ -550,6 +550,13 @@ function openDialog(row) {
   $('field-blurb').value = row ? row.blurb : '';
   setLatLngLookupStatus('');
 
+  // Editing saves in place on Close (existing data, nothing to discard).
+  // Adding gets a real Save/Cancel choice — there's no prior state to fall
+  // back to, so "Close" alone would be ambiguous about whether it saves.
+  $('dialog-close-btn').textContent = row ? 'Close' : 'Save';
+  $('dialog-cancel-btn').hidden = !!row;
+  updateSaveButtonState();
+
   $('staff-group').innerHTML = '';
   $('universities-group').innerHTML = '';
   if (row) {
@@ -680,6 +687,7 @@ async function saveMinistry() {
   const closeBtn = $('dialog-close-btn');
   closeBtn.disabled = true;
   closeBtn.textContent = 'Saving…';
+  $('dialog-cancel-btn').disabled = true;
   try {
     await reconcileAllPhotos();
     if (state.editingId) {
@@ -703,9 +711,19 @@ async function saveMinistry() {
     }
     handleWriteError(err, loadMinistries);
   } finally {
-    closeBtn.disabled = false;
-    closeBtn.textContent = 'Close';
+    closeBtn.textContent = state.editingId ? 'Close' : 'Save';
+    updateSaveButtonState();
+    $('dialog-cancel-btn').disabled = false;
   }
+}
+
+// City, Country, Latitude, and Longitude are the only fields the site's map
+// pin actually needs to place a ministry — gate Save/Close on those instead
+// of relying solely on the server's validation error after a round trip.
+function updateSaveButtonState() {
+  const ready = ['field-city', 'field-country', 'field-lat', 'field-lng']
+    .every((id) => $(id).value.trim());
+  $('dialog-close-btn').disabled = !ready;
 }
 
 function setLatLngLookupStatus(message, kind = '') {
@@ -739,6 +757,7 @@ async function lookupLatLng() {
     $('field-lat').value = Number(results[0].lat).toFixed(4);
     $('field-lng').value = Number(results[0].lon).toFixed(4);
     setLatLngLookupStatus(`Found: ${results[0].display_name}`);
+    updateSaveButtonState();
   } catch (err) {
     setLatLngLookupStatus(`Lookup failed: ${err.message || err}`, 'error');
   } finally {
@@ -752,6 +771,10 @@ function wireDialog() {
   $('add-university-btn').addEventListener('click', () => addUniversityRow());
   $('latlng-lookup-btn').addEventListener('click', lookupLatLng);
   $('dialog-close-btn').addEventListener('click', saveMinistry);
+  $('dialog-cancel-btn').addEventListener('click', () => $('ministry-dialog').close());
+  ['field-city', 'field-country', 'field-lat', 'field-lng'].forEach((id) => {
+    $(id).addEventListener('input', updateSaveButtonState);
+  });
 }
 
 // --- Ministries tab: load ---------------------------------------------------
