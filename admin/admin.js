@@ -249,9 +249,10 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUpload
 
   chooseBtn.addEventListener('click', () => input.click());
 
-  function setReplaceStatus(message, isError) {
+  // kind: 'error' | 'uploading' | '' (cleared)
+  function setReplaceStatus(message, kind = '') {
     replaceStatus.textContent = message;
-    replaceStatus.className = `replace-status ${isError ? 'error' : ''}`;
+    replaceStatus.className = `replace-status ${kind}`.trim();
     replaceStatus.hidden = !message;
   }
 
@@ -289,10 +290,10 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUpload
     if (!file) return;
     const parts = getSlugParts();
     if (!parts) {
-      setReplaceStatus('Fill in the name/city first, then add a photo.', true);
+      setReplaceStatus('Fill in the Name and City first, then add a photo.', 'error');
       return;
     }
-    setReplaceStatus('Uploading…', false);
+    setReplaceStatus('Uploading…', 'uploading');
     try {
       const jpeg = await reencodeToJpeg(file);
       const imageBase64 = await blobToBase64(jpeg);
@@ -306,11 +307,11 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUpload
         const img = Object.assign(document.createElement('img'), { className: 'photo-thumb', src: thumb.src });
         thumb.replaceWith(img);
       }
-      setReplaceStatus('', false);
+      setReplaceStatus('');
       await refreshInfo(objectUrl, file.name);
       if (onUploaded) onUploaded(result.path);
     } catch (err) {
-      setReplaceStatus(`Upload failed: ${err.message || err}`, true);
+      setReplaceStatus(`Upload failed: ${err.message || err}`, 'error');
     }
   }
 
