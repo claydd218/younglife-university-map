@@ -186,7 +186,10 @@ async function findExistingImageUrl(slug) {
 // member's name before dropping their photo works naturally.
 // `onUploaded(path)` fires after a successful upload (used by the Images
 // tab to flip a row from Missing back to Good/Low in place).
-function createPhotoWidget(container, { getSlugParts, initialUrl, onUploaded }) {
+// `kind` ('staff' or 'city') drives the same good/low classification used
+// by the Images tab, so the dimensions shown here get the same color and
+// the same recommended-size hint when a photo comes in under the minimum.
+function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUploaded }) {
   container.innerHTML = '';
   const thumb = initialUrl
     ? Object.assign(document.createElement('img'), { className: 'photo-thumb', src: initialUrl })
@@ -196,10 +199,43 @@ function createPhotoWidget(container, { getSlugParts, initialUrl, onUploaded }) 
   input.accept = 'image/*';
   const status = document.createElement('span');
   status.textContent = initialUrl ? 'Drop a new photo to replace it' : 'Drop a photo or choose a file';
+  const dims = document.createElement('span');
+  dims.className = 'dims';
+  const hint = document.createElement('div');
+  hint.className = 'photo-hint';
+  hint.hidden = true;
+
+  const textWrap = document.createElement('div');
+  textWrap.className = 'photo-widget-text';
+  textWrap.appendChild(status);
+  textWrap.appendChild(dims);
+  textWrap.appendChild(hint);
 
   container.appendChild(thumb);
   container.appendChild(input);
-  container.appendChild(status);
+  container.appendChild(textWrap);
+
+  async function updateDims(url) {
+    const measured = kind ? await measureImage(url) : null;
+    if (!measured) {
+      dims.textContent = '';
+      dims.className = 'dims';
+      hint.hidden = true;
+      return;
+    }
+    const cls = classify(kind, measured);
+    dims.textContent = `${measured.width}×${measured.height}`;
+    dims.className = `dims status-${cls}`;
+    const min = PHOTO_MINIMUMS[kind];
+    if (cls === 'low' && min) {
+      hint.textContent = `Recommended: at least ${min.width}×${min.height}px${kind === 'staff' ? ', square' : ''}.`;
+      hint.hidden = false;
+    } else {
+      hint.hidden = true;
+    }
+  }
+
+  if (initialUrl) updateDims(initialUrl);
 
   async function handleFile(file) {
     if (!file) return;
@@ -209,6 +245,8 @@ function createPhotoWidget(container, { getSlugParts, initialUrl, onUploaded }) 
       return;
     }
     status.textContent = 'Uploading…';
+    dims.textContent = '';
+    hint.hidden = true;
     try {
       const jpeg = await reencodeToJpeg(file);
       const imageBase64 = await blobToBase64(jpeg);
@@ -216,12 +254,14 @@ function createPhotoWidget(container, { getSlugParts, initialUrl, onUploaded }) 
         method: 'POST',
         body: JSON.stringify({ ...parts, imageBase64 }),
       });
-      thumb.src = URL.createObjectURL(jpeg);
+      const objectUrl = URL.createObjectURL(jpeg);
+      thumb.src = objectUrl;
       if (thumb.tagName !== 'IMG') {
         const img = Object.assign(document.createElement('img'), { className: 'photo-thumb', src: thumb.src });
         thumb.replaceWith(img);
       }
       status.textContent = 'Uploaded';
+      updateDims(objectUrl);
       if (onUploaded) onUploaded(result.path);
     } catch (err) {
       status.textContent = `Upload failed: ${err.message || err}`;
@@ -305,11 +345,24 @@ function repeatableRow(group, { nameLabel, metaLabel, metaPlaceholder, name = ''
       <input type="text" class="row-meta" value="${escapeHtml(meta)}" placeholder="${escapeHtml(metaPlaceholder || '')}">
       <div class="field-error" hidden></div>
     </div>
-    <button type="button" class="btn secondary btn-small remove-row">Remove</button>
   `;
-  item.querySelector('.remove-row').addEventListener('click', () => item.remove());
   group.appendChild(item);
   return item;
+}
+
+// `confirmMessage`, when set, guards the click with window.confirm — used
+// for staff rows since removing one (unlike a university) also abandons an
+// attached photo upload.
+function makeRemoveButton({ danger = false, confirmMessage = null, onRemove }) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `btn btn-small remove-row ${danger ? 'danger' : 'secondary'}`;
+  btn.textContent = 'Remove';
+  btn.addEventListener('click', () => {
+    if (confirmMessage && !window.confirm(confirmMessage)) return;
+    onRemove();
+  });
+  return btn;
 }
 
 function addStaffRow(prefill = {}) {
@@ -322,8 +375,19 @@ function addStaffRow(prefill = {}) {
   photoWidget.className = 'photo-widget';
   item.appendChild(photoWidget);
 
+  const separator = document.createElement('hr');
+  separator.className = 'row-separator';
+  item.appendChild(separator);
+
+  item.appendChild(makeRemoveButton({
+    danger: true,
+    confirmMessage: 'Remove this staff member? This can’t be undone after you save the ministry.',
+    onRemove: () => item.remove(),
+  }));
+
   const slug = prefill.name ? slugify(prefill.name) : null;
   const wireWidget = (initialUrl) => createPhotoWidget(photoWidget, {
+    kind: 'staff',
     getSlugParts: () => (nameInput.value.trim() ? { kind: 'staff', name: nameInput.value.trim() } : null),
     initialUrl,
   });
@@ -335,10 +399,11 @@ function addStaffRow(prefill = {}) {
 }
 
 function addUniversityRow(prefill = {}) {
-  repeatableRow($('universities-group'), {
+  const item = repeatableRow($('universities-group'), {
     nameLabel: 'University', metaLabel: 'Year', metaPlaceholder: 'e.g. 2025',
     name: prefill.name, meta: prefill.year,
   });
+  item.appendChild(makeRemoveButton({ onRemove: () => item.remove() }));
 }
 
 function clearFieldErrors() {
@@ -368,6 +433,7 @@ function openDialog(row) {
   const cityWidget = $('city-photo-widget');
   const citySlug = row ? `${slugify(row.city)}-${slugify(row.country)}` : null;
   const wireCityWidget = (initialUrl) => createPhotoWidget(cityWidget, {
+    kind: 'city',
     getSlugParts: () => {
       const city = $('field-city').value.trim();
       const country = $('field-country').value.trim();
@@ -658,6 +724,7 @@ async function removePhoto(entry, li) {
     const replaceWidget = li.querySelector('.replace-widget');
     replaceWidget.hidden = false;
     createPhotoWidget(replaceWidget, {
+      kind: entry.kind,
       getSlugParts: () => (entry.kind === 'staff' ? { kind: 'staff', name: entry.name } : { kind: 'city', city: entry.city, country: entry.country }),
       initialUrl: null,
       onUploaded: () => loadMinistries().then(renderImagesTab),
