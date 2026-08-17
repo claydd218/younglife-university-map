@@ -548,6 +548,7 @@ function openDialog(row) {
   $('field-lat').value = row ? row.lat : '';
   $('field-lng').value = row ? row.lng : '';
   $('field-blurb').value = row ? row.blurb : '';
+  setLatLngLookupStatus('');
 
   $('staff-group').innerHTML = '';
   $('universities-group').innerHTML = '';
@@ -707,10 +708,49 @@ async function saveMinistry() {
   }
 }
 
+function setLatLngLookupStatus(message, kind = '') {
+  const status = $('latlng-lookup-status');
+  status.textContent = message;
+  status.className = `latlng-lookup-status ${kind}`.trim();
+}
+
+// Nominatim (OpenStreetMap's free geocoder) — no API key, but rate-limited
+// and occasionally imprecise for small towns, so this only ever fills the
+// lat/lng fields; it never blocks manual entry/override.
+async function lookupLatLng() {
+  const city = $('field-city').value.trim();
+  const country = $('field-country').value.trim();
+  if (!city || !country) {
+    setLatLngLookupStatus('Fill in City and Country first.', 'error');
+    return;
+  }
+  const btn = $('latlng-lookup-btn');
+  btn.disabled = true;
+  setLatLngLookupStatus('Looking up…');
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${city}, ${country}`)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Request failed (${res.status})`);
+    const results = await res.json();
+    if (!results.length) {
+      setLatLngLookupStatus('No match found — enter lat/long manually.', 'error');
+      return;
+    }
+    $('field-lat').value = Number(results[0].lat).toFixed(4);
+    $('field-lng').value = Number(results[0].lon).toFixed(4);
+    setLatLngLookupStatus(`Found: ${results[0].display_name}`);
+  } catch (err) {
+    setLatLngLookupStatus(`Lookup failed: ${err.message || err}`, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function wireDialog() {
   $('add-ministry-btn').addEventListener('click', () => openDialog(null));
   $('add-staff-btn').addEventListener('click', () => addStaffRow());
   $('add-university-btn').addEventListener('click', () => addUniversityRow());
+  $('latlng-lookup-btn').addEventListener('click', lookupLatLng);
   $('dialog-close-btn').addEventListener('click', saveMinistry);
 }
 
