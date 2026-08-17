@@ -1,0 +1,9 @@
+worker/
+scripts/
+node_modules/
+.wrangler/
+.dev.vars
+package.json
+package-lock.json
+wrangler.toml
+admin/SETUP.md
