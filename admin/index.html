@@ -139,8 +139,23 @@
     color: #666;
   }
   .photo-widget.dragover { background: #eef4fb; border-color: #7aa8d8; }
-  .photo-widget img.photo-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 1px solid #ccc; }
+  .photo-widget img.photo-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 1px solid #ccc; cursor: zoom-in; }
   .photo-widget .photo-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #eee; }
+
+  /* City photo: matches the 380x200 (1.9:1) ratio the live popup displays
+     it at, with no circle mask, and a taller base size than the staff
+     avatar thumb. */
+  .photo-widget[data-kind="city"] { grid-template-columns: 160px 1fr auto; }
+  .photo-widget[data-kind="city"] img.photo-thumb,
+  .photo-widget[data-kind="city"] .photo-placeholder {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1.9 / 1;
+    border-radius: 4px;
+  }
+
+  .photo-zoom-row { grid-column: 1 / -1; margin-top: 4px; }
+  .photo-zoom-row img { display: block; max-width: 100%; max-height: 320px; object-fit: contain; border-radius: 4px; border: 1px solid #ccc; }
 
   .photo-col-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 2px; font-size: 14px; }
   .photo-filename { color: #333; font-weight: 600; overflow-wrap: anywhere; }
@@ -212,6 +227,7 @@
   .filter-toggle.on.status-good { border-color: #1e7a3c; color: #1e7a3c; background: #eafaf0; }
 
   h2.division { font-size: 17px; margin: 26px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #1a1a1a; }
+  #ministries-report table { margin-bottom: 8px; }
   h3.country { font-size: 14.5px; margin: 16px 0 6px; color: #333; }
   ul.entry-list { list-style: none; margin: 0 0 4px; padding: 0; font-size: 13.5px; }
   ul.entry-list li.entry { padding: 6px 0; border-bottom: 1px solid #eee; }
@@ -240,7 +256,7 @@
 </head>
 <body>
 
-  <h1>Admin</h1>
+  <h1>YoungLife University International Admin</h1>
   <p class="subtitle">
     Edit ministry data and staff/city photos. Every save here is a real
     commit to the site's GitHub repo, same as any other change — nothing is
@@ -259,18 +275,7 @@
       <span id="ministries-count" class="status-text"></span>
       <button type="button" class="btn" id="add-ministry-btn">+ Add new ministry</button>
     </div>
-    <table id="ministries-table">
-      <thead>
-        <tr>
-          <th>City</th>
-          <th>Country</th>
-          <th>Staff</th>
-          <th>Opened</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="ministries-tbody"></tbody>
-    </table>
+    <div id="ministries-report"></div>
   </section>
 
   <section id="tab-images" class="tab-panel" hidden>

@@ -260,7 +260,25 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   replaceCol.className = 'photo-col-replace';
   replaceCol.append(replaceLabel, replaceRow, replaceStatus, input);
 
-  container.append(thumbCol, infoCol, replaceCol);
+  // Click a loaded photo to toggle a larger preview below the widget.
+  const zoomRow = document.createElement('div');
+  zoomRow.className = 'photo-zoom-row';
+  zoomRow.hidden = true;
+  const zoomImg = document.createElement('img');
+  zoomRow.appendChild(zoomImg);
+
+  container.append(thumbCol, infoCol, replaceCol, zoomRow);
+
+  thumbCol.addEventListener('click', (e) => {
+    const img = e.target.closest('img.photo-thumb');
+    if (!img) return;
+    if (zoomRow.hidden) {
+      zoomImg.src = img.src;
+      zoomRow.hidden = false;
+    } else {
+      zoomRow.hidden = true;
+    }
+  });
 
   // Exposed on the DOM node (rather than returned) so code outside the
   // async findExistingImageUrl().then(wireWidget) chain — e.g. the Close
@@ -332,6 +350,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
         thumb.replaceWith(img);
       }
       setReplaceStatus('');
+      zoomRow.hidden = true;
       photoSlug = slugFromParts(parts);
       // The stored name (from the server's slug-based naming convention,
       // e.g. daniel-njoku.jpg) — not the original filename from the
@@ -356,29 +375,60 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
 // --- Ministries tab: table -------------------------------------------------
 
 function renderMinistriesTable() {
-  const tbody = $('ministries-tbody');
-  tbody.innerHTML = '';
-  const sorted = state.rows.slice().sort((a, b) => a.city.localeCompare(b.city));
-  for (const row of sorted) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHtml(row.city)}</td>
-      <td>${escapeHtml(row.country)}</td>
-      <td>${row.staff.map((s) => escapeHtml(s.name)).join(', ') || '—'}</td>
-      <td>${escapeHtml(row.date_opened) || '—'}</td>
-      <td class="actions">
-        <button type="button" class="btn secondary btn-small" data-edit="${escapeHtml(row.id)}">Edit</button>
-        <button type="button" class="btn danger btn-small" data-delete="${escapeHtml(row.id)}">Delete</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
+  const container = $('ministries-report');
+  container.innerHTML = '';
+
+  // Group by division (same key used to color the public map) so ministries
+  // read the same way the Images tab already does. Rows whose country isn't
+  // in country-divisions.csv still need to be reachable to fix, so they get
+  // their own uncolored group rather than being silently dropped.
+  const byDivision = new Map();
+  const other = [];
+  for (const row of state.rows) {
+    const divisionKey = state.divisionByCountry.get(row.country);
+    if (!divisionKey) { other.push(row); continue; }
+    if (!byDivision.has(divisionKey)) byDivision.set(divisionKey, []);
+    byDivision.get(divisionKey).push(row);
   }
+
+  const groups = Object.keys(DIVISIONS)
+    .filter((key) => byDivision.has(key))
+    .map((key) => ({ label: DIVISIONS[key].label, color: DIVISIONS[key].pin, rows: byDivision.get(key) }));
+  if (other.length) groups.push({ label: 'Other (country not in country-divisions.csv)', color: '#888', rows: other });
+
+  for (const group of groups) {
+    const sorted = group.rows.slice().sort((a, b) => a.city.localeCompare(b.city));
+    const rowsHtml = sorted.map((row) => `
+      <tr>
+        <td>${escapeHtml(row.city)}</td>
+        <td>${escapeHtml(row.country)}</td>
+        <td>${row.staff.map((s) => escapeHtml(s.name)).join(', ') || '—'}</td>
+        <td>${escapeHtml(row.date_opened) || '—'}</td>
+        <td class="actions">
+          <button type="button" class="btn secondary btn-small" data-edit="${escapeHtml(row.id)}">Edit</button>
+          <button type="button" class="btn danger btn-small" data-delete="${escapeHtml(row.id)}">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+    const section = document.createElement('div');
+    section.innerHTML = `
+      <h2 class="division" style="color: ${group.color}; border-bottom-color: ${group.color};">${escapeHtml(group.label)}</h2>
+      <table>
+        <thead>
+          <tr><th>City</th><th>Country</th><th>Staff</th><th>Opened</th><th></th></tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `;
+    container.appendChild(section);
+  }
+
   $('ministries-count').textContent = `${state.rows.length} ministr${state.rows.length === 1 ? 'y' : 'ies'}`;
 
-  tbody.querySelectorAll('[data-edit]').forEach((btn) => {
+  container.querySelectorAll('[data-edit]').forEach((btn) => {
     btn.addEventListener('click', () => openDialog(state.rows.find((r) => r.id === btn.dataset.edit)));
   });
-  tbody.querySelectorAll('[data-delete]').forEach((btn) => {
+  container.querySelectorAll('[data-delete]').forEach((btn) => {
     btn.addEventListener('click', () => deleteMinistry(btn.dataset.delete));
   });
 }
@@ -885,7 +935,8 @@ async function renderImagesTab() {
     if (!countryMap) continue;
     const countryNames = Array.from(countryMap.keys()).sort((a, b) => a.localeCompare(b));
     const divisionEl = document.createElement('div');
-    divisionEl.innerHTML = `<h2 class="division">${escapeHtml(DIVISIONS[divisionKey].label)}</h2>`;
+    const divisionColor = DIVISIONS[divisionKey].pin;
+    divisionEl.innerHTML = `<h2 class="division" style="color: ${divisionColor}; border-bottom-color: ${divisionColor};">${escapeHtml(DIVISIONS[divisionKey].label)}</h2>`;
 
     for (const country of countryNames) {
       const bucket = countryMap.get(country);
