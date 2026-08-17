@@ -13,11 +13,20 @@ export async function login(request, env) {
     return Response.redirect(new URL('/admin/login?error=1', request.url), 302);
   }
 
-  const cookie = await createSessionCookie(env);
-  return new Response(null, {
-    status: 302,
-    headers: { Location: '/admin/', 'Set-Cookie': cookie },
-  });
+  try {
+    const cookie = await createSessionCookie(env);
+    return new Response(null, {
+      status: 302,
+      headers: { Location: '/admin/', 'Set-Cookie': cookie },
+    });
+  } catch (err) {
+    // Same user-facing outcome as a wrong password (a clean redirect back
+    // to the login page) rather than a raw crypto/config error reaching the
+    // browser — covers the mid-deploy secrets-not-attached-yet case a
+    // retry a few seconds later resolves on its own.
+    console.error('Login failed after password check passed:', err);
+    return Response.redirect(new URL('/admin/login?error=1', request.url), 302);
+  }
 }
 
 export async function logout(request) {

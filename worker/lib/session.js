@@ -29,6 +29,9 @@ function timingSafeEqual(a, b) {
 
 // -> a `Set-Cookie` header value that logs the session in.
 export async function createSessionCookie(env) {
+  if (!env.ADMIN_SESSION_SECRET) {
+    throw new Error('ADMIN_SESSION_SECRET unavailable (mid-deploy?) — try again shortly');
+  }
   const expiresAt = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
   const sig = await hmacHex(env.ADMIN_SESSION_SECRET, String(expiresAt));
   const value = `${expiresAt}.${sig}`;
@@ -41,6 +44,14 @@ export function clearSessionCookie() {
 
 // Request -> boolean. Checks the cookie against ADMIN_SESSION_SECRET.
 export async function hasValidSession(request, env) {
+  // Seen in practice: a request landing on a freshly-deployed Worker
+  // version in the brief window before its secrets are fully attached,
+  // which otherwise reached crypto.subtle.importKey with an empty key and
+  // threw a low-level "raw key data (0)" error instead of a clean
+  // not-logged-in result. Fails safe here — no valid secret means no
+  // session can be valid, so this is behaviorally a no-op change, just
+  // without the crash.
+  if (!env.ADMIN_SESSION_SECRET) return false;
   const cookieHeader = request.headers.get('Cookie') || '';
   const match = cookieHeader.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
   if (!match) return false;
