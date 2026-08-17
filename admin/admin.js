@@ -308,7 +308,10 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUpload
         thumb.replaceWith(img);
       }
       setReplaceStatus('');
-      await refreshInfo(objectUrl, file.name);
+      // The stored name (from the server's slug-based naming convention,
+      // e.g. daniel-njoku.jpg) — not the original filename from the
+      // uploader's computer — so this matches what's actually in the repo.
+      await refreshInfo(objectUrl, basenameOf(result.path));
       if (onUploaded) onUploaded(result.path);
     } catch (err) {
       setReplaceStatus(`Upload failed: ${err.message || err}`, 'error');
