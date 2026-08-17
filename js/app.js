@@ -638,14 +638,7 @@ async function init() {
       style: styleCountryFeature,
       onEachFeature: (feature, layer) => {
         layer.bindTooltip(feature.properties.name, { sticky: true, className: 'country-tooltip' });
-        layer.on('mouseover', () => {
-          // Checked at hover time, not layer-creation time —
-          // countriesWithVisiblePins isn't populated yet when this layer is
-          // first built (that happens once the ministries CSV loads, after
-          // the country geometry).
-          const hasMinistry = state.countriesWithVisiblePins.has(normalizeCountryName(feature.properties.name));
-          layer.setStyle({ weight: hasMinistry ? 3.5 : 1.6 });
-        });
+        layer.on('mouseover', () => layer.setStyle({ weight: 1.6 }));
         layer.on('mouseout', () => layer.setStyle(styleCountryFeature(feature)));
       },
     }).addTo(map);
