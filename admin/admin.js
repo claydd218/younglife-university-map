@@ -197,8 +197,23 @@ function basenameOf(url) {
   }
 }
 
-function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUploaded }) {
+// Mirrors the server's own slug computation (worker/routes/upload.js) so
+// the client can tell, without asking the server, whether a photo that's
+// already on screen still matches the current field values.
+function slugFromParts(parts) {
+  if (!parts) return null;
+  return parts.kind === 'staff' ? slugify(parts.name) : `${slugify(parts.city)}-${slugify(parts.country)}`;
+}
+
+function missingFieldsMessage(kind) {
+  return kind === 'city'
+    ? 'Fill in the City and Country first, then add a photo.'
+    : 'Fill in the Name first, then add a photo.';
+}
+
+function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialSlug, onUploaded }) {
   container.innerHTML = '';
+  let photoSlug = initialUrl ? (initialSlug || null) : null;
 
   // Column 1: the photo itself, unchanged.
   const thumb = initialUrl
@@ -247,6 +262,15 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUpload
 
   container.append(thumbCol, infoCol, replaceCol);
 
+  // Exposed on the DOM node (rather than returned) so code outside the
+  // async findExistingImageUrl().then(wireWidget) chain — e.g. the Close
+  // handler's slug-reconciliation pass — can still reach this widget.
+  container.photoHandle = {
+    getPhotoSlug: () => photoSlug,
+    setPhotoSlug: (s) => { photoSlug = s; },
+    hasPhoto: () => thumb.tagName === 'IMG',
+  };
+
   chooseBtn.addEventListener('click', () => input.click());
 
   // kind: 'error' | 'uploading' | '' (cleared)
@@ -290,7 +314,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUpload
     if (!file) return;
     const parts = getSlugParts();
     if (!parts) {
-      setReplaceStatus('Fill in the Name and City first, then add a photo.', 'error');
+      setReplaceStatus(missingFieldsMessage(kind), 'error');
       return;
     }
     setReplaceStatus('Uploading…', 'uploading');
@@ -308,6 +332,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUpload
         thumb.replaceWith(img);
       }
       setReplaceStatus('');
+      photoSlug = slugFromParts(parts);
       // The stored name (from the server's slug-based naming convention,
       // e.g. daniel-njoku.jpg) — not the original filename from the
       // uploader's computer — so this matches what's actually in the repo.
@@ -440,6 +465,7 @@ function addStaffRow(prefill = {}) {
     kind: 'staff',
     getSlugParts: () => (nameInput.value.trim() ? { kind: 'staff', name: nameInput.value.trim() } : null),
     initialUrl,
+    initialSlug: slug,
   });
   if (slug) {
     findExistingImageUrl(slug).then(wireWidget);
@@ -490,6 +516,7 @@ function openDialog(row) {
       return city && country ? { kind: 'city', city, country } : null;
     },
     initialUrl,
+    initialSlug: citySlug,
   });
   if (citySlug) findExistingImageUrl(citySlug).then(wireCityWidget);
   else wireCityWidget(null);
@@ -525,6 +552,41 @@ function validateNoParensInForm() {
   return ok;
 }
 
+// If a photo was uploaded under a name that's since been edited — or the
+// dialog was opened on an existing photo and the row got renamed — the
+// file on disk drifts from what the fields now say. There's no more
+// Cancel to escape that mismatch through, so Close reconciles each photo
+// to the current fields as part of saving: read the old file's bytes,
+// re-upload them under the new slug, then remove the old one. Instant
+// no-op (no network calls) when nothing's changed, which is the common case.
+async function reconcilePhotoWidget(widget, parts) {
+  if (!widget || !widget.hasPhoto()) return;
+  const oldSlug = widget.getPhotoSlug();
+  const newSlug = slugFromParts(parts);
+  if (!oldSlug || !newSlug || oldSlug === newSlug) return;
+  const oldUrl = await findExistingImageUrl(oldSlug);
+  if (!oldUrl) return; // nothing on disk to move
+  const sourceBlob = await (await fetch(oldUrl, { cache: 'no-store' })).blob();
+  const jpeg = await reencodeToJpeg(sourceBlob);
+  const imageBase64 = await blobToBase64(jpeg);
+  await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ ...parts, imageBase64 }) });
+  await apiFetch(`/photos/${encodeURIComponent(oldSlug)}`, { method: 'DELETE' });
+  widget.setPhotoSlug(newSlug);
+}
+
+async function reconcileAllPhotos() {
+  for (const item of document.querySelectorAll('#staff-group .repeatable-item')) {
+    const name = item.querySelector('.row-name').value.trim();
+    if (!name) continue;
+    await reconcilePhotoWidget(item.querySelector('.photo-widget')?.photoHandle, { kind: 'staff', name });
+  }
+  const city = $('field-city').value.trim();
+  const country = $('field-country').value.trim();
+  if (city && country) {
+    await reconcilePhotoWidget($('city-photo-widget').photoHandle, { kind: 'city', city, country });
+  }
+}
+
 async function saveMinistry() {
   if (!validateNoParensInForm()) return;
 
@@ -548,7 +610,11 @@ async function saveMinistry() {
 
   const { sha: _staleSha, ...rowFields } = body;
 
+  const closeBtn = $('dialog-close-btn');
+  closeBtn.disabled = true;
+  closeBtn.textContent = 'Saving…';
   try {
+    await reconcileAllPhotos();
     if (state.editingId) {
       const result = await apiFetch(`/ministries/${encodeURIComponent(state.editingId)}`, { method: 'PUT', body: JSON.stringify(body) });
       // Same read-after-write reasoning as deleteMinistry — update from the
@@ -569,6 +635,9 @@ async function saveMinistry() {
       return;
     }
     handleWriteError(err, loadMinistries);
+  } finally {
+    closeBtn.disabled = false;
+    closeBtn.textContent = 'Close';
   }
 }
 
@@ -576,9 +645,7 @@ function wireDialog() {
   $('add-ministry-btn').addEventListener('click', () => openDialog(null));
   $('add-staff-btn').addEventListener('click', () => addStaffRow());
   $('add-university-btn').addEventListener('click', () => addUniversityRow());
-  $('dialog-save-btn').addEventListener('click', saveMinistry);
-  $('dialog-cancel-btn').addEventListener('click', () => $('ministry-dialog').close());
-  $('dialog-close-btn').addEventListener('click', () => $('ministry-dialog').close());
+  $('dialog-close-btn').addEventListener('click', saveMinistry);
 }
 
 // --- Ministries tab: load ---------------------------------------------------
@@ -777,6 +844,7 @@ async function removePhoto(entry, li) {
       kind: entry.kind,
       getSlugParts: () => (entry.kind === 'staff' ? { kind: 'staff', name: entry.name } : { kind: 'city', city: entry.city, country: entry.country }),
       initialUrl: null,
+      initialSlug: entry.slug,
       onUploaded: () => loadMinistries().then(renderImagesTab),
     });
   } catch (err) {

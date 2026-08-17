@@ -99,8 +99,7 @@
     border-bottom: 1px solid #eee;
   }
   .dialog-header h2 { font-size: 17px; margin: 0; }
-  .dialog-body { padding: 16px 20px; overflow-y: auto; max-height: calc(88vh - 130px); }
-  .dialog-footer { padding: 14px 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 8px; }
+  .dialog-body { padding: 16px 20px; overflow-y: auto; max-height: calc(88vh - 68px); }
 
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
@@ -122,7 +121,7 @@
   /* Stacked (name, then role, full-width each) rather than side by side —
      splitting the row in half left both fields too cramped for a full
      name/title. */
-  .repeatable-item { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #eee; }
+  .repeatable-item { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #ddd; }
   .repeatable-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
   .repeatable-item .field { flex: none; width: 100%; margin-bottom: 0; }
   .repeatable-item .remove-row { align-self: flex-end; }
@@ -289,7 +288,7 @@
     <form id="ministry-form" method="dialog">
       <div class="dialog-header">
         <h2 id="dialog-title">Add ministry</h2>
-        <button type="button" class="btn secondary btn-small" id="dialog-close-btn">Close</button>
+        <button type="button" class="btn" id="dialog-close-btn">Close</button>
       </div>
       <div class="dialog-body">
         <div class="field-row">
@@ -325,6 +324,11 @@
         </div>
 
         <div class="field">
+          <label for="field-blurb">Blurb</label>
+          <textarea id="field-blurb"></textarea>
+        </div>
+
+        <div class="field">
           <label>Staff</label>
           <div class="repeatable-group" id="staff-group"></div>
           <button type="button" class="btn secondary btn-small" id="add-staff-btn">+ Add staff member</button>
@@ -335,15 +339,6 @@
           <div class="repeatable-group" id="universities-group"></div>
           <button type="button" class="btn secondary btn-small" id="add-university-btn">+ Add university</button>
         </div>
-
-        <div class="field">
-          <label for="field-blurb">Blurb</label>
-          <textarea id="field-blurb"></textarea>
-        </div>
-      </div>
-      <div class="dialog-footer">
-        <button type="button" class="btn secondary" id="dialog-cancel-btn">Cancel</button>
-        <button type="button" class="btn" id="dialog-save-btn">Save</button>
       </div>
     </form>
   </dialog>
