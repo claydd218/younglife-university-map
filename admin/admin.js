@@ -189,64 +189,110 @@ async function findExistingImageUrl(slug) {
 // `kind` ('staff' or 'city') drives the same good/low classification used
 // by the Images tab, so the dimensions shown here get the same color and
 // the same recommended-size hint when a photo comes in under the minimum.
+function basenameOf(url) {
+  try {
+    return decodeURIComponent(url.split('/').pop().split('?')[0]);
+  } catch {
+    return url;
+  }
+}
+
 function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUploaded }) {
   container.innerHTML = '';
+
+  // Column 1: the photo itself, unchanged.
   const thumb = initialUrl
     ? Object.assign(document.createElement('img'), { className: 'photo-thumb', src: initialUrl })
     : Object.assign(document.createElement('div'), { className: 'photo-placeholder' });
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  const status = document.createElement('span');
-  status.textContent = initialUrl ? 'Drop a new photo to replace it' : 'Drop a photo or choose a file';
-  const dims = document.createElement('span');
+  const thumbCol = document.createElement('div');
+  thumbCol.className = 'photo-col-thumb';
+  thumbCol.appendChild(thumb);
+
+  // Column 2: file name / resolution / recommendation, one per row.
+  const fileNameEl = document.createElement('div');
+  fileNameEl.className = 'photo-filename';
+  const dims = document.createElement('div');
   dims.className = 'dims';
   const hint = document.createElement('div');
   hint.className = 'photo-hint';
   hint.hidden = true;
+  const infoCol = document.createElement('div');
+  infoCol.className = 'photo-col-info';
+  infoCol.append(fileNameEl, dims, hint);
 
-  const textWrap = document.createElement('div');
-  textWrap.className = 'photo-widget-text';
-  textWrap.appendChild(status);
-  textWrap.appendChild(dims);
-  textWrap.appendChild(hint);
+  // Column 3: replace action. The real file input is visually hidden — a
+  // styled button drives it via .click(), so the browser's own "No file
+  // chosen" text next to a native input never appears; the file name is
+  // already shown in column 2 instead.
+  const replaceLabel = document.createElement('div');
+  replaceLabel.className = 'replace-label';
+  replaceLabel.textContent = 'To replace, drop a new photo';
+  const chooseBtn = document.createElement('button');
+  chooseBtn.type = 'button';
+  chooseBtn.className = 'btn secondary btn-small';
+  chooseBtn.textContent = 'Choose File';
+  const replaceRow = document.createElement('div');
+  replaceRow.className = 'replace-row';
+  replaceRow.append('or ', chooseBtn);
+  const replaceStatus = document.createElement('div');
+  replaceStatus.className = 'replace-status';
+  replaceStatus.hidden = true;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.className = 'hidden-file-input';
+  const replaceCol = document.createElement('div');
+  replaceCol.className = 'photo-col-replace';
+  replaceCol.append(replaceLabel, replaceRow, replaceStatus, input);
 
-  container.appendChild(thumb);
-  container.appendChild(input);
-  container.appendChild(textWrap);
+  container.append(thumbCol, infoCol, replaceCol);
 
-  async function updateDims(url) {
-    const measured = kind ? await measureImage(url) : null;
+  chooseBtn.addEventListener('click', () => input.click());
+
+  function setReplaceStatus(message, isError) {
+    replaceStatus.textContent = message;
+    replaceStatus.className = `replace-status ${isError ? 'error' : ''}`;
+    replaceStatus.hidden = !message;
+  }
+
+  async function refreshInfo(url, displayName) {
+    fileNameEl.textContent = displayName || (url ? basenameOf(url) : 'No photo yet');
+    const measured = (kind && url) ? await measureImage(url) : null;
+    const min = PHOTO_MINIMUMS[kind];
     if (!measured) {
       dims.textContent = '';
       dims.className = 'dims';
-      hint.hidden = true;
+      if (min) {
+        hint.textContent = `Recommended: at least ${min.width}×${min.height}px${kind === 'staff' ? ', square' : ''}.`;
+        hint.className = 'photo-hint neutral';
+        hint.hidden = false;
+      } else {
+        hint.hidden = true;
+      }
       return;
     }
     const cls = classify(kind, measured);
     dims.textContent = `${measured.width}×${measured.height}`;
     dims.className = `dims status-${cls}`;
-    const min = PHOTO_MINIMUMS[kind];
     if (cls === 'low' && min) {
       hint.textContent = `Recommended: at least ${min.width}×${min.height}px${kind === 'staff' ? ', square' : ''}.`;
+      hint.className = 'photo-hint warning';
       hint.hidden = false;
     } else {
       hint.hidden = true;
     }
   }
 
-  if (initialUrl) updateDims(initialUrl);
+  refreshInfo(initialUrl, null);
 
   async function handleFile(file) {
     if (!file) return;
     const parts = getSlugParts();
     if (!parts) {
-      status.textContent = 'Fill in the name/city first, then add a photo.';
+      setReplaceStatus('Fill in the name/city first, then add a photo.', true);
       return;
     }
-    status.textContent = 'Uploading…';
-    dims.textContent = '';
-    hint.hidden = true;
+    setReplaceStatus('Uploading…', false);
     try {
       const jpeg = await reencodeToJpeg(file);
       const imageBase64 = await blobToBase64(jpeg);
@@ -260,11 +306,11 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, onUpload
         const img = Object.assign(document.createElement('img'), { className: 'photo-thumb', src: thumb.src });
         thumb.replaceWith(img);
       }
-      status.textContent = 'Uploaded';
-      updateDims(objectUrl);
+      setReplaceStatus('', false);
+      await refreshInfo(objectUrl, file.name);
       if (onUploaded) onUploaded(result.path);
     } catch (err) {
-      status.textContent = `Upload failed: ${err.message || err}`;
+      setReplaceStatus(`Upload failed: ${err.message || err}`, true);
     }
   }
 

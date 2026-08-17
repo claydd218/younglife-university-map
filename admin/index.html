@@ -128,23 +128,43 @@
   .repeatable-item .remove-row { align-self: flex-end; }
 
   .photo-widget {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: start;
+    gap: 14px;
     border: 1px dashed #ccc;
     border-radius: 6px;
-    padding: 8px;
+    padding: 10px;
     margin-top: 6px;
     font-size: 12.5px;
     color: #666;
   }
   .photo-widget.dragover { background: #eef4fb; border-color: #7aa8d8; }
-  .photo-widget img.photo-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 1px solid #ccc; flex: 0 0 auto; }
-  .photo-widget .photo-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #eee; flex: 0 0 auto; }
-  .photo-widget input[type="file"] { font-size: 12px; }
-  .photo-widget-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .photo-widget-text .dims { margin-left: 0; }
-  .photo-hint { font-size: 11.5px; color: #8a6500; }
+  .photo-widget img.photo-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 1px solid #ccc; }
+  .photo-widget .photo-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #eee; }
+
+  .photo-col-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 2px; }
+  .photo-filename { color: #333; font-weight: 600; overflow-wrap: anywhere; }
+  .photo-col-info .dims { margin-left: 0; }
+  .photo-hint { font-size: 11.5px; }
+  .photo-hint.warning { color: #8a6500; }
+  .photo-hint.neutral { color: #888; }
+
+  .photo-col-replace { display: flex; flex-direction: column; gap: 4px; white-space: nowrap; text-align: right; }
+  .replace-row { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+  .replace-status { font-size: 11.5px; color: #666; }
+  .replace-status.error { color: #a33; }
+  .hidden-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 
   .row-separator { border: none; border-top: 1px solid #eee; margin: 0; }
 
