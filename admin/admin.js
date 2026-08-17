@@ -550,10 +550,10 @@ function openDialog(row) {
   $('field-blurb').value = row ? row.blurb : '';
   setLatLngLookupStatus('');
 
-  // Editing saves in place on Close (existing data, nothing to discard).
+  // Editing saves in place on Update (existing data, nothing to discard).
   // Adding gets a real Save/Cancel choice — there's no prior state to fall
-  // back to, so "Close" alone would be ambiguous about whether it saves.
-  $('dialog-close-btn').textContent = row ? 'Close' : 'Save';
+  // back to, so a single always-saving button would be ambiguous.
+  $('dialog-close-btn').textContent = row ? 'Update' : 'Save';
   $('dialog-cancel-btn').hidden = !!row;
   updateSaveButtonState();
 
@@ -627,9 +627,9 @@ function validateNoParensInForm() {
 
 // If a photo was uploaded under a name that's since been edited — or the
 // dialog was opened on an existing photo and the row got renamed — the
-// file on disk drifts from what the fields now say. There's no more
-// Cancel to escape that mismatch through, so Close reconciles each photo
-// to the current fields as part of saving: read the old file's bytes,
+// file on disk drifts from what the fields now say. Editing has no Cancel
+// to escape that mismatch through, so Update reconciles each photo to the
+// current fields as part of saving: read the old file's bytes,
 // re-upload them under the new slug, then remove the old one. Instant
 // no-op (no network calls) when nothing's changed, which is the common case.
 async function reconcilePhotoWidget(widget, parts) {
@@ -711,7 +711,7 @@ async function saveMinistry() {
     }
     handleWriteError(err, loadMinistries);
   } finally {
-    closeBtn.textContent = state.editingId ? 'Close' : 'Save';
+    closeBtn.textContent = state.editingId ? 'Update' : 'Save';
     updateSaveButtonState();
     $('dialog-cancel-btn').disabled = false;
   }
