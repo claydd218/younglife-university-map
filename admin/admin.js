@@ -475,7 +475,11 @@ function addUniversityRow(prefill = {}) {
     nameLabel: 'University', metaLabel: 'Year', metaPlaceholder: 'e.g. 2025',
     name: prefill.name, meta: prefill.year,
   });
-  item.appendChild(makeRemoveButton({ onRemove: () => item.remove() }));
+  item.appendChild(makeRemoveButton({
+    danger: true,
+    confirmMessage: 'Remove this university? This can’t be undone after you save the ministry.',
+    onRemove: () => item.remove(),
+  }));
 }
 
 function clearFieldErrors() {
