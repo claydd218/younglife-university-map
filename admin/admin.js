@@ -986,7 +986,11 @@ function openAddPhotoWidget(entry, li) {
     onUploaded: (path, measured) => {
       entry.dims = measured;
       entry.status = classify(entry.kind, measured);
-      li.replaceWith(imageEntryRow(entry));
+      const newLi = imageEntryRow(entry);
+      li.replaceWith(newLi);
+      // Land straight on the preview instead of making them click the name
+      // again to confirm the photo they just watched upload actually took.
+      if (entry.status !== 'missing') newLi.querySelector('.who-btn').click();
     },
   });
 }
