@@ -807,7 +807,8 @@ function closePinPlacementMap() {
     pinPlacementMarker = null;
   }
   $('pin-placement-map').hidden = true;
-  $('pin-placement-btn').textContent = 'Update pin placement';
+  $('pin-placement-btn').textContent = 'Update Pin Placement';
+  $('pin-placement-btn').classList.add('secondary');
 }
 
 // A single draggable marker, click-anywhere-to-place — dragging or clicking
@@ -817,7 +818,8 @@ function openPinPlacementMap() {
   const lat = Number($('field-lat').value);
   const lng = Number($('field-lng').value);
   $('pin-placement-map').hidden = false;
-  $('pin-placement-btn').textContent = 'Close map';
+  $('pin-placement-btn').textContent = 'Close Map';
+  $('pin-placement-btn').classList.remove('secondary');
 
   pinPlacementMap = L.map('pin-placement-map').setView([lat, lng], 10);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
