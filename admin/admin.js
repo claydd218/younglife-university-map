@@ -922,7 +922,10 @@ function imageEntryRow(entry) {
   li.className = 'entry';
   li.dataset.status = entry.status;
   li.dataset.slug = entry.slug;
-  const removeBtn = entry.status !== 'missing' ? `<button type="button" class="btn secondary btn-small" data-remove="${escapeHtml(entry.slug)}">Remove</button>` : '';
+  const actionsHtml = entry.status === 'missing'
+    ? `<button type="button" class="btn secondary btn-small" data-replace>Add photo</button>`
+    : `<button type="button" class="btn secondary btn-small" data-replace>Replace</button>
+       <button type="button" class="btn danger btn-small" data-remove="${escapeHtml(entry.slug)}">Remove</button>`;
   li.innerHTML = `
     <div class="entry-row">
       <div class="entry-left">
@@ -933,12 +936,15 @@ function imageEntryRow(entry) {
         </button>
         ${dimsText ? `<span class="dims">${dimsText}</span>` : ''}
       </div>
-      <div class="entry-actions">${removeBtn}</div>
+      <div class="entry-actions">${actionsHtml}</div>
     </div>
     <div class="preview" hidden></div>
     <div class="replace-widget" hidden></div>
   `;
 
+  // The name/city only reads as a link — and only opens a preview — when
+  // there's actually a photo behind it; `disabled` above already keeps it
+  // inert for a missing entry.
   if (entry.status !== 'missing') {
     li.querySelector('.who-btn').addEventListener('click', () => {
       const preview = li.querySelector('.preview');
@@ -946,13 +952,37 @@ function imageEntryRow(entry) {
       if (!preview.dataset.loaded) {
         preview.innerHTML = `<img src="${escapeHtml(entry.dims.url)}" alt="">`;
         preview.dataset.loaded = '1';
+        preview.querySelector('img').addEventListener('click', () => { preview.hidden = true; });
       }
       preview.hidden = false;
     });
     li.querySelector('[data-remove]').addEventListener('click', () => removePhoto(entry, li));
   }
+  li.querySelector('[data-replace]').addEventListener('click', () => openReplaceWidget(entry, li));
 
   return li;
+}
+
+// Shared by the "Add photo" (missing) and "Replace" (already has one)
+// actions — same upload widget either way, just a different starting URL.
+// Clicking again while it's open collapses it, same toggle pattern as the
+// name/city preview above.
+function openReplaceWidget(entry, li) {
+  const replaceWidget = li.querySelector('.replace-widget');
+  if (!replaceWidget.hidden) {
+    replaceWidget.hidden = true;
+    replaceWidget.innerHTML = '';
+    return;
+  }
+  li.querySelector('.preview').hidden = true;
+  replaceWidget.hidden = false;
+  createPhotoWidget(replaceWidget, {
+    kind: entry.kind,
+    getSlugParts: () => (entry.kind === 'staff' ? { kind: 'staff', name: entry.name } : { kind: 'city', city: entry.city, country: entry.country }),
+    initialUrl: entry.dims ? entry.dims.url : null,
+    initialSlug: entry.slug,
+    onUploaded: () => loadMinistries().then(renderImagesTab),
+  });
 }
 
 async function removePhoto(entry, li) {
@@ -961,21 +991,7 @@ async function removePhoto(entry, li) {
     await apiFetch(`/photos/${encodeURIComponent(entry.slug)}`, { method: 'DELETE' });
     entry.dims = null;
     entry.status = 'missing';
-    li.dataset.status = 'missing';
-    li.querySelector('.status-dot').className = 'status-dot status-missing';
-    li.querySelector('.dims')?.remove();
-    li.querySelector('.entry-actions').innerHTML = '';
-    li.querySelector('.who-btn').disabled = true;
-    li.querySelector('.preview').hidden = true;
-    const replaceWidget = li.querySelector('.replace-widget');
-    replaceWidget.hidden = false;
-    createPhotoWidget(replaceWidget, {
-      kind: entry.kind,
-      getSlugParts: () => (entry.kind === 'staff' ? { kind: 'staff', name: entry.name } : { kind: 'city', city: entry.city, country: entry.country }),
-      initialUrl: null,
-      initialSlug: entry.slug,
-      onUploaded: () => loadMinistries().then(renderImagesTab),
-    });
+    li.replaceWith(imageEntryRow(entry));
   } catch (err) {
     handleWriteError(err, () => loadMinistries().then(renderImagesTab));
   }
