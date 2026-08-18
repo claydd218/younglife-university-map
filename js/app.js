@@ -647,7 +647,12 @@ async function init() {
           const name = normalizeCountryName(feature.properties.name);
           const present = state.countriesWithVisiblePins.get(name);
           if (present && present.size) {
-            map.fitBounds(layer.getBounds(), { paddingTopLeft: [30, 80], paddingBottomRight: [30, 30] });
+            // One zoom level out from a tight fit halves the linear scale,
+            // so the country reads as roughly a quarter of the screen's
+            // area instead of filling it — enough to see it in context
+            // among its neighbors rather than edge-to-edge alone.
+            const bounds = layer.getBounds();
+            map.setView(bounds.getCenter(), map.getBoundsZoom(bounds) - 1);
           }
         });
       },
