@@ -640,6 +640,16 @@ async function init() {
         layer.bindTooltip(feature.properties.name, { sticky: true, className: 'country-tooltip' });
         layer.on('mouseover', () => layer.setStyle({ weight: 1.6 }));
         layer.on('mouseout', () => layer.setStyle(styleCountryFeature(feature)));
+        // Only countries actually holding a ministry pin are worth zooming
+        // into — clicking anywhere else on the (uncolored) landmass would
+        // otherwise zoom to an empty country with nothing to see.
+        layer.on('click', () => {
+          const name = normalizeCountryName(feature.properties.name);
+          const present = state.countriesWithVisiblePins.get(name);
+          if (present && present.size) {
+            map.fitBounds(layer.getBounds(), { paddingTopLeft: [30, 80], paddingBottomRight: [30, 30] });
+          }
+        });
       },
     }).addTo(map);
 
