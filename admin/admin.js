@@ -184,8 +184,10 @@ async function findExistingImageUrl(slug) {
 // upload time (not widget-creation time) so it reflects whatever the
 // associated name/city/country fields currently say — e.g. typing a staff
 // member's name before dropping their photo works naturally.
-// `onUploaded(path)` fires after a successful upload (used by the Images
-// tab to flip a row from Missing back to Good/Low in place).
+// `onUploaded(path, measured)` fires after a successful upload — `measured`
+// is `{url, width, height}` (url is a local blob, not a repo URL) or null
+// if it couldn't be read, used by the Images tab to flip a row from Missing
+// back to Good/Low in place without re-fetching the just-uploaded file.
 // `kind` ('staff' or 'city') drives the same good/low classification used
 // by the Images tab, so the dimensions shown here get the same color and
 // the same recommended-size hint when a photo comes in under the minimum.
@@ -313,7 +315,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
       } else {
         hint.hidden = true;
       }
-      return;
+      return null;
     }
     const cls = classify(kind, measured);
     dims.textContent = `${measured.width}×${measured.height}`;
@@ -325,6 +327,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
     } else {
       hint.hidden = true;
     }
+    return measured;
   }
 
   refreshInfo(initialUrl, null);
@@ -356,8 +359,11 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
       // The stored name (from the server's slug-based naming convention,
       // e.g. daniel-njoku.jpg) — not the original filename from the
       // uploader's computer — so this matches what's actually in the repo.
-      await refreshInfo(objectUrl, basenameOf(result.path));
-      if (onUploaded) onUploaded(result.path);
+      const measured = await refreshInfo(objectUrl, basenameOf(result.path));
+      // Pass the just-measured local blob, not a URL the caller would have
+      // to re-fetch from the repo — GitHub's Contents API has a brief
+      // read-after-write lag, so an immediate re-fetch can still 404.
+      if (onUploaded) onUploaded(result.path, measured);
     } catch (err) {
       setReplaceStatus(`Upload failed: ${err.message || err}`, 'error');
     }
@@ -973,7 +979,15 @@ function openAddPhotoWidget(entry, li) {
     getSlugParts: () => (entry.kind === 'staff' ? { kind: 'staff', name: entry.name } : { kind: 'city', city: entry.city, country: entry.country }),
     initialUrl: null,
     initialSlug: entry.slug,
-    onUploaded: () => loadMinistries().then(renderImagesTab),
+    // Swap straight from the just-uploaded blob rather than reloading —
+    // reloading re-measures every image over the network, including this
+    // one from the repo it was just written to, which can still 404 during
+    // GitHub's brief read-after-write lag and flip the row back to Missing.
+    onUploaded: (path, measured) => {
+      entry.dims = measured;
+      entry.status = classify(entry.kind, measured);
+      li.replaceWith(imageEntryRow(entry));
+    },
   });
 }
 
