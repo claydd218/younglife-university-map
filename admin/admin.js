@@ -923,9 +923,8 @@ function imageEntryRow(entry) {
   li.dataset.status = entry.status;
   li.dataset.slug = entry.slug;
   const actionsHtml = entry.status === 'missing'
-    ? `<button type="button" class="btn secondary btn-small" data-replace>Add photo</button>`
-    : `<button type="button" class="btn secondary btn-small" data-replace>Replace</button>
-       <button type="button" class="btn danger btn-small" data-remove="${escapeHtml(entry.slug)}">Remove</button>`;
+    ? `<button type="button" class="btn secondary btn-small" data-add>Add photo</button>`
+    : `<button type="button" class="btn danger btn-small" data-remove="${escapeHtml(entry.slug)}">Remove</button>`;
   li.innerHTML = `
     <div class="entry-row">
       <div class="entry-left">
@@ -957,25 +956,17 @@ function imageEntryRow(entry) {
       preview.hidden = false;
     });
     li.querySelector('[data-remove]').addEventListener('click', () => removePhoto(entry, li));
+  } else {
+    li.querySelector('[data-add]').addEventListener('click', () => openAddPhotoWidget(entry, li));
   }
-  li.querySelector('[data-replace]').addEventListener('click', () => openReplaceWidget(entry, li));
 
   return li;
 }
 
-// Shared by the "Add photo" (missing) and "Replace" (already has one)
-// actions — same empty upload widget either way; the entry row above it
-// already shows the current photo via the name/city preview, so this
-// doesn't repeat it. Clicking again while it's open collapses it, same
-// toggle pattern as that preview.
-function openReplaceWidget(entry, li) {
+// Only reachable for a missing entry — to change an existing photo,
+// Remove it first and a fresh Add photo button takes its place.
+function openAddPhotoWidget(entry, li) {
   const replaceWidget = li.querySelector('.replace-widget');
-  if (!replaceWidget.hidden) {
-    replaceWidget.hidden = true;
-    replaceWidget.innerHTML = '';
-    return;
-  }
-  li.querySelector('.preview').hidden = true;
   replaceWidget.hidden = false;
   createPhotoWidget(replaceWidget, {
     kind: entry.kind,
