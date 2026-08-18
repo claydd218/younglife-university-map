@@ -964,9 +964,10 @@ function imageEntryRow(entry) {
 }
 
 // Shared by the "Add photo" (missing) and "Replace" (already has one)
-// actions — same upload widget either way, just a different starting URL.
-// Clicking again while it's open collapses it, same toggle pattern as the
-// name/city preview above.
+// actions — same empty upload widget either way; the entry row above it
+// already shows the current photo via the name/city preview, so this
+// doesn't repeat it. Clicking again while it's open collapses it, same
+// toggle pattern as that preview.
 function openReplaceWidget(entry, li) {
   const replaceWidget = li.querySelector('.replace-widget');
   if (!replaceWidget.hidden) {
@@ -979,7 +980,7 @@ function openReplaceWidget(entry, li) {
   createPhotoWidget(replaceWidget, {
     kind: entry.kind,
     getSlugParts: () => (entry.kind === 'staff' ? { kind: 'staff', name: entry.name } : { kind: 'city', city: entry.city, country: entry.country }),
-    initialUrl: entry.dims ? entry.dims.url : null,
+    initialUrl: null,
     initialSlug: entry.slug,
     onUploaded: () => loadMinistries().then(renderImagesTab),
   });
