@@ -652,7 +652,15 @@ async function init() {
             // area instead of filling it — enough to see it in context
             // among its neighbors rather than edge-to-edge alone.
             const bounds = layer.getBounds();
-            map.setView(bounds.getCenter(), map.getBoundsZoom(bounds) - 1);
+            const targetZoom = map.getBoundsZoom(bounds) - 1;
+            // Only zoom IN. If already zoomed in past that point (e.g.
+            // exploring a specific ministry already), clicking the country
+            // shouldn't zoom back out — just re-center on it instead.
+            if (map.getZoom() >= targetZoom) {
+              map.panTo(bounds.getCenter());
+            } else {
+              map.setView(bounds.getCenter(), targetZoom);
+            }
           }
         });
       },

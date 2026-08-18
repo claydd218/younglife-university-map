@@ -119,12 +119,12 @@
   .latlng-lookup { display: flex; align-items: center; gap: 10px; margin: -6px 0 12px; }
   .latlng-lookup-status { font-size: 12.5px; color: #666; }
   .latlng-lookup-status.error { color: #a33; }
-  .pin-placement { margin: -6px 0 12px; text-align: right; }
+  .pin-placement-btn-col { display: flex; align-items: flex-end; flex: 0 0 auto; }
   .pin-placement-map {
     height: 260px;
     border-radius: 6px;
     border: 1px solid #ccc;
-    margin-top: 8px;
+    margin: 6px 0 12px;
   }
   .field-row { display: flex; gap: 10px; }
   .field-row .field { flex: 1; }
@@ -335,11 +335,11 @@
             <label for="field-lng">Longitude</label>
             <input type="number" step="any" id="field-lng" required>
           </div>
+          <div class="pin-placement-btn-col">
+            <button type="button" class="btn secondary btn-small" id="pin-placement-btn" hidden>Update Pin Placement</button>
+          </div>
         </div>
-        <div class="pin-placement">
-          <button type="button" class="btn secondary btn-small" id="pin-placement-btn" hidden>Update Pin Placement</button>
-          <div id="pin-placement-map" class="pin-placement-map" hidden></div>
-        </div>
+        <div id="pin-placement-map" class="pin-placement-map" hidden></div>
 
         <div class="field">
           <label>City photo</label>
