@@ -555,6 +555,8 @@ function openDialog(row) {
   $('field-lng').value = row ? row.lng : '';
   $('field-blurb').value = row ? row.blurb : '';
   setLatLngLookupStatus('');
+  closePinPlacementMap();
+  updatePinPlacementVisibility();
 
   // Editing saves in place on Update (existing data, nothing to discard).
   // Adding gets a real Save/Cancel choice — there's no prior state to fall
@@ -738,9 +740,20 @@ function setLatLngLookupStatus(message, kind = '') {
   status.className = `latlng-lookup-status ${kind}`.trim();
 }
 
+async function geocode(query) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  const results = await res.json();
+  return results[0] || null;
+}
+
 // Nominatim (OpenStreetMap's free geocoder) — no API key, but rate-limited
 // and occasionally imprecise for small towns, so this only ever fills the
-// lat/lng fields; it never blocks manual entry/override.
+// lat/lng fields; it never blocks manual entry/override. If the exact city
+// can't be found, falls back to a country-only query so the fields always
+// end up with *something* plausible to fine-tune with pin placement, rather
+// than staying blank.
 async function lookupLatLng() {
   const city = $('field-city').value.trim();
   const country = $('field-country').value.trim();
@@ -752,18 +765,23 @@ async function lookupLatLng() {
   btn.disabled = true;
   setLatLngLookupStatus('Looking up…');
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(`${city}, ${country}`)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Request failed (${res.status})`);
-    const results = await res.json();
-    if (!results.length) {
+    let result = await geocode(`${city}, ${country}`);
+    let approximate = false;
+    if (!result) {
+      result = await geocode(country);
+      approximate = true;
+    }
+    if (!result) {
       setLatLngLookupStatus('No match found — enter lat/long manually.', 'error');
       return;
     }
-    $('field-lat').value = Number(results[0].lat).toFixed(4);
-    $('field-lng').value = Number(results[0].lon).toFixed(4);
-    setLatLngLookupStatus(`Found: ${results[0].display_name}`);
+    $('field-lat').value = Number(result.lat).toFixed(4);
+    $('field-lng').value = Number(result.lon).toFixed(4);
+    setLatLngLookupStatus(approximate
+      ? `No exact match for "${city}" — placed at the approximate center of ${country}. Use Update pin placement to adjust.`
+      : `Found: ${result.display_name}`);
     updateSaveButtonState();
+    updatePinPlacementVisibility();
   } catch (err) {
     setLatLngLookupStatus(`Lookup failed: ${err.message || err}`, 'error');
   } finally {
@@ -771,15 +789,86 @@ async function lookupLatLng() {
   }
 }
 
+// --- Ministries tab: pin placement map --------------------------------------
+
+let pinPlacementMap = null; // Leaflet instances, only exist while the panel is open
+let pinPlacementMarker = null;
+
+function updatePinPlacementVisibility() {
+  const hasLatLng = $('field-lat').value.trim() && $('field-lng').value.trim();
+  $('pin-placement-btn').hidden = !hasLatLng;
+  if (!hasLatLng) closePinPlacementMap();
+}
+
+function closePinPlacementMap() {
+  if (pinPlacementMap) {
+    pinPlacementMap.remove();
+    pinPlacementMap = null;
+    pinPlacementMarker = null;
+  }
+  $('pin-placement-map').hidden = true;
+  $('pin-placement-btn').textContent = 'Update pin placement';
+}
+
+// A single draggable marker, click-anywhere-to-place — dragging or clicking
+// writes straight back into the lat/lng fields so the map and the fields
+// never disagree about where the pin actually is.
+function openPinPlacementMap() {
+  const lat = Number($('field-lat').value);
+  const lng = Number($('field-lng').value);
+  $('pin-placement-map').hidden = false;
+  $('pin-placement-btn').textContent = 'Close map';
+
+  pinPlacementMap = L.map('pin-placement-map').setView([lat, lng], 10);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  }).addTo(pinPlacementMap);
+
+  pinPlacementMarker = L.marker([lat, lng], { draggable: true }).addTo(pinPlacementMap);
+  const applyPosition = (latlng) => {
+    $('field-lat').value = latlng.lat.toFixed(4);
+    $('field-lng').value = latlng.lng.toFixed(4);
+    updateSaveButtonState();
+  };
+  pinPlacementMarker.on('dragend', () => applyPosition(pinPlacementMarker.getLatLng()));
+  pinPlacementMap.on('click', (e) => {
+    pinPlacementMarker.setLatLng(e.latlng);
+    applyPosition(e.latlng);
+  });
+}
+
+function togglePinPlacementMap() {
+  if (pinPlacementMap) closePinPlacementMap();
+  else openPinPlacementMap();
+}
+
 function wireDialog() {
   $('add-ministry-btn').addEventListener('click', () => openDialog(null));
   $('add-staff-btn').addEventListener('click', () => addStaffRow());
   $('add-university-btn').addEventListener('click', () => addUniversityRow());
   $('latlng-lookup-btn').addEventListener('click', lookupLatLng);
+  $('pin-placement-btn').addEventListener('click', togglePinPlacementMap);
   $('dialog-close-btn').addEventListener('click', saveMinistry);
   $('dialog-cancel-btn').addEventListener('click', () => $('ministry-dialog').close());
   ['field-city', 'field-country', 'field-lat', 'field-lng'].forEach((id) => {
     $(id).addEventListener('input', updateSaveButtonState);
+  });
+  ['field-lat', 'field-lng'].forEach((id) => {
+    $(id).addEventListener('input', () => {
+      updatePinPlacementVisibility();
+      // Keep the map in sync if it's open and the fields were hand-edited
+      // instead of dragged/clicked.
+      if (pinPlacementMarker) {
+        const lat = Number($('field-lat').value);
+        const lng = Number($('field-lng').value);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          pinPlacementMarker.setLatLng([lat, lng]);
+          pinPlacementMap.panTo([lat, lng]);
+        }
+      }
+    });
   });
 }
 
