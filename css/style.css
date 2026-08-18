@@ -498,6 +498,9 @@ h1, h2, h3, .legend-label, .cluster-badge {
   margin: 0 0 4px;
   font-size: 21px;
   color: var(--ink);
+  /* Reserve space for the close (X) button's column so a long
+     city/country title wraps before running under it, on any width. */
+  padding-right: 34px;
 }
 
 .popup-staff {
@@ -798,11 +801,5 @@ h1, h2, h3, .legend-label, .cluster-badge {
   }
   .leaflet-popup-content {
     width: 300px !important;
-  }
-  /* The narrower mobile popup leaves less room before the close button's
-     column than the title text needs — reserve space so it wraps early
-     instead of running underneath the (X). */
-  .popup-body h3 {
-    padding-right: 34px;
   }
 }
