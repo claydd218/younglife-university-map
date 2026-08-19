@@ -23,13 +23,6 @@
   p { margin: 8px 0; font-size: 14.5px; }
   ul, ol { margin: 8px 0; padding-left: 22px; font-size: 14.5px; }
   li { margin-bottom: 6px; }
-  code {
-    font-family: "SF Mono", Menlo, Consolas, monospace;
-    font-size: 13px;
-    background: #eee;
-    padding: 1px 5px;
-    border-radius: 3px;
-  }
   .note {
     background: #eef4fb;
     border: 1px solid #bcd6ef;
@@ -58,11 +51,11 @@
   <p class="subtitle">How to use the Young Life University International admin tool.</p>
 
   <div class="note">
-    Every save here is a real commit to the site's GitHub repository — the same one the public map reads from. There's no separate database, so changes go live as soon as they're saved (typically within a few seconds).
+    Updates to the admin typically show up on the map in about 30 seconds.
   </div>
 
   <h2>Ministries Tab</h2>
-  <p>Lists every ministry, grouped by division (Africa, Asia Pacific, Europe, etc.) in the same colors the public map uses for each region. A country not listed in <code>country-divisions.csv</code> falls into an uncolored "Other" group instead of disappearing — that's a sign the country needs to be added to that file.</p>
+  <p>Lists every ministry, grouped by division (Africa, Asia Pacific, Europe, etc.) in the same colors the public map uses for each region.</p>
 
   <h3>Adding or editing a ministry</h3>
   <ul>
@@ -88,9 +81,6 @@
     <li>The ministry's "date opened" isn't a separate field — it's derived automatically from the earliest year listed among its universities.</li>
   </ul>
 
-  <h3>Renaming a staff member or ministry</h3>
-  <p>If you rename someone (or a city) that already has a photo, saving automatically moves the photo file to match the new name — no separate step needed, and no orphaned file left behind under the old name.</p>
-
   <h2>Images Tab</h2>
   <p>A single list of every staff and city photo across all ministries, grouped by division and country the same way the Ministries tab is, so it's easy to spot who's still missing a photo.</p>
   <ul>
@@ -100,12 +90,6 @@
     <li>Missing entries get an <strong>Add Photo</strong> button. Existing ones get <strong>Remove</strong> instead — to replace a photo, remove it first and a fresh <strong>Add Photo</strong> button takes its place.</li>
   </ul>
   <p>Recommended sizes: profile (staff) photos should be at least 400&times;400px and roughly square; banner (city) photos should be at least 1200&times;630px.</p>
-
-  <h2>Tips</h2>
-  <ul>
-    <li>Division colors (the headings and map pin colors) come from <code>js/config.js</code> and are shared with the public map — they're not something this tool lets you change per-ministry.</li>
-    <li>If two browser tabs or two people save changes to the same ministry close together, the second save will show a conflict message with a <strong>Reload Latest Data</strong> option rather than silently overwriting the first change.</li>
-  </ul>
 
 </body>
 </html>
