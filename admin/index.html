@@ -101,7 +101,7 @@
   }
   .dialog-header h2 { font-size: 17px; margin: 0; }
   .dialog-header-actions { display: flex; gap: 8px; }
-  .dialog-body { padding: 16px 20px; overflow-y: auto; max-height: calc(88vh - 68px); }
+  .dialog-body { padding: 16px 20px 28px; overflow-y: auto; max-height: calc(88vh - 68px); }
 
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
@@ -119,7 +119,7 @@
   .latlng-lookup { display: flex; align-items: center; gap: 10px; margin: -6px 0 12px; }
   .latlng-lookup-status { font-size: 12.5px; color: #666; }
   .latlng-lookup-status.error { color: #a33; }
-  .pin-placement-btn-col { display: flex; align-items: flex-end; flex: 0 0 auto; }
+  .pin-placement-btn-col { flex: 0 0 auto; }
   .pin-placement-map {
     height: 260px;
     border-radius: 6px;
@@ -281,7 +281,7 @@
   <section id="tab-ministries" class="tab-panel">
     <div class="toolbar">
       <span id="ministries-count" class="status-text"></span>
-      <button type="button" class="btn" id="add-ministry-btn">+ Add new ministry</button>
+      <button type="button" class="btn" id="add-ministry-btn">+ Add New Ministry</button>
     </div>
     <div id="ministries-report"></div>
   </section>
@@ -318,7 +318,7 @@
           </div>
         </div>
         <div class="latlng-lookup">
-          <button type="button" class="btn secondary btn-small" id="latlng-lookup-btn">Look up Latitude and Longitude from City &amp; Country</button>
+          <button type="button" class="btn secondary btn-small" id="latlng-lookup-btn">Look Up Latitude and Longitude from City &amp; Country</button>
           <span class="latlng-lookup-status" id="latlng-lookup-status"></span>
         </div>
         <div class="field-row">
@@ -330,8 +330,9 @@
             <label for="field-lng">Longitude</label>
             <input type="number" step="any" id="field-lng" required>
           </div>
-          <div class="pin-placement-btn-col">
-            <button type="button" class="btn secondary btn-small" id="pin-placement-btn" hidden>Update Pin Placement</button>
+          <div class="field pin-placement-btn-col">
+            <label>&nbsp;</label>
+            <button type="button" class="btn secondary btn-small" id="pin-placement-btn" hidden>Adjust Pin Placement</button>
           </div>
         </div>
         <div id="pin-placement-map" class="pin-placement-map" hidden></div>
@@ -349,13 +350,13 @@
         <div class="field">
           <label>Staff</label>
           <div class="repeatable-group" id="staff-group"></div>
-          <button type="button" class="btn secondary btn-small" id="add-staff-btn">+ Add staff member</button>
+          <button type="button" class="btn secondary btn-small" id="add-staff-btn">+ Add Staff Member</button>
         </div>
 
         <div class="field">
           <label>Universities</label>
           <div class="repeatable-group" id="universities-group"></div>
-          <button type="button" class="btn secondary btn-small" id="add-university-btn">+ Add university</button>
+          <button type="button" class="btn secondary btn-small" id="add-university-btn">+ Add University</button>
         </div>
       </div>
     </form>

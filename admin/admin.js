@@ -91,7 +91,7 @@ async function apiFetch(path, options = {}) {
 function handleWriteError(err, retryReload) {
   if (err instanceof ApiError && err.status === 409) {
     showBanner('conflict', err.message, [
-      { label: 'Reload latest data', onClick: () => { hideBanner(); retryReload(); } },
+      { label: 'Reload Latest Data', onClick: () => { hideBanner(); retryReload(); } },
     ]);
     return true;
   }
@@ -806,7 +806,7 @@ function closePinPlacementMap() {
     pinPlacementMarker = null;
   }
   $('pin-placement-map').hidden = true;
-  $('pin-placement-btn').textContent = 'Update Pin Placement';
+  $('pin-placement-btn').textContent = 'Adjust Pin Placement';
   $('pin-placement-btn').classList.add('secondary');
 }
 
@@ -990,7 +990,7 @@ function renderFilterBar() {
   const bar = $('images-filter-bar');
   const defs = [
     { key: 'good', label: 'Good' },
-    { key: 'low', label: 'Low resolution' },
+    { key: 'low', label: 'Low Resolution' },
     { key: 'missing', label: 'Missing' },
   ];
   bar.innerHTML = defs.map((d) => `<button type="button" class="filter-toggle status-${d.key} ${imagesFilter[d.key] ? 'on' : ''}" data-status="${d.key}">${d.label}</button>`).join('');
@@ -1019,7 +1019,7 @@ function imageEntryRow(entry) {
   li.dataset.status = entry.status;
   li.dataset.slug = entry.slug;
   const actionsHtml = entry.status === 'missing'
-    ? `<button type="button" class="btn secondary btn-small" data-add>Add photo</button>`
+    ? `<button type="button" class="btn secondary btn-small" data-add>Add Photo</button>`
     : `<button type="button" class="btn danger btn-small" data-remove="${escapeHtml(entry.slug)}">Remove</button>`;
   li.innerHTML = `
     <div class="entry-row">
