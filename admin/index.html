@@ -15,6 +15,14 @@
     background: #fafafa;
   }
   h1 { font-size: 22px; margin-bottom: 4px; }
+  .help-link {
+    font-size: 17px;
+    color: #888;
+    text-decoration: none;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+  .help-link:hover { color: #1a1a1a; }
   .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
 
   .tabs {
@@ -97,9 +105,14 @@
     border: 1px solid #ccc;
     border-radius: 8px;
     padding: 0;
-    display: flex;
     overflow: hidden;
   }
+  /* The ID selector above already outranks the UA stylesheet's
+     dialog:not([open]) { display: none }, so display:flex has to be
+     conditioned on [open] here too — otherwise the dialog stays laid
+     out (just invisible-looking, pushed below the fold) even when
+     closed, instead of actually being removed from flow. */
+  dialog#ministry-dialog[open] { display: flex; }
   dialog#ministry-dialog::backdrop { background: rgba(0,0,0,0.4); }
   #ministry-form { display: flex; flex-direction: column; min-height: 0; width: 100%; }
   .dialog-header {
@@ -280,7 +293,7 @@
 </head>
 <body>
 
-  <h1>Young Life University International Admin</h1>
+  <h1>Young Life University International Admin <a href="help.html" class="help-link" title="Help" aria-label="Help">&#9432;</a></h1>
 
   <div id="banner" class="banner" hidden></div>
 

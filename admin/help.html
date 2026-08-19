@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Help — Young Life University International Admin</title>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 760px;
+    margin: 32px auto;
+    padding: 0 20px 80px;
+    color: #1a1a1a;
+    background: #fafafa;
+    line-height: 1.55;
+  }
+  .back-link { display: inline-block; margin-bottom: 20px; color: #1a1a1a; font-size: 14px; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 28px; }
+  h2 { font-size: 17px; margin: 32px 0 4px; padding-bottom: 6px; border-bottom: 2px solid #1a1a1a; }
+  h3 { font-size: 14.5px; margin: 20px 0 6px; color: #333; }
+  p { margin: 8px 0; font-size: 14.5px; }
+  ul, ol { margin: 8px 0; padding-left: 22px; font-size: 14.5px; }
+  li { margin-bottom: 6px; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: #eee;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .note {
+    background: #eef4fb;
+    border: 1px solid #bcd6ef;
+    color: #1a4b7a;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 14px;
+    margin: 16px 0;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 4px;
+  }
+  .badge.danger { background: #fdecea; color: #8a2c22; }
+  .badge.good { background: #eafaf0; color: #1e7a3c; }
+  .badge.warn { background: #fff6e5; color: #7a5a1a; }
+</style>
+</head>
+<body>
+
+  <a class="back-link" href="index.html">&larr; Back to Admin</a>
+  <h1>Admin Help</h1>
+  <p class="subtitle">How to use the Young Life University International admin tool.</p>
+
+  <div class="note">
+    Every save here is a real commit to the site's GitHub repository — the same one the public map reads from. There's no separate database, so changes go live as soon as they're saved (typically within a few seconds).
+  </div>
+
+  <h2>Ministries Tab</h2>
+  <p>Lists every ministry, grouped by division (Africa, Asia Pacific, Europe, etc.) in the same colors the public map uses for each region. A country not listed in <code>country-divisions.csv</code> falls into an uncolored "Other" group instead of disappearing — that's a sign the country needs to be added to that file.</p>
+
+  <h3>Adding or editing a ministry</h3>
+  <ul>
+    <li><strong>+ Add New Ministry</strong> opens a blank form; clicking <strong>Edit</strong> on an existing row opens it pre-filled.</li>
+    <li>New ministries get <strong>Save</strong> and <strong>Cancel</strong> buttons — Cancel discards everything, nothing is saved.</li>
+    <li>Editing an existing ministry instead gets a single <strong>Update</strong> button, since there's already saved data to update in place rather than a choice to discard.</li>
+    <li><strong>Save</strong>/<strong>Update</strong> stays disabled until City, Country, Latitude, and Longitude are all filled in — those four are what the public map needs to actually place the pin.</li>
+  </ul>
+
+  <h3>Finding a location</h3>
+  <ul>
+    <li><strong>Look Up Latitude and Longitude from City & Country</strong> geocodes the typed City/Country and fills in both fields. If it can't find that exact city, it falls back to the approximate center of the country instead of leaving the fields blank.</li>
+    <li>Once Latitude and Longitude have any value, an <strong>Adjust Pin Placement</strong> button appears. Click it to open a small map — drag the pin or click anywhere on the map to fine-tune the exact spot, and the Latitude/Longitude fields update to match.</li>
+  </ul>
+
+  <h3>City photo</h3>
+  <p>The banner-style photo shown on the ministry's map popup. Drop an image onto the widget or use <strong>Choose File</strong>. Click the photo to see it enlarged; click again (or click the enlarged version) to close it.</p>
+
+  <h3>Staff and Universities</h3>
+  <ul>
+    <li><strong>+ Add Staff Member</strong> / <strong>+ Add University</strong> add a new row with a Name/Role or Name/Year pair. Each staff row has its own profile photo widget, same drag-and-drop/Choose File pattern as the city photo.</li>
+    <li>Both kinds of row can be removed with the red <strong>Remove</strong> button, which asks for confirmation first — this can't be undone after the ministry is saved.</li>
+    <li>The ministry's "date opened" isn't a separate field — it's derived automatically from the earliest year listed among its universities.</li>
+  </ul>
+
+  <h3>Renaming a staff member or ministry</h3>
+  <p>If you rename someone (or a city) that already has a photo, saving automatically moves the photo file to match the new name — no separate step needed, and no orphaned file left behind under the old name.</p>
+
+  <h2>Images Tab</h2>
+  <p>A single list of every staff and city photo across all ministries, grouped by division and country the same way the Ministries tab is, so it's easy to spot who's still missing a photo.</p>
+  <ul>
+    <li>Each entry shows a status dot: <span class="badge good">Good</span> meets the recommended size, <span class="badge warn">Low Resolution</span> exists but is smaller than recommended, <span class="badge danger">Missing</span> has no photo at all.</li>
+    <li>Use the <strong>Good</strong> / <strong>Low Resolution</strong> / <strong>Missing</strong> filter buttons at the top to narrow the list down.</li>
+    <li>A name or city only opens a preview when it actually has a photo — click it to see the photo, click the enlarged version to close it again.</li>
+    <li>Missing entries get an <strong>Add Photo</strong> button. Existing ones get <strong>Remove</strong> instead — to replace a photo, remove it first and a fresh <strong>Add Photo</strong> button takes its place.</li>
+  </ul>
+  <p>Recommended sizes: profile (staff) photos should be at least 400&times;400px and roughly square; banner (city) photos should be at least 1200&times;630px.</p>
+
+  <h2>Tips</h2>
+  <ul>
+    <li>Division colors (the headings and map pin colors) come from <code>js/config.js</code> and are shared with the public map — they're not something this tool lets you change per-ministry.</li>
+    <li>If two browser tabs or two people save changes to the same ministry close together, the second save will show a conflict message with a <strong>Reload Latest Data</strong> option rather than silently overwriting the first change.</li>
+  </ul>
+
+</body>
+</html>
