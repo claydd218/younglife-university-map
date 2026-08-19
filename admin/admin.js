@@ -546,7 +546,7 @@ function clearFieldErrors() {
 function openDialog(row) {
   clearFieldErrors();
   state.editingId = row ? row.id : null;
-  $('dialog-title').textContent = row ? `Edit ${row.city}, ${row.country}` : 'Add ministry';
+  $('dialog-title').textContent = row ? `Edit ${row.city}, ${row.country}` : 'Add Ministry';
 
   $('field-city').value = row ? row.city : '';
   $('field-country').value = row ? row.country : '';

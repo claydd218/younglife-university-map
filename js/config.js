@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// YoungLife International Ministries — site configuration
+// Young Life International Ministries — site configuration
 //
 // This is the only file you should need to edit for day-to-day changes.
 // ---------------------------------------------------------------------------

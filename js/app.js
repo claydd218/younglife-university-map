@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// YoungLife International Ministries — map application
+// Young Life International Ministries — map application
 // See js/config.js to change data sources, divisions, and colors.
 // ---------------------------------------------------------------------------
 
