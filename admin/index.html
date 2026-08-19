@@ -84,24 +84,35 @@
   td.actions button { margin-left: 6px; }
   .btn-small { font-size: 12.5px; padding: 5px 10px; }
 
+  /* max-height alone isn't enough — <dialog> has no overflow rule by
+     default, so once content (e.g. several staff/university rows) pushes
+     past it, the dialog itself starts scrolling as a whole instead of just
+     .dialog-body, dragging the header out of view. Flexing the dialog and
+     its form wrapper, with the body as the only flexible/scrolling child,
+     means the body always gets exactly "whatever's left" under the header
+     — no guessing the header's height with a magic-number calc().  */
   dialog#ministry-dialog {
     width: min(760px, 94vw);
     max-height: 88vh;
     border: 1px solid #ccc;
     border-radius: 8px;
     padding: 0;
+    display: flex;
+    overflow: hidden;
   }
   dialog#ministry-dialog::backdrop { background: rgba(0,0,0,0.4); }
+  #ministry-form { display: flex; flex-direction: column; min-height: 0; width: 100%; }
   .dialog-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 16px 20px;
     border-bottom: 1px solid #eee;
+    flex: 0 0 auto;
   }
   .dialog-header h2 { font-size: 17px; margin: 0; }
   .dialog-header-actions { display: flex; gap: 8px; }
-  .dialog-body { padding: 16px 20px 28px; overflow-y: auto; max-height: calc(88vh - 68px); }
+  .dialog-body { padding: 16px 20px 28px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
