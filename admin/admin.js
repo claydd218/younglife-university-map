@@ -499,7 +499,7 @@ function makeRemoveButton({ danger = false, confirmMessage = null, onRemove }) {
 
 function addStaffRow(prefill = {}) {
   const item = repeatableRow($('staff-group'), {
-    nameLabel: 'Name', metaLabel: 'Role', metaPlaceholder: 'e.g. Staff Associate',
+    nameLabel: 'Name', metaLabel: 'Role', metaPlaceholder: 'e.g. College Coordinator',
     name: prefill.name, meta: prefill.role,
   });
   const nameInput = item.querySelector('.row-name');
