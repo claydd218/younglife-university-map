@@ -55,6 +55,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
 
 .site-header h1 {
   margin: 0;
+  pointer-events: auto;
   font-size: clamp(18px, 3vw, 30px);
   letter-spacing: 0.06em;
   color: var(--ink);

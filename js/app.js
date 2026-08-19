@@ -613,6 +613,20 @@ function wirePhotoPreview() {
   map.on('movestart', hide);
 }
 
+// Easter egg: triple-clicking the page title swaps it for a joke variant,
+// and swaps back on the next triple-click. Triple-click (not single/double)
+// so it's not something a visitor stumbles into by accident.
+function wireTitleEasterEgg() {
+  const titleEl = document.getElementById('site-title');
+  if (!titleEl) return;
+  const original = titleEl.textContent;
+  const joke = 'The sun never sets on the Brett-ish Empire';
+  titleEl.addEventListener('click', (e) => {
+    if (e.detail !== 3) return;
+    titleEl.textContent = titleEl.textContent === original ? joke : original;
+  });
+}
+
 async function init() {
   showStatus('Loading ministries…');
   try {
@@ -734,6 +748,7 @@ async function init() {
     buildCountryDirectory(ministryRows);
     wireDirectoryControls();
     wirePhotoPreview();
+    wireTitleEasterEgg();
 
     if (unmatchedCountries.size) {
       console.warn(
