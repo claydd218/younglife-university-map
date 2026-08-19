@@ -23,6 +23,7 @@ async function verifyTurnstile(token, env, request) {
       body,
     });
     const data = await res.json();
+    if (data.success !== true) console.error('Turnstile verification did not pass:', JSON.stringify(data));
     return data.success === true;
   } catch (err) {
     console.error('Turnstile verification request failed:', err);
@@ -35,15 +36,17 @@ export async function login(request, env) {
   const password = form.get('password');
   const turnstileToken = form.get('cf-turnstile-response');
 
-  // Checked first (and reported with the same generic error as a wrong
-  // password) so a failed captcha never reveals whether it was the human
-  // check or the password that actually failed.
+  // Checked first (and reported with the same generic error text as a
+  // wrong password) so a failed captcha never reveals whether it was the
+  // human check or the password that actually failed. The distinct query
+  // param (same displayed message either way) is a temporary debugging aid
+  // — remove once the current login-failure report is root-caused.
   if (!(await verifyTurnstile(turnstileToken, env, request))) {
-    return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
+    return Response.redirect(new URL('/bigtime/login?error=captcha', request.url), 302);
   }
 
   if (!checkPassword(password, env.ADMIN_SHARED_PASSWORD)) {
-    return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
+    return Response.redirect(new URL('/bigtime/login?error=password', request.url), 302);
   }
 
   try {
