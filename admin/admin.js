@@ -410,7 +410,6 @@ function renderMinistriesTable() {
         <td>${escapeHtml(row.city)}</td>
         <td>${escapeHtml(row.country)}</td>
         <td>${row.staff.map((s) => escapeHtml(s.name)).join(', ') || '—'}</td>
-        <td>${escapeHtml(row.date_opened) || '—'}</td>
         <td class="actions">
           <button type="button" class="btn secondary btn-small" data-edit="${escapeHtml(row.id)}">Edit</button>
           <button type="button" class="btn danger btn-small" data-delete="${escapeHtml(row.id)}">Delete</button>
@@ -422,7 +421,7 @@ function renderMinistriesTable() {
       <h2 class="division" style="color: ${group.color}; border-bottom-color: ${group.color};">${escapeHtml(group.label)}</h2>
       <table>
         <thead>
-          <tr><th>City</th><th>Country</th><th>Staff</th><th>Opened</th><th></th></tr>
+          <tr><th>City</th><th>Country</th><th>Staff</th><th></th></tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
       </table>
