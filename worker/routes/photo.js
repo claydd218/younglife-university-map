@@ -1,4 +1,4 @@
-// Routes /admin/api/photos/:slug — remove a staff/city photo. Powers the
+// Routes /bigtime/api/photos/:slug — remove a staff/city photo. Powers the
 // Images tab's "Remove" action. Add/replace is worker/routes/upload.js.
 
 import { listDir, deleteFile, ConflictError } from '../lib/github.js';

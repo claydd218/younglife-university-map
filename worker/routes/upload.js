@@ -1,4 +1,4 @@
-// Routes /admin/api/upload — add or replace a staff/city photo.
+// Routes /bigtime/api/upload — add or replace a staff/city photo.
 // Deletion is worker/routes/photo.js.
 
 import { listDir, deleteFile, putFileBase64, ConflictError } from '../lib/github.js';

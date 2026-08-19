@@ -6,15 +6,15 @@ compatibility_date = "2024-09-23"
 directory = "."
 binding = "ASSETS"
 # Without this, Cloudflare serves any request matching an actual static
-# file (admin/index.html, admin/login.html, admin/admin.js) directly,
+# file (bigtime/index.html, bigtime/login.html, bigtime/admin.js) directly,
 # WITHOUT ever invoking the Worker — meaning worker/index.js's login check
-# never ran for the admin page itself, only for /admin/api/* calls (which
+# never ran for the admin page itself, only for /bigtime/api/* calls (which
 # have no matching file, so they already reached the Worker by default).
 # That was a real bug found in production: the page loaded with no login
 # prompt at all, then its API calls correctly 401'd. run_worker_first=true
 # forces every request through the Worker; worker/index.js already
 # explicitly falls through to env.ASSETS.fetch() for anything that isn't
-# /admin/*, so this doesn't change how the public map is served.
+# /bigtime/*, so this doesn't change how the public map is served.
 #
 # Could not verify this specific setting against a local `wrangler dev` —
 # both the array and boolean forms hit an unrelated wrangler-internal

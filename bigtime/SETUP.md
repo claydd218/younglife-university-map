@@ -1,6 +1,6 @@
 # Admin CMS — one-time setup
 
-This is dashboard/account configuration, not stored in the repo. Do this once before real editors use `/admin/`.
+This is dashboard/account configuration, not stored in the repo. Do this once before real editors use `/bigtime/`.
 
 ## 1. Environment variables (this is a Worker, not classic Pages)
 
@@ -21,7 +21,7 @@ Cloudflare dashboard → **Workers & Pages** → **younglife-university-map** �
 
 ## 2. Login
 
-No Cloudflare Access, no per-user accounts — just a single shared password, checked against `ADMIN_SHARED_PASSWORD` above. Visiting `/admin/` while logged out redirects to `/admin/login.html`; a correct password sets a signed, HttpOnly session cookie (30 days) and there's nothing else to configure. Share the password with whoever needs to edit; change it any time by updating `ADMIN_SHARED_PASSWORD` (existing logged-in sessions stay valid until they expire, since the cookie's signature only depends on `ADMIN_SESSION_SECRET` — rotate that too if you need to force everyone out immediately).
+No Cloudflare Access, no per-user accounts — just a single shared password, checked against `ADMIN_SHARED_PASSWORD` above. Visiting `/bigtime/` while logged out redirects to `/bigtime/login.html`; a correct password sets a signed, HttpOnly session cookie (30 days) and there's nothing else to configure. Share the password with whoever needs to edit; change it any time by updating `ADMIN_SHARED_PASSWORD` (existing logged-in sessions stay valid until they expire, since the cookie's signature only depends on `ADMIN_SESSION_SECRET` — rotate that too if you need to force everyone out immediately).
 
 One tradeoff worth knowing: since everyone shares one password, git commit history (`git log` on `data/ministries.csv`/`images/`) will show every admin edit as coming from the same generic committer identity — there's no per-editor attribution the way Cloudflare Access's per-email login would have given.
 

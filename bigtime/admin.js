@@ -1,17 +1,17 @@
 // ---------------------------------------------------------------------------
 // Admin CMS — Ministries CRUD + Images (photo health/upload/remove) tabs.
-// Talks only to /admin/api/* (JSON in/out) — never reads/writes CSV itself.
+// Talks only to /bigtime/api/* (JSON in/out) — never reads/writes CSV itself.
 // Every write there is a real GitHub commit; this page just calls the API.
 // Uses slugify/parseParenList/lastNameOf/flagEmoji from ../js/utils.js and
 // DIVISIONS from ../js/config.js, loaded as plain <script> tags before this
-// file (see admin/index.html) — same convention as admin/imagecheck.html.
+// file (see index.html) — same convention as admin/imagecheck.html used to.
 // ---------------------------------------------------------------------------
 
-const API_BASE = '/admin/api';
+const API_BASE = '/bigtime/api';
 
 // Recommended minimum photo dimensions, used by both the Images tab's
 // classification and its guidance banner text — one source of truth so
-// they can't drift apart. See admin/index.html's .guidance block for where
+// they can't drift apart. See index.html's .guidance block for where
 // this is rendered.
 const PHOTO_MINIMUMS = {
   staff: { width: 400, height: 400, label: 'Profile photos', detail: 'at least 400×400px, square' },

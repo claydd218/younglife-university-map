@@ -1,4 +1,4 @@
-// Handles /admin/api/login (POST) and /admin/api/logout (POST). Plain
+// Handles /bigtime/api/login (POST) and /bigtime/api/logout (POST). Plain
 // functions, not the onRequestX Pages-Functions-shaped convention the other
 // routes use, since these are dispatched directly by worker/index.js's auth
 // gate rather than through the normal route table.
@@ -10,14 +10,14 @@ export async function login(request, env) {
   const password = form.get('password');
 
   if (!checkPassword(password, env.ADMIN_SHARED_PASSWORD)) {
-    return Response.redirect(new URL('/admin/login?error=1', request.url), 302);
+    return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
 
   try {
     const cookie = await createSessionCookie(env);
     return new Response(null, {
       status: 302,
-      headers: { Location: '/admin/', 'Set-Cookie': cookie },
+      headers: { Location: '/bigtime/', 'Set-Cookie': cookie },
     });
   } catch (err) {
     // Same user-facing outcome as a wrong password (a clean redirect back
@@ -25,13 +25,13 @@ export async function login(request, env) {
     // browser — covers the mid-deploy secrets-not-attached-yet case a
     // retry a few seconds later resolves on its own.
     console.error('Login failed after password check passed:', err);
-    return Response.redirect(new URL('/admin/login?error=1', request.url), 302);
+    return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
 }
 
 export async function logout(request) {
   return new Response(null, {
     status: 302,
-    headers: { Location: '/admin/login', 'Set-Cookie': clearSessionCookie() },
+    headers: { Location: '/bigtime/login', 'Set-Cookie': clearSessionCookie() },
   });
 }

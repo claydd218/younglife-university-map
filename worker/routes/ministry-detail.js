@@ -1,4 +1,4 @@
-// Routes /admin/api/ministries/:id — update (PUT) or remove (DELETE) one
+// Routes /bigtime/api/ministries/:id — update (PUT) or remove (DELETE) one
 // ministry row. Listing/creating is worker/routes/ministries.js.
 
 import { getFile, putFile, ConflictError } from '../lib/github.js';

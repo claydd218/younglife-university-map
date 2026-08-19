@@ -1,4 +1,4 @@
-// Routes /admin/api/ministries — list all ministries (GET) and create a new
+// Routes /bigtime/api/ministries — list all ministries (GET) and create a new
 // one (POST). Editing/deleting a specific row is worker/routes/ministry-detail.js.
 // Dispatched by worker/index.js's router, which builds the same
 // {request, env, params} shape Cloudflare Pages Functions used to provide
