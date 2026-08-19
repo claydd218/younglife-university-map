@@ -5,9 +5,42 @@
 
 import { createSessionCookie, clearSessionCookie, checkPassword } from '../lib/session.js';
 
+// Verifies the Turnstile widget's token server-side against Cloudflare's
+// siteverify endpoint. Fails closed like the rest of this file's secret
+// handling (see hasValidSession in session.js) — a missing/misconfigured
+// TURNSTILE_SECRET_KEY rejects the login rather than silently skipping the
+// bot check, so a botched deploy can't quietly turn Turnstile off.
+async function verifyTurnstile(token, env, request) {
+  if (!env.ADMIN_TURNSTILE_SECRET_KEY || !token) return false;
+  const body = new URLSearchParams({
+    secret: env.ADMIN_TURNSTILE_SECRET_KEY,
+    response: token,
+    remoteip: request.headers.get('CF-Connecting-IP') || '',
+  });
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body,
+    });
+    const data = await res.json();
+    return data.success === true;
+  } catch (err) {
+    console.error('Turnstile verification request failed:', err);
+    return false;
+  }
+}
+
 export async function login(request, env) {
   const form = await request.formData();
   const password = form.get('password');
+  const turnstileToken = form.get('cf-turnstile-response');
+
+  // Checked first (and reported with the same generic error as a wrong
+  // password) so a failed captcha never reveals whether it was the human
+  // check or the password that actually failed.
+  if (!(await verifyTurnstile(turnstileToken, env, request))) {
+    return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
+  }
 
   if (!checkPassword(password, env.ADMIN_SHARED_PASSWORD)) {
     return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);

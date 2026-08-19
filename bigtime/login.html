@@ -48,13 +48,16 @@
     margin-bottom: 12px;
   }
   .error[hidden] { display: none; }
+  .cf-turnstile { margin-bottom: 12px; }
 </style>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <h1>Admin Login</h1>
   <form method="POST" action="/bigtime/api/login">
-    <div class="error" id="error" hidden>Wrong password — try again.</div>
+    <div class="error" id="error" hidden>Login failed — check your password and try again.</div>
     <input type="password" name="password" placeholder="Password" autofocus required>
+    <div class="cf-turnstile" data-sitekey="0x4AAAAAAEV3Hr6PnCCyLUxb"></div>
     <button type="submit">Log in</button>
   </form>
   <script>
