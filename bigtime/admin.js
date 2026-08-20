@@ -191,14 +191,6 @@ async function findExistingImageUrl(slug) {
 // `kind` ('staff' or 'city') drives the same good/low classification used
 // by the Images tab, so the dimensions shown here get the same color and
 // the same recommended-size hint when a photo comes in under the minimum.
-function basenameOf(url) {
-  try {
-    return decodeURIComponent(url.split('/').pop().split('?')[0]);
-  } catch {
-    return url;
-  }
-}
-
 // Mirrors the server's own slug computation (worker/routes/upload.js) so
 // the client can tell, without asking the server, whether a photo that's
 // already on screen still matches the current field values.
@@ -225,9 +217,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   thumbCol.className = 'photo-col-thumb';
   thumbCol.appendChild(thumb);
 
-  // Column 2: file name / resolution / recommendation, one per row.
-  const fileNameEl = document.createElement('div');
-  fileNameEl.className = 'photo-filename';
+  // Column 2: resolution / recommendation, one per row.
   const dims = document.createElement('div');
   dims.className = 'dims';
   const hint = document.createElement('div');
@@ -235,7 +225,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   hint.hidden = true;
   const infoCol = document.createElement('div');
   infoCol.className = 'photo-col-info';
-  infoCol.append(fileNameEl, dims, hint);
+  infoCol.append(dims, hint);
 
   // Column 3: replace action. The real file input is visually hidden — a
   // styled button drives it via .click(), so the browser's own "No file
@@ -301,8 +291,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
     replaceStatus.hidden = !message;
   }
 
-  async function refreshInfo(url, displayName) {
-    fileNameEl.textContent = displayName || (url ? basenameOf(url) : 'No photo yet');
+  async function refreshInfo(url) {
     const measured = (kind && url) ? await measureImage(url) : null;
     const min = PHOTO_MINIMUMS[kind];
     if (!measured) {
@@ -330,7 +319,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
     return measured;
   }
 
-  refreshInfo(initialUrl, null);
+  refreshInfo(initialUrl);
 
   async function handleFile(file) {
     if (!file) return;
@@ -356,10 +345,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
       setReplaceStatus('');
       zoomRow.hidden = true;
       photoSlug = slugFromParts(parts);
-      // The stored name (from the server's slug-based naming convention,
-      // e.g. daniel-njoku.jpg) — not the original filename from the
-      // uploader's computer — so this matches what's actually in the repo.
-      const measured = await refreshInfo(objectUrl, basenameOf(result.path));
+      const measured = await refreshInfo(objectUrl);
       // Pass the just-measured local blob, not a URL the caller would have
       // to re-fetch from the repo — GitHub's Contents API has a brief
       // read-after-write lag, so an immediate re-fetch can still 404.
@@ -377,6 +363,133 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
     container.classList.remove('dragover');
     handleFile(e.dataTransfer.files[0]);
   });
+}
+
+// --- Ministry photos (multi-photo manager) ----------------------------------
+// A ministry can have several photos; unlike the single-photo staff/legacy
+// widget above, each upload here adds a new file rather than replacing one
+// (see worker/routes/upload.js's kind==='city' branch). currentMinistryPhotos
+// is the ordered list of filenames for whichever ministry the dialog is
+// currently open on — first entry is the "main" photo shown on the public
+// map popup; the rest are only visible in that popup's photo carousel.
+
+let currentMinistryPhotos = [];
+
+function ministryPhotoUrl(filename) {
+  return `../${CONFIG.IMAGES_DIR}${filename}`;
+}
+
+function renderMinistryPhotos() {
+  const container = $('ministry-photos');
+  container.innerHTML = '';
+  if (currentMinistryPhotos.length === 0) {
+    container.innerHTML = '<div class="ministry-photo-empty">No photos yet.</div>';
+    return;
+  }
+
+  currentMinistryPhotos.forEach((filename, index) => {
+    const item = document.createElement('div');
+    item.className = 'ministry-photo-item';
+
+    const img = document.createElement('img');
+    img.src = ministryPhotoUrl(filename);
+    img.alt = '';
+
+    const infoCol = document.createElement('div');
+    infoCol.className = 'photo-col-info';
+    if (index === 0) {
+      const badge = document.createElement('span');
+      badge.className = 'ministry-photo-main-badge';
+      badge.textContent = 'Main photo';
+      infoCol.appendChild(badge);
+    }
+
+    const upBtn = document.createElement('button');
+    upBtn.type = 'button';
+    upBtn.className = 'btn secondary btn-small';
+    upBtn.textContent = '↑';
+    upBtn.title = 'Move earlier';
+    upBtn.disabled = index === 0;
+    upBtn.addEventListener('click', () => {
+      [currentMinistryPhotos[index - 1], currentMinistryPhotos[index]] =
+        [currentMinistryPhotos[index], currentMinistryPhotos[index - 1]];
+      renderMinistryPhotos();
+    });
+
+    const downBtn = document.createElement('button');
+    downBtn.type = 'button';
+    downBtn.className = 'btn secondary btn-small';
+    downBtn.textContent = '↓';
+    downBtn.title = 'Move later';
+    downBtn.disabled = index === currentMinistryPhotos.length - 1;
+    downBtn.addEventListener('click', () => {
+      [currentMinistryPhotos[index + 1], currentMinistryPhotos[index]] =
+        [currentMinistryPhotos[index], currentMinistryPhotos[index + 1]];
+      renderMinistryPhotos();
+    });
+
+    const reorderRow = document.createElement('div');
+    reorderRow.className = 'ministry-photo-reorder';
+    reorderRow.append(upBtn, downBtn);
+
+    const actionsCol = document.createElement('div');
+    actionsCol.className = 'ministry-photo-actions';
+    actionsCol.appendChild(reorderRow);
+    // Removal happens immediately (unlike a staff/university row) because
+    // the photo is already a committed file on disk the moment it's
+    // uploaded — there's no pending/discardable draft state for it, same
+    // as the Images tab's Remove action.
+    actionsCol.appendChild(makeRemoveButton({
+      danger: true,
+      confirmMessage: 'Remove this photo? This deletes it from the live site.',
+      onRemove: async () => {
+        try {
+          await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
+          currentMinistryPhotos.splice(index, 1);
+          renderMinistryPhotos();
+        } catch (err) {
+          handleWriteError(err, loadMinistries);
+        }
+      },
+    }));
+
+    item.append(img, infoCol, actionsCol);
+    container.appendChild(item);
+  });
+}
+
+async function handleAddMinistryPhoto(file) {
+  if (!file) return;
+  const city = $('field-city').value.trim();
+  const country = $('field-country').value.trim();
+  if (!city || !country) {
+    showBanner('error', 'Fill in the City and Country first, then add a photo.');
+    return;
+  }
+  const addBtn = $('add-ministry-photo-btn');
+  addBtn.disabled = true;
+  addBtn.textContent = 'Uploading…';
+  try {
+    const jpeg = await reencodeToJpeg(file);
+    const imageBase64 = await blobToBase64(jpeg);
+    const result = await apiFetch('/upload', {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'city', city, country, imageBase64 }),
+    });
+    currentMinistryPhotos.push(result.filename);
+    renderMinistryPhotos();
+  } catch (err) {
+    showBanner('error', `Upload failed: ${err.message || err}`);
+  } finally {
+    addBtn.disabled = false;
+    addBtn.textContent = '+ Add Photo';
+    $('ministry-photo-input').value = '';
+  }
+}
+
+function wireMinistryPhotoAdd() {
+  $('add-ministry-photo-btn').addEventListener('click', () => $('ministry-photo-input').click());
+  $('ministry-photo-input').addEventListener('change', (e) => handleAddMinistryPhoto(e.target.files[0]));
 }
 
 // --- Ministries tab: table -------------------------------------------------
@@ -572,20 +685,8 @@ function openDialog(row) {
     row.universities.forEach((u) => addUniversityRow(u));
   }
 
-  const cityWidget = $('city-photo-widget');
-  const citySlug = row ? `${slugify(row.city)}-${slugify(row.country)}` : null;
-  const wireCityWidget = (initialUrl) => createPhotoWidget(cityWidget, {
-    kind: 'city',
-    getSlugParts: () => {
-      const city = $('field-city').value.trim();
-      const country = $('field-country').value.trim();
-      return city && country ? { kind: 'city', city, country } : null;
-    },
-    initialUrl,
-    initialSlug: citySlug,
-  });
-  if (citySlug) findExistingImageUrl(citySlug).then(wireCityWidget);
-  else wireCityWidget(null);
+  currentMinistryPhotos = row ? row.photos.slice() : [];
+  renderMinistryPhotos();
 
   $('ministry-dialog').showModal();
 }
@@ -655,6 +756,27 @@ async function reconcilePhotoWidget(widget, parts) {
   widget.setPhotoSlug(newSlug);
 }
 
+// Same idea as reconcilePhotoWidget, but for the ministry's whole photo
+// list: each filename embeds the slug it was uploaded under
+// (slug-1.jpg, slug-2.jpg, ...), so a city/country edit can leave any of
+// them stale. Checked (and fixed) individually rather than all-or-nothing,
+// since photos added earlier in this same edit may already be current.
+async function reconcileMinistryPhotos(city, country) {
+  const newSlug = slugFromParts({ kind: 'city', city, country });
+  for (let i = 0; i < currentMinistryPhotos.length; i++) {
+    const filename = currentMinistryPhotos[i];
+    const match = filename.match(/^(.*)-(\d+)\.[^.]+$/);
+    const oldSlug = match ? match[1] : null;
+    if (!oldSlug || oldSlug === newSlug) continue;
+    const sourceBlob = await (await fetch(ministryPhotoUrl(filename), { cache: 'no-store' })).blob();
+    const jpeg = await reencodeToJpeg(sourceBlob);
+    const imageBase64 = await blobToBase64(jpeg);
+    const result = await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ kind: 'city', city, country, imageBase64 }) });
+    await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
+    currentMinistryPhotos[i] = result.filename;
+  }
+}
+
 async function reconcileAllPhotos() {
   for (const item of document.querySelectorAll('#staff-group .repeatable-item')) {
     const name = item.querySelector('.row-name').value.trim();
@@ -663,8 +785,8 @@ async function reconcileAllPhotos() {
   }
   const city = $('field-city').value.trim();
   const country = $('field-country').value.trim();
-  if (city && country) {
-    await reconcilePhotoWidget($('city-photo-widget').photoHandle, { kind: 'city', city, country });
+  if (city && country && currentMinistryPhotos.length) {
+    await reconcileMinistryPhotos(city, country);
   }
 }
 
@@ -683,6 +805,10 @@ async function saveMinistry() {
     blurb: $('field-blurb').value.trim(),
     staff: collectRepeatable($('staff-group'), 'name', 'role'),
     universities,
+    // Reference, not a copy — reconcileAllPhotos() (called below, before
+    // this body is stringified) may rewrite entries in place if the
+    // city/country changed, and this needs to pick up that final state.
+    photos: currentMinistryPhotos,
   };
 
   if (body.country && !state.divisionByCountry.has(body.country)) {
@@ -851,6 +977,7 @@ function wireDialog() {
   $('add-ministry-btn').addEventListener('click', () => openDialog(null));
   $('add-staff-btn').addEventListener('click', () => addStaffRow());
   $('add-university-btn').addEventListener('click', () => addUniversityRow());
+  wireMinistryPhotoAdd();
   $('latlng-lookup-btn').addEventListener('click', lookupLatLng);
   $('pin-placement-btn').addEventListener('click', togglePinPlacementMap);
   $('dialog-close-btn').addEventListener('click', saveMinistry);
@@ -944,19 +1071,22 @@ function measureImage(url) {
   });
 }
 
+// Staff only — ministry/city photos are multi-valued now (see the
+// Ministries tab's own photo manager) and don't fit this tab's
+// one-status-per-entry model, so they're managed and health-checked there
+// instead (each photo's dimensions show inline as it's added).
 async function buildImagesData() {
-  // division -> country -> { cities: [...], staff: [...] } — same shape
-  // admin/imagecheck.html used to build from the ministries rows.
+  // division -> country -> { staff: [...] } — same shape admin/imagecheck.html
+  // used to build from the ministries rows, minus the cities bucket.
   const structure = new Map();
   for (const row of state.rows) {
     const divisionKey = state.divisionByCountry.get(row.country);
     if (!divisionKey) continue;
     if (!structure.has(divisionKey)) structure.set(divisionKey, new Map());
     const countryMap = structure.get(divisionKey);
-    if (!countryMap.has(row.country)) countryMap.set(row.country, { cities: [], staff: [] });
+    if (!countryMap.has(row.country)) countryMap.set(row.country, { staff: [] });
     const bucket = countryMap.get(row.country);
 
-    bucket.cities.push({ kind: 'city', label: row.city, city: row.city, country: row.country, slug: `${slugify(row.city)}-${slugify(row.country)}` });
     for (const s of row.staff) {
       bucket.staff.push({ kind: 'staff', label: s.name, role: s.role, city: row.city, name: s.name, slug: slugify(s.name) });
     }
@@ -965,7 +1095,7 @@ async function buildImagesData() {
   const checks = [];
   for (const [, countryMap] of structure) {
     for (const [, bucket] of countryMap) {
-      for (const entry of [...bucket.cities, ...bucket.staff]) {
+      for (const entry of bucket.staff) {
         checks.push((async () => {
           entry.dims = null;
           for (const ext of CONFIG.IMAGE_EXTENSIONS) {
@@ -983,9 +1113,8 @@ async function buildImagesData() {
 }
 
 function renderGuidance() {
-  $('images-guidance').innerHTML = Object.values(PHOTO_MINIMUMS)
-    .map((m) => `<strong>${escapeHtml(m.label)}:</strong> ${escapeHtml(m.detail)}`)
-    .join(' &nbsp;·&nbsp; ');
+  $('images-guidance').innerHTML = `<strong>${escapeHtml(PHOTO_MINIMUMS.staff.label)}:</strong> ${escapeHtml(PHOTO_MINIMUMS.staff.detail)} `
+    + `&nbsp;·&nbsp; Ministry photos are managed from each ministry's own Edit dialog, not here.`;
 }
 
 function renderFilterBar() {
@@ -1127,7 +1256,7 @@ async function renderImagesTab() {
       countryEl.innerHTML = `<h3 class="country">${escapeHtml(country)}</h3>`;
       const ul = document.createElement('ul');
       ul.className = 'entry-list';
-      for (const entry of [...bucket.cities, ...staffSorted]) {
+      for (const entry of staffSorted) {
         total++;
         if (entry.status === 'missing') missing++;
         if (entry.status === 'low') low++;

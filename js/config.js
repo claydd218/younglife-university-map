@@ -19,12 +19,14 @@ const CONFIG = {
 
   COUNTRIES_GEOJSON_URL: 'data/world-countries.geojson',
 
-  // Staff and city photos are looked up by filename, not stored in the CSV.
-  // A staff member "Joe Smith" resolves to images/joe-smith.png (accents
-  // and punctuation stripped, lowercased, spaces become hyphens). A city
-  // photo for "Bogotá, Colombia" resolves to images/bogota-colombia.png.
-  // Each extension below is tried in order; if none exist, a generated
+  // Staff photos are looked up by filename, not stored in the CSV. A staff
+  // member "Joe Smith" resolves to images/joe-smith.png (accents and
+  // punctuation stripped, lowercased, spaces become hyphens). Each
+  // extension below is tried in order; if none exist, a generated
   // initial-letter placeholder is shown instead.
+  // Ministry photos work differently — a ministry can have several, so
+  // their filenames (images/<slug>-1.jpg, -2.jpg, ...) are listed directly
+  // in ministries.csv's photos column instead of being guessed.
   IMAGES_DIR: 'images/',
   IMAGE_EXTENSIONS: ['png', 'jpg', 'jpeg', 'webp'],
 

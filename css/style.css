@@ -472,6 +472,11 @@ h1, h2, h3, .legend-label, .cluster-badge {
   border-bottom: 1px solid var(--border-soft);
 }
 
+img.popup-photo {
+  cursor: pointer;
+  -webkit-touch-callout: none;
+}
+
 .popup-photo-fallback {
   display: flex;
   align-items: center;
@@ -555,6 +560,99 @@ h1, h2, h3, .legend-label, .cluster-badge {
   opacity: 0;
   transform: scale(0.85);
   transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+/* ---------- Ministry photo lightbox carousel ---------- */
+/* Opened by hovering/tapping a .popup-photo — see wireMinistryPhotoCarousel
+   in js/app.js. A single fixed-position overlay, same reasoning as
+   .photo-preview above: has to live outside the popup's clipped content. */
+
+.ministry-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.ministry-lightbox.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 15, 8, 0.82);
+}
+
+.lightbox-content {
+  position: relative;
+  z-index: 1;
+  max-width: 92vw;
+  max-height: 85vh;
+  display: flex;
+}
+
+.lightbox-image {
+  display: block;
+  max-width: 92vw;
+  max-height: 85vh;
+  object-fit: contain;
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
+  background: var(--card-bg);
+}
+
+.lightbox-close,
+.lightbox-nav {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.5);
+  background: rgba(20,15,8,0.55);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-touch-callout: none;
+}
+
+.lightbox-close {
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.lightbox-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  font-size: 15px;
+}
+
+.lightbox-prev { left: 10px; }
+.lightbox-next { right: 10px; }
+
+.lightbox-counter {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20,15,8,0.55);
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
 }
 
 .photo-preview.visible {

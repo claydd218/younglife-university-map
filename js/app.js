@@ -137,6 +137,18 @@ window.__imgFallback = function (img) {
   img.replaceWith(fallback);
 };
 
+// Ministry photos are named explicitly in ministries.csv's photos column
+// (not guessed via CONFIG.IMAGE_EXTENSIONS the way staff photos are), so
+// there's no extension to retry — a load failure goes straight to the
+// initials-style placeholder.
+window.__ministryPhotoFallback = function (img) {
+  const fallback = document.createElement('div');
+  fallback.className = 'popup-photo popup-photo-fallback';
+  fallback.style.setProperty('--fallback-color', img.dataset.fallbackColor);
+  fallback.innerHTML = `<span>${img.dataset.fallbackText}</span>`;
+  img.replaceWith(fallback);
+};
+
 function markerIcon(divisionKey, stageKey) {
   const div = DIVISIONS[divisionKey];
   const stage = STAGES[stageKey];
@@ -196,14 +208,18 @@ function buildPopupHtml(row, divisionKey) {
         .join('')}</ul>`
     : '';
 
-  const cityPhoto = photoTag({
-    slug: `${slugify(row.city)}-${slugify(row.country)}`,
-    altText: `${row.city} ministry photo`,
-    fallbackText: row.city || '?',
-    fallbackColor: div.country,
-    imgClass: 'popup-photo',
-    fallbackClass: 'popup-photo popup-photo-fallback',
-  });
+  const photos = (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+  const cityPhoto = photos.length
+    ? `<img
+        class="popup-photo"
+        src="${escapeHtml(CONFIG.IMAGES_DIR + photos[0])}"
+        alt="${escapeHtml(`${row.city} ministry photo`)}"
+        data-photos='${escapeHtml(JSON.stringify(photos))}'
+        data-fallback-text="${escapeHtml(row.city || '?')}"
+        data-fallback-color="${escapeHtml(div.country)}"
+        onerror="window.__ministryPhotoFallback(this)"
+      >`
+    : `<div class="popup-photo popup-photo-fallback" style="--fallback-color:${escapeHtml(div.country)}"><span>${escapeHtml(row.city || '?')}</span></div>`;
 
   return `
     <div class="popup-card">
@@ -601,6 +617,78 @@ function wirePhotoPreview() {
   map.on('movestart', hide);
 }
 
+// Fullscreen lightbox carousel for a ministry's photos — every popup-photo
+// img carries its ministry's full photo list in data-photos (see
+// buildPopupHtml), so this opens with all of them even though only the
+// first (main) one is ever shown inline in the popup itself. Click/tap
+// opens it, clicking the same photo again (or clicking outside it) closes
+// it — same click-to-toggle pattern as wirePhotoPreview above, but on
+// click rather than hover on desktop too: hover-triggered popups here read
+// as too jarring for a fullscreen overlay.
+function wireMinistryPhotoCarousel() {
+  const lightbox = document.getElementById('ministry-lightbox');
+  const imageEl = lightbox.querySelector('.lightbox-image');
+  const counterEl = lightbox.querySelector('.lightbox-counter');
+  const prevBtn = lightbox.querySelector('.lightbox-prev');
+  const nextBtn = lightbox.querySelector('.lightbox-next');
+
+  let photos = [];
+  let index = 0;
+  let activeImg = null; // the img currently open, for click-to-toggle
+
+  function render() {
+    imageEl.src = CONFIG.IMAGES_DIR + photos[index];
+    const multi = photos.length > 1;
+    counterEl.textContent = multi ? `${index + 1} / ${photos.length}` : '';
+    prevBtn.hidden = !multi;
+    nextBtn.hidden = !multi;
+  }
+
+  function open(photoList) {
+    photos = photoList;
+    index = 0;
+    render();
+    lightbox.classList.add('visible');
+  }
+
+  function close() {
+    lightbox.classList.remove('visible');
+    activeImg = null;
+  }
+
+  function showNext() { index = (index + 1) % photos.length; render(); }
+  function showPrev() { index = (index - 1 + photos.length) % photos.length; render(); }
+
+  prevBtn.addEventListener('click', (e) => { e.stopPropagation(); showPrev(); });
+  nextBtn.addEventListener('click', (e) => { e.stopPropagation(); showNext(); });
+  lightbox.querySelector('.lightbox-close').addEventListener('click', close);
+  lightbox.querySelector('.lightbox-backdrop').addEventListener('click', close);
+
+  function photosFromImg(img) {
+    try {
+      const list = JSON.parse(img.dataset.photos);
+      return Array.isArray(list) && list.length ? list : null;
+    } catch {
+      return null;
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    const img = e.target.closest('img.popup-photo');
+    if (img && img.dataset.photos) {
+      if (activeImg === img) { close(); return; }
+      const photoList = photosFromImg(img);
+      if (photoList) { open(photoList); activeImg = img; }
+      return;
+    }
+    if (e.target.closest('.ministry-lightbox')) return;
+    close();
+  });
+
+  map.on('popupclose', close);
+  map.on('movestart', close);
+}
+
 // Easter egg: triple-clicking the page title swaps it for a joke variant,
 // and swaps back on the next triple-click. Triple-click (not single/double)
 // so it's not something a visitor stumbles into by accident.
@@ -736,6 +824,7 @@ async function init() {
     buildCountryDirectory(ministryRows);
     wireDirectoryControls();
     wirePhotoPreview();
+    wireMinistryPhotoCarousel();
     wireTitleEasterEgg();
 
     if (unmatchedCountries.size) {

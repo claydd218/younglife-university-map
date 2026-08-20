@@ -50,33 +50,61 @@ export async function onRequestPost({ request, env }) {
     return errorResponse(400, `Image is ${(byteLength / 1024 / 1024).toFixed(1)}MB, over the ${MAX_BYTES / 1024 / 1024}MB limit`);
   }
 
-  const targetPath = `${IMAGES_DIR}/${slug}.${OUTPUT_EXT}`;
-  const existing = await listDir(env, IMAGES_DIR);
-  const existingForSlug = existing.filter((f) => f.name.startsWith(`${slug}.`));
-  const sameExt = existingForSlug.find((f) => f.name === `${slug}.${OUTPUT_EXT}`);
-
-  // CONFIG.IMAGE_EXTENSIONS on the public site tries .png before .jpg — if
-  // an existing photo is slug.png and this endpoint always writes slug.jpg
-  // without removing the old file, the new upload would silently never win
-  // that extension race and the old photo would keep showing. Clear out any
-  // other-extension file for this slug first (its own commit) before
-  // writing the new one.
   const commit = committerFromRequest(request);
-  for (const stale of existingForSlug) {
-    if (stale.name === `${slug}.${OUTPUT_EXT}`) continue;
+  const existing = await listDir(env, IMAGES_DIR);
+
+  if (kind === 'staff') {
+    const targetPath = `${IMAGES_DIR}/${slug}.${OUTPUT_EXT}`;
+    const existingForSlug = existing.filter((f) => f.name.startsWith(`${slug}.`));
+    const sameExt = existingForSlug.find((f) => f.name === `${slug}.${OUTPUT_EXT}`);
+
+    // CONFIG.IMAGE_EXTENSIONS on the public site tries .png before .jpg —
+    // if an existing photo is slug.png and this endpoint always writes
+    // slug.jpg without removing the old file, the new upload would
+    // silently never win that extension race and the old photo would
+    // keep showing. Clear out any other-extension file for this slug
+    // first (its own commit) before writing the new one.
+    for (const stale of existingForSlug) {
+      if (stale.name === `${slug}.${OUTPUT_EXT}`) continue;
+      try {
+        await deleteFile(env, stale.path, stale.sha, `Remove stale photo: ${stale.name}`, commit);
+      } catch (err) {
+        if (err instanceof ConflictError) return errorResponse(409, err.message, { error: 'conflict' });
+        throw err;
+      }
+    }
+
+    let result;
     try {
-      await deleteFile(env, stale.path, stale.sha, `Remove stale photo: ${stale.name}`, commit);
+      result = await putFileBase64(env, targetPath, imageBase64, {
+        sha: sameExt ? sameExt.sha : undefined,
+        message: `${sameExt ? 'Update' : 'Add'} photo: ${slug}`,
+        ...commit,
+      });
     } catch (err) {
       if (err instanceof ConflictError) return errorResponse(409, err.message, { error: 'conflict' });
       throw err;
     }
+
+    return jsonResponse({ ok: true, path: targetPath, filename: `${slug}.${OUTPUT_EXT}`, sha: result.sha });
   }
+
+  // kind === 'city': a ministry can have multiple photos, so each upload
+  // adds a new numbered file (slug-1.jpg, slug-2.jpg, ...) rather than
+  // overwriting — the admin's photo manager owns ordering/deletion.
+  const numberedPattern = new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)\\.`);
+  let nextIndex = 1;
+  for (const f of existing) {
+    const match = f.name.match(numberedPattern);
+    if (match) nextIndex = Math.max(nextIndex, parseInt(match[1], 10) + 1);
+  }
+  const filename = `${slug}-${nextIndex}.${OUTPUT_EXT}`;
+  const targetPath = `${IMAGES_DIR}/${filename}`;
 
   let result;
   try {
     result = await putFileBase64(env, targetPath, imageBase64, {
-      sha: sameExt ? sameExt.sha : undefined,
-      message: `${sameExt ? 'Update' : 'Add'} photo: ${slug}`,
+      message: `Add photo: ${filename}`,
       ...commit,
     });
   } catch (err) {
@@ -84,5 +112,5 @@ export async function onRequestPost({ request, env }) {
     throw err;
   }
 
-  return jsonResponse({ ok: true, path: targetPath, sha: result.sha });
+  return jsonResponse({ ok: true, path: targetPath, filename, sha: result.sha });
 }

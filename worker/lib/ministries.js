@@ -8,7 +8,7 @@ import { parseParenList, joinParenList, assertNoParens, ValidationError } from '
 
 export const MINISTRIES_PATH = 'data/ministries.csv';
 export const DIVISIONS_PATH = 'data/country-divisions.csv';
-export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'blurb'];
+export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'blurb', 'photos'];
 
 // country -> division, per data/country-divisions.csv.
 export async function loadDivisions(env) {
@@ -44,6 +44,7 @@ export function rowToApi(row) {
     staff: parseParenList(row.staff).map(({ name, meta }) => ({ name, role: meta })),
     universities: parseParenList(row.universities).map(({ name, meta }) => ({ name, year: meta })),
     blurb: row.blurb,
+    photos: (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean),
   };
 }
 
@@ -82,6 +83,7 @@ export function rowFromBody(id, body) {
     universities: joinParenList(universitiesMeta),
     staff: joinParenList(staffMeta),
     blurb: (body.blurb || '').trim(),
+    photos: (body.photos || []).join('; '),
   };
 }
 

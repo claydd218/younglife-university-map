@@ -181,23 +181,10 @@
   .photo-widget img.photo-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 1px solid #ccc; cursor: zoom-in; }
   .photo-widget .photo-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #eee; }
 
-  /* Ministry photo: matches the 4:3 ratio the live popup displays it at,
-     with no circle mask, and a taller base size than the staff avatar
-     thumb. */
-  .photo-widget[data-kind="city"] { grid-template-columns: 160px 1fr auto; }
-  .photo-widget[data-kind="city"] img.photo-thumb,
-  .photo-widget[data-kind="city"] .photo-placeholder {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 4 / 3;
-    border-radius: 4px;
-  }
-
   .photo-zoom-row { grid-column: 1 / -1; margin-top: 4px; }
   .photo-zoom-row img { display: block; max-width: 100%; max-height: 320px; object-fit: contain; border-radius: 4px; border: 1px solid #ccc; cursor: zoom-out; }
 
   .photo-col-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 2px; font-size: 14px; }
-  .photo-filename { color: #333; font-weight: 600; overflow-wrap: anywhere; }
   .photo-col-info .dims { margin-left: 0; font-size: 13px; }
   .photo-hint { font-size: 12.5px; }
   .photo-hint.warning { color: #8a6500; }
@@ -225,6 +212,44 @@
     white-space: nowrap;
     border: 0;
   }
+
+  /* --- Ministry photos (multi-photo manager) --- */
+  .ministry-photos { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 10px; }
+  .ministry-photo-empty { font-size: 13px; color: #888; padding: 4px 2px; }
+  .ministry-photo-item {
+    display: grid;
+    grid-template-columns: 140px 1fr auto;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .ministry-photo-item img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+  .ministry-photo-main-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #1e7a3c;
+    background: #eafaf0;
+    border: 1px solid #bfe8cc;
+    border-radius: 4px;
+    padding: 2px 7px;
+    width: fit-content;
+  }
+  .ministry-photo-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .ministry-photo-reorder { display: flex; gap: 4px; }
+  .ministry-photo-reorder .btn { padding: 5px 9px; }
+  .ministry-photo-hint { font-size: 12.5px; color: #888; margin-top: 2px; }
 
   /* --- Images tab --- */
   .summary {
@@ -365,8 +390,11 @@
         <div id="pin-placement-map" class="pin-placement-map" hidden></div>
 
         <div class="field">
-          <label>Ministry Photo</label>
-          <div class="photo-widget" id="city-photo-widget" data-kind="city"></div>
+          <label>Ministry Photos</label>
+          <div class="ministry-photos" id="ministry-photos"></div>
+          <button type="button" class="btn secondary btn-small" id="add-ministry-photo-btn">+ Add Photo</button>
+          <input type="file" id="ministry-photo-input" class="hidden-file-input" accept="image/*">
+          <div class="ministry-photo-hint">First photo is the main one shown on the map popup — use the arrows to reorder. Recommended: at least 1200×900px (4:3).</div>
         </div>
 
         <div class="field">
