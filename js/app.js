@@ -137,18 +137,6 @@ window.__imgFallback = function (img) {
   img.replaceWith(fallback);
 };
 
-// Placeholder rule until real ministry-stage data exists: anything opened
-// within the last STAGE_CUTOFF_YEARS counts as "developing".
-function computeStage(dateOpenedRaw) {
-  const raw = (dateOpenedRaw || '').trim();
-  if (!raw) return 'established';
-  const parsed = Date.parse(raw);
-  const openedDate = !Number.isNaN(parsed) ? new Date(parsed) : new Date(parseInt(raw, 10) || 0, 0, 1);
-  if (Number.isNaN(openedDate.getTime())) return 'established';
-  const years = (Date.now() - openedDate.getTime()) / (365.25 * 24 * 3600 * 1000);
-  return years < STAGE_CUTOFF_YEARS ? 'developing' : 'established';
-}
-
 function markerIcon(divisionKey, stageKey) {
   const div = DIVISIONS[divisionKey];
   const stage = STAGES[stageKey];
@@ -713,7 +701,7 @@ async function init() {
         continue;
       }
 
-      const stageKey = computeStage(row.date_opened);
+      const stageKey = String(row.is_developing).trim().toLowerCase() === 'true' ? 'developing' : 'established';
       const marker = L.marker([lat, lng], { icon: markerIcon(divisionKey, stageKey) });
       marker.bindPopup(buildPopupHtml(row, divisionKey), {
         maxWidth: 380,

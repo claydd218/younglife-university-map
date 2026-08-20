@@ -82,9 +82,8 @@ const DIVISIONS = {
 };
 
 // Ministry stage: shown as marker shape (independent of division color).
-// A ministry counts as "developing" when it opened less than STAGE_CUTOFF_YEARS
-// ago; this is a placeholder rule until real stage data is available.
-const STAGE_CUTOFF_YEARS = 2;
+// Set manually per ministry (the admin's "Developing" checkbox) — not
+// derived from date_opened or anything else.
 const STAGES = {
   developing: {
     label: 'Developing',

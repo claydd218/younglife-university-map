@@ -553,6 +553,7 @@ function openDialog(row) {
   $('field-lat').value = row ? row.lat : '';
   $('field-lng').value = row ? row.lng : '';
   $('field-blurb').value = row ? row.blurb : '';
+  $('field-is-developing').checked = row ? !!row.is_developing : false;
   setLatLngLookupStatus('');
   closePinPlacementMap();
   updatePinPlacementVisibility();
@@ -602,8 +603,8 @@ function collectRepeatable(group, nameField, metaField) {
 // parens, e.g. "UNHAS" is an abbreviation, not a year — see rowToApi/
 // rowFromBody in worker/lib/ministries.js), so this only counts entries
 // that actually parse as a plausible year and takes the earliest one.
-// computeStage() in js/app.js already treats a blank value as
-// "established", same as it always has for ministries with no date.
+// This is purely a display field now — the "Developing" checkbox is what
+// actually drives the map's dot-vs-star marker shape, not this date.
 function deriveDateOpened(universities) {
   const years = universities
     .map((u) => parseInt(u.year, 10))
@@ -678,6 +679,7 @@ async function saveMinistry() {
     lat: $('field-lat').value.trim(),
     lng: $('field-lng').value.trim(),
     date_opened: deriveDateOpened(universities),
+    is_developing: $('field-is-developing').checked,
     blurb: $('field-blurb').value.trim(),
     staff: collectRepeatable($('staff-group'), 'name', 'role'),
     universities,
@@ -777,7 +779,7 @@ async function lookupLatLng() {
     $('field-lat').value = Number(result.lat).toFixed(4);
     $('field-lng').value = Number(result.lon).toFixed(4);
     setLatLngLookupStatus(approximate
-      ? `No exact match for "${city}" — placed at the approximate center of ${country}. Use Update pin placement to adjust.`
+      ? `No exact match for "${city}" — placed at the approximate center of ${country}. Use Adjust Pin Placement to fine-tune.`
       : `Found: ${result.display_name}`);
     updateSaveButtonState();
     updatePinPlacementVisibility();

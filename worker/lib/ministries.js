@@ -8,7 +8,7 @@ import { parseParenList, joinParenList, assertNoParens, ValidationError } from '
 
 export const MINISTRIES_PATH = 'data/ministries.csv';
 export const DIVISIONS_PATH = 'data/country-divisions.csv';
-export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'universities', 'staff', 'blurb'];
+export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'blurb'];
 
 // country -> division, per data/country-divisions.csv.
 export async function loadDivisions(env) {
@@ -40,6 +40,7 @@ export function rowToApi(row) {
     lat: row.lat,
     lng: row.lng,
     date_opened: row.date_opened,
+    is_developing: String(row.is_developing).trim().toLowerCase() === 'true',
     staff: parseParenList(row.staff).map(({ name, meta }) => ({ name, role: meta })),
     universities: parseParenList(row.universities).map(({ name, meta }) => ({ name, year: meta })),
     blurb: row.blurb,
@@ -77,6 +78,7 @@ export function rowFromBody(id, body) {
     lat: String(body.lat).trim(),
     lng: String(body.lng).trim(),
     date_opened: (body.date_opened || '').trim(),
+    is_developing: body.is_developing ? 'true' : 'false',
     universities: joinParenList(universitiesMeta),
     staff: joinParenList(staffMeta),
     blurb: (body.blurb || '').trim(),

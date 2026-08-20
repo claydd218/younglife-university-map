@@ -129,6 +129,8 @@
 
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
+  .field-checkbox label { display: flex; align-items: center; gap: 8px; font-weight: 400; margin-bottom: 0; }
+  .field-checkbox input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
   .field input[type="text"], .field input[type="number"], .field textarea, .field input[list] {
     width: 100%;
     font: inherit;
@@ -332,7 +334,7 @@
       <div class="dialog-body">
         <div class="field-row">
           <div class="field">
-            <label for="field-city">City</label>
+            <label for="field-city">City / Area</label>
             <input type="text" id="field-city" required>
           </div>
           <div class="field">
@@ -363,13 +365,20 @@
         <div id="pin-placement-map" class="pin-placement-map" hidden></div>
 
         <div class="field">
-          <label>City Photo</label>
+          <label>Ministry Photo</label>
           <div class="photo-widget" id="city-photo-widget" data-kind="city"></div>
         </div>
 
         <div class="field">
           <label for="field-blurb">Blurb</label>
           <textarea id="field-blurb"></textarea>
+        </div>
+
+        <div class="field field-checkbox">
+          <label for="field-is-developing">
+            <input type="checkbox" id="field-is-developing">
+            Developing (shows as a dot on the map instead of a star)
+          </label>
         </div>
 
         <div class="field">
