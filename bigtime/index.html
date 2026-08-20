@@ -181,15 +181,15 @@
   .photo-widget img.photo-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 1px solid #ccc; cursor: zoom-in; }
   .photo-widget .photo-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #eee; }
 
-  /* City photo: matches the 380x200 (1.9:1) ratio the live popup displays
-     it at, with no circle mask, and a taller base size than the staff
-     avatar thumb. */
+  /* Ministry photo: matches the 4:3 ratio the live popup displays it at,
+     with no circle mask, and a taller base size than the staff avatar
+     thumb. */
   .photo-widget[data-kind="city"] { grid-template-columns: 160px 1fr auto; }
   .photo-widget[data-kind="city"] img.photo-thumb,
   .photo-widget[data-kind="city"] .photo-placeholder {
     width: 100%;
     height: auto;
-    aspect-ratio: 1.9 / 1;
+    aspect-ratio: 4 / 3;
     border-radius: 4px;
   }
 
