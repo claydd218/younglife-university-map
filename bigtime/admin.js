@@ -15,7 +15,7 @@ const API_BASE = '/bigtime/api';
 // this is rendered.
 const PHOTO_MINIMUMS = {
   staff: { width: 400, height: 400, label: 'Profile photos', detail: 'at least 400×400px, square' },
-  city: { width: 1200, height: 630, label: 'Banner (city) photos', detail: 'at least 1200×630px' },
+  city: { width: 1200, height: 900, label: 'Banner (city) photos', detail: 'at least 1200×900px (4:3)' },
 };
 
 const state = {
