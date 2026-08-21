@@ -703,6 +703,46 @@ function wireTitleEasterEgg() {
   });
 }
 
+// Panning/zooming the map (or opening a popup) doesn't change the URL, so
+// the browser's Back button has nothing of ours to step back through — it
+// falls straight through to wherever the visitor was before this page,
+// which reads as "the map ate my back button" for anyone who'd zoomed in
+// first. Pushing one extra history entry the first time the view changes
+// gives Back something of ours to consume first: it lands back on this
+// same page (no reload, same URL) and fires 'popstate', which resets the
+// view instead of the browser navigating away. A second Back press with no
+// further interaction then behaves normally and leaves the page, same as
+// if the map had never been touched.
+function wireBackButtonReset() {
+  const initialView = { center: L.latLng(CONFIG.MAP_CENTER), zoom: CONFIG.MAP_ZOOM };
+  let pushed = false;
+  // Set while resetMapView's own setView call is in flight, so that
+  // programmatic move doesn't immediately re-arm the trap it was called to
+  // disarm — cleared on the next tick, once Leaflet's synchronous
+  // (animate:false) move/zoom events for that call have all fired.
+  let suppressArm = false;
+
+  function armTrap() {
+    if (pushed || suppressArm) return;
+    pushed = true;
+    history.pushState({ ylMapView: true }, '', location.href);
+  }
+
+  function resetMapView() {
+    suppressArm = true;
+    map.closePopup();
+    map.setView(initialView.center, initialView.zoom, { animate: false });
+    setTimeout(() => { suppressArm = false; }, 0);
+  }
+
+  map.on('movestart', armTrap);
+  window.addEventListener('popstate', () => {
+    if (!pushed) return; // not our entry — let the browser navigate normally
+    pushed = false;
+    resetMapView();
+  });
+}
+
 async function init() {
   showStatus('Loading ministries…');
   try {
@@ -826,6 +866,7 @@ async function init() {
     wirePhotoPreview();
     wireMinistryPhotoCarousel();
     wireTitleEasterEgg();
+    wireBackButtonReset();
 
     if (unmatchedCountries.size) {
       console.warn(
