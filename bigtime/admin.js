@@ -23,6 +23,7 @@ const state = {
   sha: null,
   divisionByCountry: new Map(),
   editingId: null, // null while adding, otherwise the id being edited
+  dialogDirty: false, // edit mode only — see markDialogDirty/updateDialogButtons
 };
 
 // --- small DOM/text helpers -------------------------------------------------
@@ -422,6 +423,7 @@ function renderMinistryPhotos() {
       [currentMinistryPhotos[index - 1], currentMinistryPhotos[index]] =
         [currentMinistryPhotos[index], currentMinistryPhotos[index - 1]];
       renderMinistryPhotos();
+      markDialogDirty();
     });
 
     const downBtn = document.createElement('button');
@@ -434,6 +436,7 @@ function renderMinistryPhotos() {
       [currentMinistryPhotos[index + 1], currentMinistryPhotos[index]] =
         [currentMinistryPhotos[index], currentMinistryPhotos[index + 1]];
       renderMinistryPhotos();
+      markDialogDirty();
     });
 
     const reorderRow = document.createElement('div');
@@ -487,6 +490,7 @@ async function handleAddMinistryPhoto(file) {
     ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(jpeg);
     currentMinistryPhotos.push(result.filename);
     renderMinistryPhotos();
+    markDialogDirty();
   } catch (err) {
     showBanner('error', `Upload failed: ${err.message || err}`);
   } finally {
@@ -614,6 +618,7 @@ function makeRemoveButton({ danger = false, confirmMessage = null, onRemove }) {
   btn.addEventListener('click', () => {
     if (confirmMessage && !window.confirm(confirmMessage)) return;
     onRemove();
+    markDialogDirty();
   });
   return btn;
 }
@@ -640,6 +645,7 @@ function addStaffRow(prefill = {}) {
     getSlugParts: () => (nameInput.value.trim() ? { kind: 'staff', name: nameInput.value.trim() } : null),
     initialUrl,
     initialSlug: slug,
+    onUploaded: markDialogDirty,
   });
   if (slug) {
     findExistingImageUrl(slug).then(wireWidget);
@@ -665,6 +671,38 @@ function clearFieldErrors() {
   $('country-error').hidden = true;
 }
 
+// Adding a new ministry keeps its unconditional Save/Cancel choice — there's
+// no prior saved state to fall back to either way, so a single
+// always-saving button would be ambiguous, and Cancel is always safe since
+// nothing about a not-yet-created ministry has been saved.
+// Editing an existing ministry instead starts on Cancel (untouched, so
+// there's nothing to save) and switches to Update — permanently, for the
+// rest of this dialog session — the moment anything changes. This also
+// covers photo add/remove/reorder: those already commit to the repo the
+// instant they happen (see the photo manager below), so once one has
+// happened Cancel would otherwise leave the saved ministry row's photos
+// list out of sync with what's actually on disk — flipping to Update
+// closes that gap by making a save (which is what a photo action needs
+// anyway) the only remaining way to leave the dialog.
+function updateDialogButtons() {
+  if (!state.editingId) {
+    $('dialog-close-btn').hidden = false;
+    $('dialog-close-btn').textContent = 'Save';
+    $('dialog-cancel-btn').hidden = false;
+    return;
+  }
+  const dirty = state.dialogDirty;
+  $('dialog-close-btn').hidden = !dirty;
+  $('dialog-close-btn').textContent = 'Update';
+  $('dialog-cancel-btn').hidden = dirty;
+}
+
+function markDialogDirty() {
+  if (state.dialogDirty) return;
+  state.dialogDirty = true;
+  updateDialogButtons();
+}
+
 function openDialog(row) {
   clearFieldErrors();
   state.editingId = row ? row.id : null;
@@ -680,11 +718,8 @@ function openDialog(row) {
   closePinPlacementMap();
   updatePinPlacementVisibility();
 
-  // Editing saves in place on Update (existing data, nothing to discard).
-  // Adding gets a real Save/Cancel choice — there's no prior state to fall
-  // back to, so a single always-saving button would be ambiguous.
-  $('dialog-close-btn').textContent = row ? 'Update' : 'Save';
-  $('dialog-cancel-btn').hidden = !!row;
+  state.dialogDirty = false;
+  updateDialogButtons();
   updateSaveButtonState();
 
   $('staff-group').innerHTML = '';
@@ -919,6 +954,7 @@ async function lookupLatLng() {
       : `Found: ${result.display_name}`);
     updateSaveButtonState();
     updatePinPlacementVisibility();
+    markDialogDirty();
   } catch (err) {
     setLatLngLookupStatus(`Lookup failed: ${err.message || err}`, 'error');
   } finally {
@@ -970,6 +1006,7 @@ function openPinPlacementMap() {
     $('field-lat').value = latlng.lat.toFixed(4);
     $('field-lng').value = latlng.lng.toFixed(4);
     updateSaveButtonState();
+    markDialogDirty();
   };
   pinPlacementMarker.on('dragend', () => applyPosition(pinPlacementMarker.getLatLng()));
   pinPlacementMap.on('click', (e) => {
@@ -985,13 +1022,18 @@ function togglePinPlacementMap() {
 
 function wireDialog() {
   $('add-ministry-btn').addEventListener('click', () => openDialog(null));
-  $('add-staff-btn').addEventListener('click', () => addStaffRow());
-  $('add-university-btn').addEventListener('click', () => addUniversityRow());
+  $('add-staff-btn').addEventListener('click', () => { addStaffRow(); markDialogDirty(); });
+  $('add-university-btn').addEventListener('click', () => { addUniversityRow(); markDialogDirty(); });
   wireMinistryPhotoAdd();
   $('latlng-lookup-btn').addEventListener('click', lookupLatLng);
   $('pin-placement-btn').addEventListener('click', togglePinPlacementMap);
   $('dialog-close-btn').addEventListener('click', saveMinistry);
   $('dialog-cancel-btn').addEventListener('click', () => $('ministry-dialog').close());
+  // Delegated rather than wired per-field: covers every text/number/
+  // checkbox input, including staff/university rows added after the
+  // dialog opened, without needing its own listener on each one.
+  $('ministry-form').addEventListener('input', markDialogDirty);
+  $('ministry-form').addEventListener('change', markDialogDirty);
   ['field-city', 'field-country', 'field-lat', 'field-lng'].forEach((id) => {
     $(id).addEventListener('input', updateSaveButtonState);
   });
