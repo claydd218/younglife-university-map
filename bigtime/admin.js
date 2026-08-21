@@ -374,6 +374,14 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
 // map popup; the rest are only visible in that popup's photo carousel.
 
 let currentMinistryPhotos = [];
+// filename -> local blob URL, for photos uploaded earlier in this same
+// dialog session. GitHub's Contents API has a brief read-after-write lag,
+// so fetching a just-uploaded file straight from its repo URL can 404 for
+// a few seconds — showing the blob we already have instead avoids that
+// broken-thumbnail flash. Existing photos loaded from a saved ministry
+// have no blob here and fall back to the repo URL, which is fine since
+// they've been committed for a while.
+let ministryPhotoBlobUrls = {};
 
 function ministryPhotoUrl(filename) {
   return `../${CONFIG.IMAGES_DIR}${filename}`;
@@ -392,7 +400,7 @@ function renderMinistryPhotos() {
     item.className = 'ministry-photo-item';
 
     const img = document.createElement('img');
-    img.src = ministryPhotoUrl(filename);
+    img.src = ministryPhotoBlobUrls[filename] || ministryPhotoUrl(filename);
     img.alt = '';
 
     const infoCol = document.createElement('div');
@@ -476,6 +484,7 @@ async function handleAddMinistryPhoto(file) {
       method: 'POST',
       body: JSON.stringify({ kind: 'city', city, country, imageBase64 }),
     });
+    ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(jpeg);
     currentMinistryPhotos.push(result.filename);
     renderMinistryPhotos();
   } catch (err) {
@@ -686,6 +695,7 @@ function openDialog(row) {
   }
 
   currentMinistryPhotos = row ? row.photos.slice() : [];
+  ministryPhotoBlobUrls = {};
   renderMinistryPhotos();
 
   $('ministry-dialog').showModal();
