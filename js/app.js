@@ -697,6 +697,13 @@ function wireMinistryPhotoCarousel() {
     sliding = true;
     const width = imageEl.getBoundingClientRect().width || 1;
     imageEl.style.transition = `transform ${SLIDE_MS}ms ease`;
+    // Forces the browser to commit the transition (and the drag's current
+    // position, if this follows a swipe) before the transform below
+    // changes — without it, some engines (Safari especially) coalesce the
+    // two style writes and jump straight to the end position instead of
+    // animating, which read as the photo "flashing" out rather than
+    // sliding.
+    void imageEl.offsetWidth;
     imageEl.style.transform = `translateX(${dir * -width}px)`;
 
     setTimeout(() => {
