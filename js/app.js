@@ -625,28 +625,57 @@ function wirePhotoPreview() {
 // it — same click-to-toggle pattern as wirePhotoPreview above, but on
 // click rather than hover on desktop too: hover-triggered popups here read
 // as too jarring for a fullscreen overlay.
+// Navigation is iOS Photos-style: dots instead of a "1 / 3" counter, a
+// slide transition on every change (arrows, dots, or swipe), and a real
+// drag-follow swipe gesture on touch — the photo tracks the finger 1:1
+// while dragging, then either continues on to a full slide or snaps back,
+// depending on how far it got released.
 function wireMinistryPhotoCarousel() {
   const lightbox = document.getElementById('ministry-lightbox');
+  const content = lightbox.querySelector('.lightbox-content');
   const imageEl = lightbox.querySelector('.lightbox-image');
-  const counterEl = lightbox.querySelector('.lightbox-counter');
+  const dotsEl = lightbox.querySelector('.lightbox-dots');
   const prevBtn = lightbox.querySelector('.lightbox-prev');
   const nextBtn = lightbox.querySelector('.lightbox-next');
+  const SLIDE_MS = 220;
+  const SWIPE_FRACTION = 0.18; // of the image's own width
 
   let photos = [];
   let index = 0;
   let activeImg = null; // the img currently open, for click-to-toggle
+  let sliding = false;
+
+  function renderDots() {
+    dotsEl.innerHTML = '';
+    const multi = photos.length > 1;
+    dotsEl.hidden = !multi;
+    if (!multi) return;
+    photos.forEach((_, i) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = `lightbox-dot${i === index ? ' active' : ''}`;
+      dot.setAttribute('aria-label', `Photo ${i + 1} of ${photos.length}`);
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (i !== index) slideTo(i, i > index ? 1 : -1);
+      });
+      dotsEl.appendChild(dot);
+    });
+  }
 
   function render() {
     imageEl.src = CONFIG.IMAGES_DIR + photos[index];
     const multi = photos.length > 1;
-    counterEl.textContent = multi ? `${index + 1} / ${photos.length}` : '';
     prevBtn.hidden = !multi;
     nextBtn.hidden = !multi;
+    renderDots();
   }
 
   function open(photoList) {
     photos = photoList;
     index = 0;
+    imageEl.style.transition = 'none';
+    imageEl.style.transform = 'translateX(0)';
     render();
     lightbox.classList.add('visible');
   }
@@ -656,13 +685,88 @@ function wireMinistryPhotoCarousel() {
     activeImg = null;
   }
 
-  function showNext() { index = (index + 1) % photos.length; render(); }
-  function showPrev() { index = (index - 1 + photos.length) % photos.length; render(); }
+  // Slides the current photo out in `dir`'s direction, swaps to newIndex,
+  // then slides the new one in from the opposite side. Reused by the
+  // arrows, dots, and a released swipe alike, so every path animates the
+  // same way — a swipe that's already partway through this motion just
+  // continues from wherever the drag left off, since a CSS transition
+  // animates from an element's current rendered position regardless of
+  // what put it there.
+  function slideTo(newIndex, dir) {
+    if (sliding || newIndex === index || photos.length < 2) return;
+    sliding = true;
+    const width = imageEl.getBoundingClientRect().width || 1;
+    imageEl.style.transition = `transform ${SLIDE_MS}ms ease`;
+    imageEl.style.transform = `translateX(${dir * -width}px)`;
+
+    setTimeout(() => {
+      index = newIndex;
+      imageEl.style.transition = 'none';
+      imageEl.style.transform = `translateX(${dir * width}px)`;
+      imageEl.src = CONFIG.IMAGES_DIR + photos[index];
+      void imageEl.offsetWidth; // force reflow so the slide-in below actually animates
+      imageEl.style.transition = `transform ${SLIDE_MS}ms ease`;
+      imageEl.style.transform = 'translateX(0)';
+      renderDots();
+      setTimeout(() => { sliding = false; }, SLIDE_MS);
+    }, SLIDE_MS);
+  }
+
+  function showNext() { slideTo((index + 1) % photos.length, 1); }
+  function showPrev() { slideTo((index - 1 + photos.length) % photos.length, -1); }
 
   prevBtn.addEventListener('click', (e) => { e.stopPropagation(); showPrev(); });
   nextBtn.addEventListener('click', (e) => { e.stopPropagation(); showNext(); });
   lightbox.querySelector('.lightbox-close').addEventListener('click', close);
   lightbox.querySelector('.lightbox-backdrop').addEventListener('click', close);
+
+  // Touch drag: axis-locked so an ambiguous or vertical gesture is left
+  // alone (nothing to vertically scroll here, but this also matters on
+  // iOS specifically — without it, an early horizontal drag can be read as
+  // the browser's own edge-swipe-back gesture before preventDefault below
+  // gets a chance to claim it).
+  let dragging = false;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let axis = null; // 'x' | 'y' | null
+
+  content.addEventListener('touchstart', (e) => {
+    if (sliding || photos.length < 2) return;
+    dragging = true;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    axis = null;
+    imageEl.style.transition = 'none';
+  }, { passive: true });
+
+  content.addEventListener('touchmove', (e) => {
+    if (!dragging) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+    if (!axis) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (axis !== 'x') return;
+    e.preventDefault();
+    imageEl.style.transform = `translateX(${dx}px)`;
+  }, { passive: false });
+
+  content.addEventListener('touchend', (e) => {
+    if (!dragging) return;
+    if (axis === 'x') {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const width = imageEl.getBoundingClientRect().width || 1;
+      if (Math.abs(dx) > width * SWIPE_FRACTION) {
+        dx < 0 ? showNext() : showPrev();
+      } else {
+        imageEl.style.transition = `transform ${SLIDE_MS}ms ease`;
+        imageEl.style.transform = 'translateX(0)';
+      }
+    }
+    dragging = false;
+    axis = null;
+  });
 
   function photosFromImg(img) {
     try {

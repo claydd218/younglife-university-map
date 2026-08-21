@@ -587,7 +587,11 @@ img.popup-photo {
 .lightbox-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(20, 15, 8, 0.82);
+  /* Near-solid rather than a lighter translucent tint — the map popup
+     underneath stays open while the lightbox is up (see close() in
+     wireMinistryPhotoCarousel), and its beige card was visibly showing
+     through at lower opacity. */
+  background: rgba(10, 8, 4, 0.96);
 }
 
 .lightbox-content {
@@ -606,11 +610,24 @@ img.popup-photo {
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   background: var(--card-bg);
+  /* JS drives the swipe transform directly (transition toggled on/off per
+     phase — see wireMinistryPhotoCarousel) — pan-y leaves vertical touch
+     scrolling to the browser but keeps horizontal drags from also being
+     read as a page/back gesture before our own handler can claim them. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .lightbox-close,
 .lightbox-nav {
   position: absolute;
+  /* The image gets a JS-driven transform during swipes/slides, which
+     creates its own stacking context — without an explicit z-index here,
+     that (later in DOM order) would paint above these buttons instead of
+     under them. */
+  z-index: 2;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.5);
   background: rgba(20,15,8,0.55);
@@ -642,17 +659,34 @@ img.popup-photo {
 .lightbox-prev { left: 10px; }
 .lightbox-next { right: 10px; }
 
-.lightbox-counter {
+.lightbox-dots {
   position: absolute;
-  bottom: 10px;
+  z-index: 2;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(20,15,8,0.55);
-  color: #fff;
-  padding: 3px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
   border-radius: 10px;
-  font-size: 12px;
-  letter-spacing: 0.04em;
+  background: rgba(20,15,8,0.4);
+}
+
+.lightbox-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.45);
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.lightbox-dot.active {
+  background: #fff;
+  transform: scale(1.15);
 }
 
 .photo-preview.visible {
