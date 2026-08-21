@@ -587,11 +587,7 @@ img.popup-photo {
 .lightbox-backdrop {
   position: absolute;
   inset: 0;
-  /* Near-solid rather than a lighter translucent tint — the map popup
-     underneath stays open while the lightbox is up (see close() in
-     wireMinistryPhotoCarousel), and its beige card was visibly showing
-     through at lower opacity. */
-  background: rgba(10, 8, 4, 0.96);
+  background: rgba(10, 8, 4, 0.67);
 }
 
 .lightbox-content {
