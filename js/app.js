@@ -625,25 +625,46 @@ function wirePhotoPreview() {
 // it — same click-to-toggle pattern as wirePhotoPreview above, but on
 // click rather than hover on desktop too: hover-triggered popups here read
 // as too jarring for a fullscreen overlay.
-// Navigation is iOS Photos-style: dots instead of a "1 / 3" counter, a
-// slide transition on every change (arrows, dots, or swipe), and a real
-// drag-follow swipe gesture on touch — the photo tracks the finger 1:1
-// while dragging, then either continues on to a full slide or snaps back,
-// depending on how far it got released.
+// Navigation is iOS Photos-style: dots instead of a "1 / 3" counter, and a
+// real drag-follow swipe on touch. Unlike a single sliding image, the
+// outgoing and incoming photos need to be visible together while they
+// move — so this keeps a 3-up "track" (prev/current/next) always loaded
+// side by side and slides the whole track by one slide-width; arrows and
+// dots animate the same way a swipe does, and the track then resets
+// invisibly back to center with fresh neighbors loaded for the new
+// position (the standard technique for an apparently-infinite carousel).
 function wireMinistryPhotoCarousel() {
   const lightbox = document.getElementById('ministry-lightbox');
   const content = lightbox.querySelector('.lightbox-content');
-  const imageEl = lightbox.querySelector('.lightbox-image');
+  const track = lightbox.querySelector('.lightbox-track');
+  const slidePrev = track.querySelector('[data-slide="prev"]');
+  const slideCurrent = track.querySelector('[data-slide="current"]');
+  const slideNext = track.querySelector('[data-slide="next"]');
   const dotsEl = lightbox.querySelector('.lightbox-dots');
   const prevBtn = lightbox.querySelector('.lightbox-prev');
   const nextBtn = lightbox.querySelector('.lightbox-next');
   const SLIDE_MS = 220;
-  const SWIPE_FRACTION = 0.18; // of the image's own width
+  const SWIPE_FRACTION = 0.18; // of one slide's own width
+  const REST_TRANSFORM = 'translateX(-33.3333%)';
 
   let photos = [];
   let index = 0;
   let activeImg = null; // the img currently open, for click-to-toggle
   let sliding = false;
+
+  function urlFor(i) { return CONFIG.IMAGES_DIR + photos[i]; }
+
+  // Only the adjacent two need to exist for the track to work — with a
+  // single photo, prev/next are left blank (swiping/arrows are disabled
+  // below whenever photos.length < 2, so they're never actually shown).
+  function loadSlides() {
+    slideCurrent.src = urlFor(index);
+    const n = photos.length;
+    if (n > 1) {
+      slidePrev.src = urlFor((index - 1 + n) % n);
+      slideNext.src = urlFor((index + 1) % n);
+    }
+  }
 
   function renderDots() {
     dotsEl.innerHTML = '';
@@ -657,26 +678,37 @@ function wireMinistryPhotoCarousel() {
       dot.setAttribute('aria-label', `Photo ${i + 1} of ${photos.length}`);
       dot.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (i !== index) slideTo(i, i > index ? 1 : -1);
+        goToDot(i);
       });
       dotsEl.appendChild(dot);
     });
   }
 
-  function render() {
-    imageEl.src = CONFIG.IMAGES_DIR + photos[index];
-    const multi = photos.length > 1;
-    prevBtn.hidden = !multi;
-    nextBtn.hidden = !multi;
+  // A dot for the immediate neighbor slides there like a swipe would; any
+  // other dot has no adjacent slide already loaded to slide through, so it
+  // jumps straight there instead of faking a multi-slide animation.
+  function goToDot(i) {
+    if (i === index || sliding) return;
+    const n = photos.length;
+    if ((index + 1) % n === i) { showNext(); return; }
+    if ((index - 1 + n) % n === i) { showPrev(); return; }
+    index = i;
+    track.style.transition = 'none';
+    track.style.transform = REST_TRANSFORM;
+    loadSlides();
     renderDots();
   }
 
   function open(photoList) {
     photos = photoList;
     index = 0;
-    imageEl.style.transition = 'none';
-    imageEl.style.transform = 'translateX(0)';
-    render();
+    track.style.transition = 'none';
+    track.style.transform = REST_TRANSFORM;
+    loadSlides();
+    renderDots();
+    const multi = photos.length > 1;
+    prevBtn.hidden = !multi;
+    nextBtn.hidden = !multi;
     lightbox.classList.add('visible');
   }
 
@@ -685,37 +717,35 @@ function wireMinistryPhotoCarousel() {
     activeImg = null;
   }
 
-  // Slides the current photo out in `dir`'s direction, swaps to newIndex,
-  // then slides the new one in from the opposite side. Reused by the
-  // arrows, dots, and a released swipe alike, so every path animates the
-  // same way — a swipe that's already partway through this motion just
-  // continues from wherever the drag left off, since a CSS transition
-  // animates from an element's current rendered position regardless of
-  // what put it there.
+  // Slides the whole track by one slide-width in `dir`'s direction — the
+  // photo landing there is already loaded right next to the current one,
+  // so both are visible moving together — then snaps the track back to
+  // center with transition:none and loads fresh neighbors for the new
+  // position, invisibly to the viewer. Reused by the arrows, dots, and a
+  // released swipe alike, so every path animates the same way — a swipe
+  // that's already partway through this motion just continues from
+  // wherever the drag left off, since a CSS transition animates from an
+  // element's current rendered position regardless of what put it there.
   function slideTo(newIndex, dir) {
     if (sliding || newIndex === index || photos.length < 2) return;
     sliding = true;
-    const width = imageEl.getBoundingClientRect().width || 1;
-    imageEl.style.transition = `transform ${SLIDE_MS}ms ease`;
+    track.style.transition = `transform ${SLIDE_MS}ms ease`;
     // Forces the browser to commit the transition (and the drag's current
     // position, if this follows a swipe) before the transform below
     // changes — without it, some engines (Safari especially) coalesce the
     // two style writes and jump straight to the end position instead of
     // animating, which read as the photo "flashing" out rather than
     // sliding.
-    void imageEl.offsetWidth;
-    imageEl.style.transform = `translateX(${dir * -width}px)`;
+    void track.offsetWidth;
+    track.style.transform = dir === 1 ? 'translateX(-66.6667%)' : 'translateX(0%)';
 
     setTimeout(() => {
       index = newIndex;
-      imageEl.style.transition = 'none';
-      imageEl.style.transform = `translateX(${dir * width}px)`;
-      imageEl.src = CONFIG.IMAGES_DIR + photos[index];
-      void imageEl.offsetWidth; // force reflow so the slide-in below actually animates
-      imageEl.style.transition = `transform ${SLIDE_MS}ms ease`;
-      imageEl.style.transform = 'translateX(0)';
+      track.style.transition = 'none';
+      track.style.transform = REST_TRANSFORM;
+      loadSlides();
       renderDots();
-      setTimeout(() => { sliding = false; }, SLIDE_MS);
+      sliding = false;
     }, SLIDE_MS);
   }
 
@@ -743,7 +773,7 @@ function wireMinistryPhotoCarousel() {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     axis = null;
-    imageEl.style.transition = 'none';
+    track.style.transition = 'none';
   }, { passive: true });
 
   content.addEventListener('touchmove', (e) => {
@@ -756,19 +786,20 @@ function wireMinistryPhotoCarousel() {
     }
     if (axis !== 'x') return;
     e.preventDefault();
-    imageEl.style.transform = `translateX(${dx}px)`;
+    track.style.transform = `translateX(calc(-33.3333% + ${dx}px))`;
   }, { passive: false });
 
   content.addEventListener('touchend', (e) => {
     if (!dragging) return;
     if (axis === 'x') {
       const dx = e.changedTouches[0].clientX - touchStartX;
-      const width = imageEl.getBoundingClientRect().width || 1;
+      const width = track.getBoundingClientRect().width / 3 || 1;
       if (Math.abs(dx) > width * SWIPE_FRACTION) {
         dx < 0 ? showNext() : showPrev();
       } else {
-        imageEl.style.transition = `transform ${SLIDE_MS}ms ease`;
-        imageEl.style.transform = 'translateX(0)';
+        track.style.transition = `transform ${SLIDE_MS}ms ease`;
+        void track.offsetWidth;
+        track.style.transform = REST_TRANSFORM;
       }
     }
     dragging = false;

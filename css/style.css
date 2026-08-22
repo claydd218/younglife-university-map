@@ -593,24 +593,46 @@ img.popup-photo {
 .lightbox-content {
   position: relative;
   z-index: 1;
-  max-width: 92vw;
-  max-height: 85vh;
   display: flex;
 }
 
-.lightbox-image {
-  display: block;
-  max-width: 92vw;
-  max-height: 85vh;
-  object-fit: contain;
+/* Fixed-size window rather than sized to the current photo — a sliding
+   track needs every slide to share one box so the outgoing and incoming
+   photos line up edge-to-edge while they move together. Each photo
+   letterboxes inside it via object-fit on .lightbox-slide. */
+.lightbox-viewport {
+  position: relative;
+  width: min(92vw, 900px);
+  height: min(85vh, 700px);
+  overflow: hidden;
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   background: var(--card-bg);
-  /* JS drives the swipe transform directly (transition toggled on/off per
-     phase — see wireMinistryPhotoCarousel) — pan-y leaves vertical touch
-     scrolling to the browser but keeps horizontal drags from also being
-     read as a page/back gesture before our own handler can claim them. */
+}
+
+/* Three slides — prev/current/next — always loaded and sitting side by
+   side, so an outgoing and incoming photo are both visible while the
+   whole track slides. Rests at translateX(-33.3333%) so the middle
+   ("current") slide fills the viewport; JS drives this transform directly
+   during drags and slide transitions (transition toggled on/off per
+   phase — see wireMinistryPhotoCarousel). */
+.lightbox-track {
+  display: flex;
+  width: 300%;
+  height: 100%;
+  transform: translateX(-33.3333%);
+  /* pan-y leaves vertical touch scrolling to the browser but keeps
+     horizontal drags from also being read as a page/back gesture before
+     our own handler can claim them. */
   touch-action: pan-y;
+}
+
+.lightbox-slide {
+  flex: 0 0 33.3333%;
+  width: 33.3333%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
