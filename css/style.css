@@ -477,6 +477,41 @@ img.popup-photo {
   -webkit-touch-callout: none;
 }
 
+.popup-photo-wrap {
+  position: relative;
+}
+
+/* Purely a "tap to enlarge" hint — sits over the img, not the click
+   target, so pointer-events is off and clicks pass straight through to
+   the photo underneath. */
+.popup-photo-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: rgba(20, 15, 8, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  pointer-events: none;
+}
+
+.popup-photo-badge svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.popup-photo-badge-count {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .popup-photo-fallback {
   display: flex;
   align-items: center;
@@ -687,6 +722,13 @@ img.popup-photo {
 
 .lightbox-prev { left: 10px; }
 .lightbox-next { right: 10px; }
+
+/* Touch swipe already covers navigation wherever a touch input is present
+   (even alongside a mouse, e.g. touchscreen laptops), so the arrows are
+   only useful — and only shown — where swiping isn't an option. */
+@media (any-pointer: coarse) {
+  .lightbox-nav { display: none; }
+}
 
 .lightbox-dots {
   position: absolute;

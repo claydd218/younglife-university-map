@@ -146,7 +146,9 @@ window.__ministryPhotoFallback = function (img) {
   fallback.className = 'popup-photo popup-photo-fallback';
   fallback.style.setProperty('--fallback-color', img.dataset.fallbackColor);
   fallback.innerHTML = `<span>${img.dataset.fallbackText}</span>`;
-  img.replaceWith(fallback);
+  // Swap out the whole wrap (img + its enlarge badge), not just the img —
+  // otherwise the badge is left dangling over the fallback div behind it.
+  (img.closest('.popup-photo-wrap') || img).replaceWith(fallback);
 };
 
 function markerIcon(divisionKey, stageKey) {
@@ -209,16 +211,25 @@ function buildPopupHtml(row, divisionKey) {
     : '';
 
   const photos = (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+  // The enlarge badge is the only hint that a popup photo is tappable (and,
+  // for multi-photo ministries, that there's a carousel behind it) — no
+  // hover state to lean on here since this has to read on touch too.
   const cityPhoto = photos.length
-    ? `<img
-        class="popup-photo"
-        src="${escapeHtml(CONFIG.IMAGES_DIR + photos[0])}"
-        alt="${escapeHtml(`${row.city} ministry photo`)}"
-        data-photos='${escapeHtml(JSON.stringify(photos))}'
-        data-fallback-text="${escapeHtml(row.city || '?')}"
-        data-fallback-color="${escapeHtml(div.country)}"
-        onerror="window.__ministryPhotoFallback(this)"
-      >`
+    ? `<div class="popup-photo-wrap">
+        <img
+          class="popup-photo"
+          src="${escapeHtml(CONFIG.IMAGES_DIR + photos[0])}"
+          alt="${escapeHtml(`${row.city} ministry photo`)}"
+          data-photos='${escapeHtml(JSON.stringify(photos))}'
+          data-fallback-text="${escapeHtml(row.city || '?')}"
+          data-fallback-color="${escapeHtml(div.country)}"
+          onerror="window.__ministryPhotoFallback(this)"
+        >
+        <span class="popup-photo-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+          ${photos.length > 1 ? `<span class="popup-photo-badge-count">${photos.length}</span>` : ''}
+        </span>
+      </div>`
     : `<div class="popup-photo popup-photo-fallback" style="--fallback-color:${escapeHtml(div.country)}"><span>${escapeHtml(row.city || '?')}</span></div>`;
 
   return `
