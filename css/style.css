@@ -602,18 +602,19 @@ img.popup-photo {
    letterboxes inside it via object-fit on .lightbox-slide. */
 .lightbox-viewport {
   position: relative;
-  /* Ministry photos are expected to be 4:3 (see PHOTO_MINIMUMS.city in
-     bigtime/admin.js) — matching that here, rather than deriving a shape
-     straight from the viewport's own vw/vh, means a normal photo fills
-     the box edge to edge instead of getting letterboxed/pillarboxed
-     against it. Sized as large as possible within the 92vw/85vh bounds
-     while holding that ratio exactly (the two min()s are the standard
-     "biggest N:M box that fits a W×H area" trick — capped at 1200×900,
-     already 4:3, so it stays consistent whichever term wins); anything
-     off-ratio (a legacy photo, say) still just letterboxes against the
-     dark backdrop tone below rather than a visible bar. */
-  width: min(92vw, calc(85vh * 4 / 3), 1200px);
-  height: min(85vh, calc(92vw * 3 / 4), 900px);
+  /* --ratio (width/height, unitless) is set by JS per photo — see
+     applyViewportRatio in wireMinistryPhotoCarousel — since real uploads
+     vary (not every photo is exactly the recommended 4:3), so a fixed
+     ratio here still letterboxed most of them one way or another. 1.3333
+     is just the fallback shown for an instant before the first photo's
+     real dimensions are known. Sized as large as possible within the
+     92vw/85vh bounds while holding that ratio exactly (the two min()s are
+     the standard "biggest N:M box that fits a W×H area" trick, both
+     terms deriving from the same 900px height cap so they stay
+     consistent for whatever ratio is current). */
+  --ratio: 1.3333;
+  width: min(92vw, calc(85vh * var(--ratio)), calc(900px * var(--ratio)));
+  height: min(85vh, calc(92vw / var(--ratio)), 900px);
   overflow: hidden;
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);

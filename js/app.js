@@ -636,6 +636,7 @@ function wirePhotoPreview() {
 function wireMinistryPhotoCarousel() {
   const lightbox = document.getElementById('ministry-lightbox');
   const content = lightbox.querySelector('.lightbox-content');
+  const viewport = lightbox.querySelector('.lightbox-viewport');
   const track = lightbox.querySelector('.lightbox-track');
   const slidePrev = track.querySelector('[data-slide="prev"]');
   const slideCurrent = track.querySelector('[data-slide="current"]');
@@ -654,16 +655,57 @@ function wireMinistryPhotoCarousel() {
 
   function urlFor(i) { return CONFIG.IMAGES_DIR + photos[i]; }
 
-  // Only the adjacent two need to exist for the track to work — with a
-  // single photo, prev/next are left blank (swiping/arrows are disabled
-  // below whenever photos.length < 2, so they're never actually shown).
-  function loadSlides() {
-    slideCurrent.src = urlFor(index);
-    const n = photos.length;
-    if (n > 1) {
-      slidePrev.src = urlFor((index - 1 + n) % n);
-      slideNext.src = urlFor((index + 1) % n);
+  // Resolves once `img` has actually loaded (or failed to — a broken
+  // image is as "settled" as one that decoded, for our purposes here).
+  // img.decode() looks like the textbook tool for this but isn't used:
+  // it can hang indefinitely on an element inside a currently-opacity:0
+  // container (the lightbox is exactly that until open() finishes),
+  // apparently a Chromium quirk tying decode scheduling to paint
+  // eligibility. The .complete fast path also means this resolves
+  // synchronously-ish for anything already cached — the common case,
+  // since a photo shown here was almost always already visible inline in
+  // the popup a moment earlier.
+  function whenLoaded(img) {
+    return new Promise((resolve) => {
+      if (img.complete && img.naturalWidth) { resolve(); return; }
+      img.addEventListener('load', resolve, { once: true });
+      img.addEventListener('error', resolve, { once: true });
+    });
+  }
+
+  // Real uploads vary in aspect ratio (not every photo is exactly the
+  // recommended 4:3), so the viewport's shape is resized to match
+  // whichever photo is current rather than held at one fixed ratio —
+  // otherwise most photos would still letterbox one way or another.
+  function applyViewportRatio(img) {
+    if (img.naturalWidth && img.naturalHeight) {
+      viewport.style.setProperty('--ratio', img.naturalWidth / img.naturalHeight);
     }
+  }
+
+  // Loads the current-index photo into the middle slide and waits for it
+  // to actually be ready before returning — callers only touch the
+  // transform once this resolves. As long as every caller only mutates a
+  // slide while it's off-screen (see loadNeighbors below), that rules out
+  // the reset ever landing on a slide that still shows what it had
+  // before, which otherwise flashes the outgoing photo right as the new
+  // one should already be in place.
+  async function loadCurrentSlide() {
+    slideCurrent.src = urlFor(index);
+    await whenLoaded(slideCurrent);
+    applyViewportRatio(slideCurrent);
+  }
+
+  // Prev/next aren't visible at rest, so — unlike the current slide —
+  // there's no flash risk in just setting their src and letting them
+  // decode in the background. Only meaningful with 2+ photos; the single-
+  // photo case never reaches these (swiping/arrows are disabled below
+  // whenever photos.length < 2).
+  function loadNeighbors() {
+    const n = photos.length;
+    if (n <= 1) return;
+    slidePrev.src = urlFor((index - 1 + n) % n);
+    slideNext.src = urlFor((index + 1) % n);
   }
 
   function renderDots() {
@@ -686,25 +728,30 @@ function wireMinistryPhotoCarousel() {
 
   // A dot for the immediate neighbor slides there like a swipe would; any
   // other dot has no adjacent slide already loaded to slide through, so it
-  // jumps straight there instead of faking a multi-slide animation.
-  function goToDot(i) {
+  // jumps straight there instead of faking a multi-slide animation. The
+  // track never moves for this path (it's already at rest), so the swap
+  // just needs the decode-before-showing rule below, same as everywhere
+  // else.
+  async function goToDot(i) {
     if (i === index || sliding) return;
     const n = photos.length;
     if ((index + 1) % n === i) { showNext(); return; }
     if ((index - 1 + n) % n === i) { showPrev(); return; }
+    sliding = true;
     index = i;
-    track.style.transition = 'none';
-    track.style.transform = REST_TRANSFORM;
-    loadSlides();
+    await loadCurrentSlide();
+    loadNeighbors();
     renderDots();
+    sliding = false;
   }
 
-  function open(photoList) {
+  async function open(photoList) {
     photos = photoList;
     index = 0;
     track.style.transition = 'none';
     track.style.transform = REST_TRANSFORM;
-    loadSlides();
+    await loadCurrentSlide();
+    loadNeighbors();
     renderDots();
     const multi = photos.length > 1;
     prevBtn.hidden = !multi;
@@ -739,11 +786,20 @@ function wireMinistryPhotoCarousel() {
     void track.offsetWidth;
     track.style.transform = dir === 1 ? 'translateX(-66.6667%)' : 'translateX(0%)';
 
-    setTimeout(() => {
+    setTimeout(async () => {
       index = newIndex;
+      // The middle slide is off-screen right now (the track is still
+      // slid out), so it's safe to load + decode the new current photo
+      // into it before anything is visible there — only once that's
+      // actually ready does the reset happen, so the middle slide is
+      // never shown mid-decode with the previous photo still under it.
+      await loadCurrentSlide();
       track.style.transition = 'none';
       track.style.transform = REST_TRANSFORM;
-      loadSlides();
+      // The now-adjacent slides are off-screen again post-reset, so this
+      // is likewise safe — the reverse would flash them mid-slide, before
+      // the reset, while they're still the ones on screen.
+      loadNeighbors();
       renderDots();
       sliding = false;
     }, SLIDE_MS);
