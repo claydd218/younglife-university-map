@@ -76,3 +76,13 @@ export function assertNoParens(value, fieldLabel) {
     throw new ValidationError(`${fieldLabel} can't contain parentheses`, fieldLabel);
   }
 }
+
+// An alternative to assertNoParens for fields where rejecting the save
+// outright is more friction than it's worth (e.g. a university name that's
+// legitimately got an acronym in parens, like "Institute of Technical
+// Education (ITE) East") — stripping still guarantees the same invariant
+// assertNoParens exists for (no parens ever reach joinParenList's output),
+// just by sanitizing instead of refusing.
+export function stripParens(value) {
+  return (value || '').replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
+}

@@ -4,7 +4,7 @@
 
 import { getFile } from './github.js';
 import { parseCsv } from './csv.js';
-import { parseParenList, joinParenList, assertNoParens, ValidationError } from './text.js';
+import { parseParenList, joinParenList, assertNoParens, stripParens, ValidationError } from './text.js';
 
 export const MINISTRIES_PATH = 'data/ministries.csv';
 export const DIVISIONS_PATH = 'data/country-divisions.csv';
@@ -64,13 +64,13 @@ export function rowFromBody(id, body) {
     assertNoParens(s.name, 'Staff name');
     assertNoParens(s.role, 'Staff role');
   }
-  for (const u of body.universities || []) {
-    assertNoParens(u.name, 'University name');
-    assertNoParens(u.year, 'University year');
-  }
 
   const staffMeta = (body.staff || []).map(({ name, role }) => ({ name, meta: role }));
-  const universitiesMeta = (body.universities || []).map(({ name, year }) => ({ name, meta: year }));
+  // Universities get sanitized rather than rejected — see stripParens.
+  const universitiesMeta = (body.universities || []).map(({ name, year }) => ({
+    name: stripParens(name),
+    meta: stripParens(year),
+  }));
 
   return {
     id: String(id),

@@ -760,10 +760,12 @@ function deriveDateOpened(universities) {
 
 // Mirrors the server's assertNoParens rule for instant feedback — the
 // Function re-validates regardless, this is just so a mistake shows up
-// immediately instead of after a round-trip.
+// immediately instead of after a round-trip. Staff only: university
+// name/year get parens silently stripped instead (see saveMinistry), not
+// blocked, so there's nothing to flag here for those.
 function validateNoParensInForm() {
   let ok = true;
-  document.querySelectorAll('#staff-group .repeatable-item, #universities-group .repeatable-item').forEach((item) => {
+  document.querySelectorAll('#staff-group .repeatable-item').forEach((item) => {
     const nameInput = item.querySelector('.row-name');
     const metaInput = item.querySelector('.row-meta');
     const nameErr = item.querySelectorAll('.field-error')[0];
@@ -777,6 +779,14 @@ function validateNoParensInForm() {
     if (nameBad || metaBad) ok = false;
   });
   return ok;
+}
+
+// Strips parens from a university name/year rather than blocking the save
+// on them — mirrors worker/lib/text.js's stripParens so state.rows (updated
+// from this same body after save, not re-fetched) matches what the server
+// actually wrote instead of the raw typed value.
+function stripParens(value) {
+  return (value || '').replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 // If a photo was uploaded under a name that's since been edited — or the
@@ -838,7 +848,8 @@ async function reconcileAllPhotos() {
 async function saveMinistry() {
   if (!validateNoParensInForm()) return;
 
-  const universities = collectRepeatable($('universities-group'), 'name', 'year');
+  const universities = collectRepeatable($('universities-group'), 'name', 'year')
+    .map(({ name, year }) => ({ name: stripParens(name), year: stripParens(year) }));
   const body = {
     sha: state.sha,
     city: $('field-city').value.trim(),
