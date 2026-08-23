@@ -68,15 +68,31 @@
 
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .toolbar-left { display: flex; align-items: center; gap: 12px; }
+  .ministries-search-wrap { position: relative; display: flex; align-items: center; }
   .ministries-search {
     font: inherit;
     font-size: 14px;
-    padding: 7px 10px;
+    padding: 7px 26px 7px 10px;
     border: 1px solid #ccc;
     border-radius: 5px;
     width: 240px;
     box-sizing: border-box;
   }
+  .ministries-search-clear {
+    position: absolute;
+    right: 6px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: #888;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  .ministries-search-clear:hover { background: #eee; color: #333; }
   .btn {
     font: inherit;
     font-size: 14px;
@@ -344,7 +360,10 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <span id="ministries-count" class="status-text"></span>
-        <input type="text" id="ministries-search" class="ministries-search" placeholder="Search city, country, or staff…" autocomplete="off">
+        <div class="ministries-search-wrap">
+          <input type="text" id="ministries-search" class="ministries-search" placeholder="Search city, country, or staff…" autocomplete="off">
+          <button type="button" id="ministries-search-clear" class="ministries-search-clear" aria-label="Clear search" hidden>&times;</button>
+        </div>
       </div>
       <button type="button" class="btn" id="add-ministry-btn">+ Add New Ministry</button>
     </div>

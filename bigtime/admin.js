@@ -530,8 +530,18 @@ function matchesMinistriesSearch(row, query) {
 }
 
 function wireMinistriesSearch() {
-  $('ministries-search').addEventListener('input', (e) => {
+  const input = $('ministries-search');
+  const clearBtn = $('ministries-search-clear');
+  input.addEventListener('input', (e) => {
     ministriesSearch = e.target.value.trim().toLowerCase();
+    clearBtn.hidden = !e.target.value;
+    renderMinistriesTable();
+  });
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    ministriesSearch = '';
+    clearBtn.hidden = true;
+    input.focus();
     renderMinistriesTable();
   });
 }
