@@ -46,7 +46,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 45,Kaliningrad,Russia,54.7101280,20.5105838,,false,,Veronica Noda (Staff),,
 46,Vladivostok,Russia,43.1150678,131.8855768,,false,,Bogdan (Staff),,
 47,Lima,Peru,-12.0459808,-77.0305912,,false,,Jorge (Staff),,
-48,Edinburgh,United Kingdom,55.9533456,-3.1883749,,false,,Chloe (Staff),,
+48,Edinburgh,United Kingdom,55.9533456,-3.1883749,,true,,Chloe (Staff),"Edinburgh is dynamic city full of history and many university students.  With Glasgow being the other major university city, we are encouraged that we have begun our first ministry in 2025 and hope to grow soon.",
 49,Poznan,Poland,52.4006632,16.9197326,,false,,Asia Mazur (Staff),,
 50,Belfast,United Kingdom,54.5963910,-5.9301829,,false,,Jamie Paterson (Staff); Chris Pyper (Staff); Katie Vaughn (Staff),,
 51,East London,South Africa,-33.0191604,27.8998573,,false,,Bonte Uwimana (Staff),,
