@@ -1295,6 +1295,12 @@ function imageEntryRow(entry) {
 function openAddPhotoWidget(entry, li) {
   const replaceWidget = li.querySelector('.replace-widget');
   replaceWidget.hidden = false;
+  // Unlike the Ministries dialog's staff rows (see addStaffRow), this
+  // container never got the .photo-widget class that actually draws the
+  // dashed drop-zone box — createPhotoWidget fills it with content but
+  // doesn't apply that class itself, so without this the widget rendered
+  // with no visible box to drop a file onto.
+  replaceWidget.classList.add('photo-widget');
   createPhotoWidget(replaceWidget, {
     kind: entry.kind,
     getSlugParts: () => (entry.kind === 'staff' ? { kind: 'staff', name: entry.name } : { kind: 'city', city: entry.city, country: entry.country }),
