@@ -464,6 +464,10 @@ function renderMinistryPhotos() {
       onRemove: async () => {
         try {
           await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
+          if (ministryPhotoBlobUrls[filename]) {
+            URL.revokeObjectURL(ministryPhotoBlobUrls[filename]);
+            delete ministryPhotoBlobUrls[filename];
+          }
           currentMinistryPhotos.splice(index, 1);
           renderMinistryPhotos();
         } catch (err) {
@@ -795,7 +799,12 @@ function openDialog(row) {
   }
 
   currentMinistryPhotos = row ? row.photos.slice() : [];
-  ministryPhotoBlobUrls = {};
+  // Deliberately not reset here (unlike currentMinistryPhotos) — it's a
+  // session-lifetime cache keyed by filename, not per-dialog state. A photo
+  // uploaded earlier this session still renders from its local blob
+  // instead of the live site's path, which may not have redeployed the
+  // new commit yet — without this, reopening a just-saved ministry showed
+  // broken images until that deploy caught up (usually ~30s).
   renderMinistryPhotos();
 
   $('ministry-dialog').showModal();
@@ -893,6 +902,11 @@ async function reconcileMinistryPhotos(city, country) {
     const imageBase64 = await blobToBase64(jpeg);
     const result = await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ kind: 'city', city, country, imageBase64 }) });
     await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
+    // Without this, a renamed photo has no cache entry at all (unlike a
+    // freshly-uploaded one via handleAddMinistryPhotos) — reopening the
+    // dialog would fall straight to the network path below and hit the
+    // same deploy-lag broken-image window this whole change is about.
+    ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(jpeg);
     currentMinistryPhotos[i] = result.filename;
   }
 }
