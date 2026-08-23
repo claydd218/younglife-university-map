@@ -10,6 +10,7 @@ import { parseCsv, stringifyCsv } from '../lib/csv.js';
 import { ValidationError } from '../lib/text.js';
 import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
 import { MINISTRIES_PATH, HEADER, loadDivisions, rowToApi, rowFromBody, maxId } from '../lib/ministries.js';
+import { bumpDeployVersion } from '../lib/deployVersion.js';
 
 export async function onRequestGet({ env }) {
   const file = await getFile(env, MINISTRIES_PATH);
@@ -74,5 +75,6 @@ export async function onRequestPost({ request, env }) {
     throw err;
   }
 
-  return jsonResponse({ ok: true, id: newRow.id, sha: result.sha });
+  const deployVersion = await bumpDeployVersion(env, committerFromRequest(request));
+  return jsonResponse({ ok: true, id: newRow.id, sha: result.sha, deployVersion });
 }

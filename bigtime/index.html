@@ -66,6 +66,50 @@
   }
   .banner[hidden] { display: none; }
 
+  /* Non-modal — sits in a corner rather than blocking the toolbar like
+     .banner, since publishing status isn't urgent enough to demand
+     attention and the user should be free to keep editing while it
+     resolves in the background. */
+  .deploy-toast {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px 10px 14px;
+    border-radius: 8px;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 13.5px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+  .deploy-toast[hidden] { display: none; }
+  .deploy-toast.done { background: #1e7a3c; }
+  .deploy-toast-spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: deploy-toast-spin 0.7s linear infinite;
+    flex: 0 0 auto;
+  }
+  .deploy-toast.done .deploy-toast-spinner { display: none; }
+  @keyframes deploy-toast-spin { to { transform: rotate(360deg); } }
+  .deploy-toast-dismiss {
+    font: inherit;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 0 0 4px;
+    border: none;
+    background: none;
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+  }
+  .deploy-toast-dismiss:hover { color: #fff; }
+
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .toolbar-left { display: flex; align-items: center; gap: 12px; }
   .ministries-search-wrap { position: relative; display: flex; align-items: center; }
@@ -359,6 +403,12 @@
   <h1>Young Life University International Admin <a href="help.html" target="_blank" rel="noopener" class="help-link" title="Help" aria-label="Help">&#9432;</a></h1>
 
   <div id="banner" class="banner" hidden></div>
+
+  <div id="deploy-toast" class="deploy-toast" hidden>
+    <span id="deploy-toast-spinner" class="deploy-toast-spinner"></span>
+    <span id="deploy-toast-text" class="deploy-toast-text"></span>
+    <button type="button" id="deploy-toast-dismiss" class="deploy-toast-dismiss" aria-label="Dismiss">&times;</button>
+  </div>
 
   <div class="tabs">
     <button type="button" class="tab-btn active" data-tab="ministries">Ministries</button>

@@ -6,6 +6,7 @@ import { parseCsv, stringifyCsv } from '../lib/csv.js';
 import { ValidationError } from '../lib/text.js';
 import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
 import { MINISTRIES_PATH, HEADER, rowFromBody } from '../lib/ministries.js';
+import { bumpDeployVersion } from '../lib/deployVersion.js';
 
 export async function onRequestPut({ request, env, params }) {
   let body;
@@ -56,7 +57,8 @@ export async function onRequestPut({ request, env, params }) {
     throw err;
   }
 
-  return jsonResponse({ ok: true, id: updatedRow.id, sha: result.sha });
+  const deployVersion = await bumpDeployVersion(env, committerFromRequest(request));
+  return jsonResponse({ ok: true, id: updatedRow.id, sha: result.sha, deployVersion });
 }
 
 export async function onRequestDelete({ request, env, params }) {
@@ -90,5 +92,6 @@ export async function onRequestDelete({ request, env, params }) {
     throw err;
   }
 
-  return jsonResponse({ ok: true, sha: result.sha });
+  const deployVersion = await bumpDeployVersion(env, committerFromRequest(request));
+  return jsonResponse({ ok: true, sha: result.sha, deployVersion });
 }

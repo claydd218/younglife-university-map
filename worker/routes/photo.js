@@ -3,6 +3,7 @@
 
 import { listDir, deleteFile, ConflictError } from '../lib/github.js';
 import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
+import { bumpDeployVersion } from '../lib/deployVersion.js';
 
 const IMAGES_DIR = 'images';
 
@@ -26,5 +27,6 @@ export async function onRequestDelete({ request, env, params }) {
     throw err;
   }
 
-  return jsonResponse({ ok: true });
+  const deployVersion = await bumpDeployVersion(env, commit);
+  return jsonResponse({ ok: true, deployVersion });
 }

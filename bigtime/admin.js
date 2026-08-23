@@ -58,6 +58,86 @@ function hideBanner() {
   $('banner').hidden = true;
 }
 
+// --- Deploy status toast -----------------------------------------------
+
+// Confirms a save isn't just committed to git but actually live — polls a
+// small public marker file (worker/lib/deployVersion.js) on the deployed
+// site until it reflects the token the just-completed write's response
+// came back with. Only the *latest* token is ever tracked: a newer save
+// made while an older one is still publishing simply replaces the target,
+// since once the live site catches up to the newer token the earlier
+// change (committed first) is necessarily live too — no need to track
+// multiple in-flight saves separately.
+const DEPLOY_VERSION_URL = '../data/deploy-version.txt';
+const DEPLOY_POLL_MS = 3000;
+const DEPLOY_POLL_MAX_ATTEMPTS = 40; // ~2 minutes, then give up quietly
+
+let deployTarget = null;
+let deployPollTimer = null;
+let deployPollAttempts = 0;
+
+// token is null when the server-side bump itself failed (see
+// bumpDeployVersion's own comment) — the save still succeeded, there's
+// just nothing to poll for, so this is a no-op rather than showing a
+// toast that would never resolve.
+function trackDeployVersion(token) {
+  if (!token) return;
+  deployTarget = token;
+  deployPollAttempts = 0;
+  showDeployToast('Publishing changes…', false);
+  if (!deployPollTimer) pollDeployVersion();
+}
+
+async function pollDeployVersion() {
+  deployPollTimer = null;
+  if (!deployTarget) return; // dismissed since this was scheduled
+  deployPollAttempts++;
+  try {
+    const res = await fetch(DEPLOY_VERSION_URL, { cache: 'no-store' });
+    if (res.ok) {
+      const live = (await res.text()).trim();
+      if (live === deployTarget) {
+        showDeployToast('Changes are live', true);
+        deployTarget = null;
+        setTimeout(hideDeployToast, 3000);
+        return;
+      }
+    }
+  } catch {
+    // Network hiccup — just retry on the next tick rather than surfacing
+    // it; this status check is a nicety, not something worth alarming
+    // over when the actual save already succeeded.
+  }
+  if (deployPollAttempts >= DEPLOY_POLL_MAX_ATTEMPTS) {
+    hideDeployToast();
+    deployTarget = null;
+    return;
+  }
+  deployPollTimer = setTimeout(pollDeployVersion, DEPLOY_POLL_MS);
+}
+
+function showDeployToast(text, done) {
+  const toast = $('deploy-toast');
+  toast.classList.toggle('done', done);
+  $('deploy-toast-text').textContent = text;
+  toast.hidden = false;
+}
+
+function hideDeployToast() {
+  $('deploy-toast').hidden = true;
+}
+
+// Dismissing stops polling outright rather than just hiding the toast —
+// once the user's stopped watching for it, there's no value in silently
+// confirming a fact nobody's waiting on anymore.
+function wireDeployToast() {
+  $('deploy-toast-dismiss').addEventListener('click', () => {
+    deployTarget = null;
+    if (deployPollTimer) { clearTimeout(deployPollTimer); deployPollTimer = null; }
+    hideDeployToast();
+  });
+}
+
 // --- API helpers ---------------------------------------------------------
 
 class ApiError extends Error {
@@ -345,6 +425,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
         method: 'POST',
         body: JSON.stringify({ ...parts, imageBase64 }),
       });
+      trackDeployVersion(result.deployVersion);
       const objectUrl = URL.createObjectURL(jpeg);
       thumb.src = objectUrl;
       if (thumb.tagName !== 'IMG') {
@@ -463,7 +544,8 @@ function renderMinistryPhotos() {
       confirmMessage: 'Remove this photo? This deletes it from the live site.',
       onRemove: async () => {
         try {
-          await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
+          const result = await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
+          trackDeployVersion(result.deployVersion);
           if (ministryPhotoBlobUrls[filename]) {
             URL.revokeObjectURL(ministryPhotoBlobUrls[filename]);
             delete ministryPhotoBlobUrls[filename];
@@ -507,6 +589,7 @@ async function handleAddMinistryPhotos(files) {
           method: 'POST',
           body: JSON.stringify({ kind: 'city', city, country, imageBase64 }),
         });
+        trackDeployVersion(result.deployVersion);
         ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(jpeg);
         currentMinistryPhotos.push(result.filename);
         renderMinistryPhotos();
@@ -649,6 +732,7 @@ async function deleteMinistry(id) {
     // pre-write data. The write response already has everything needed.
     state.rows = state.rows.filter((r) => r.id !== id);
     state.sha = result.sha;
+    trackDeployVersion(result.deployVersion);
     renderMinistriesTable();
   } catch (err) {
     handleWriteError(err, loadMinistries);
@@ -967,10 +1051,12 @@ async function saveMinistry() {
       const index = state.rows.findIndex((r) => r.id === state.editingId);
       state.rows[index] = { id: state.editingId, ...rowFields };
       state.sha = result.sha;
+      trackDeployVersion(result.deployVersion);
     } else {
       const result = await apiFetch('/ministries', { method: 'POST', body: JSON.stringify(body) });
       state.rows.push({ id: result.id, ...rowFields });
       state.sha = result.sha;
+      trackDeployVersion(result.deployVersion);
     }
     renderMinistriesTable();
     $('ministry-dialog').close();
@@ -1367,7 +1453,8 @@ function openAddPhotoWidget(entry, li) {
 async function removePhoto(entry, li) {
   if (!window.confirm(`Remove this photo? This deletes it from the live site.`)) return;
   try {
-    await apiFetch(`/photos/${encodeURIComponent(entry.slug)}`, { method: 'DELETE' });
+    const result = await apiFetch(`/photos/${encodeURIComponent(entry.slug)}`, { method: 'DELETE' });
+    trackDeployVersion(result.deployVersion);
     entry.dims = null;
     entry.status = 'missing';
     li.replaceWith(imageEntryRow(entry));
@@ -1429,4 +1516,5 @@ async function renderImagesTab() {
 wireTabs();
 wireDialog();
 wireMinistriesSearch();
+wireDeployToast();
 loadMinistries();

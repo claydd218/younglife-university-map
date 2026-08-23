@@ -4,6 +4,7 @@
 import { listDir, deleteFile, putFileBase64, ConflictError } from '../lib/github.js';
 import { slugify } from '../lib/text.js';
 import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
+import { bumpDeployVersion } from '../lib/deployVersion.js';
 
 const IMAGES_DIR = 'images';
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB — defense in depth; the client is
@@ -92,7 +93,8 @@ export async function onRequestPost({ request, env }) {
       throw err;
     }
 
-    return jsonResponse({ ok: true, path: targetPath, filename: `${slug}.${STAFF_OUTPUT_EXT}`, sha: result.sha });
+    const deployVersion = await bumpDeployVersion(env, commit);
+    return jsonResponse({ ok: true, path: targetPath, filename: `${slug}.${STAFF_OUTPUT_EXT}`, sha: result.sha, deployVersion });
   }
 
   // kind === 'city': a ministry can have multiple photos, so each upload
@@ -118,5 +120,6 @@ export async function onRequestPost({ request, env }) {
     throw err;
   }
 
-  return jsonResponse({ ok: true, path: targetPath, filename, sha: result.sha });
+  const deployVersion = await bumpDeployVersion(env, commit);
+  return jsonResponse({ ok: true, path: targetPath, filename, sha: result.sha, deployVersion });
 }
