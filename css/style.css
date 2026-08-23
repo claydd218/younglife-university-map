@@ -133,7 +133,8 @@ h1, h2, h3, .legend-label, .cluster-badge {
   text-shadow: 0 1px 0 rgba(255,255,255,0.55);
 }
 
-.country-tooltip {
+.country-tooltip,
+.marker-tooltip {
   font-family: 'EB Garamond', Georgia, serif;
   font-style: italic;
   background: var(--card-bg);
