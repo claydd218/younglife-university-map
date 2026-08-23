@@ -723,6 +723,12 @@ img.popup-photo {
 .lightbox-prev { left: 10px; }
 .lightbox-next { right: 10px; }
 
+/* .lightbox-nav's own display:flex above ties [hidden]'s UA-stylesheet
+   display:none on specificity, and author styles win ties regardless of
+   source order — so JS setting prevBtn/nextBtn.hidden on a single-photo
+   ministry did nothing without this explicit override. */
+.lightbox-nav[hidden] { display: none; }
+
 /* Touch swipe already covers navigation wherever a touch input is present
    (even alongside a mouse, e.g. touchscreen laptops), so the arrows are
    only useful — and only shown — where swiping isn't an option. */
