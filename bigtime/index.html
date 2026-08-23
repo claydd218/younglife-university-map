@@ -67,6 +67,16 @@
   .banner[hidden] { display: none; }
 
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .toolbar-left { display: flex; align-items: center; gap: 12px; }
+  .ministries-search {
+    font: inherit;
+    font-size: 14px;
+    padding: 7px 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    width: 240px;
+    box-sizing: border-box;
+  }
   .btn {
     font: inherit;
     font-size: 14px;
@@ -332,7 +342,10 @@
 
   <section id="tab-ministries" class="tab-panel">
     <div class="toolbar">
-      <span id="ministries-count" class="status-text"></span>
+      <div class="toolbar-left">
+        <span id="ministries-count" class="status-text"></span>
+        <input type="text" id="ministries-search" class="ministries-search" placeholder="Search city, country, or staff…" autocomplete="off">
+      </div>
       <button type="button" class="btn" id="add-ministry-btn">+ Add New Ministry</button>
     </div>
     <div id="ministries-report"></div>

@@ -515,9 +515,32 @@ function wireMinistryPhotoAdd() {
 
 // --- Ministries tab: table -------------------------------------------------
 
+let ministriesSearch = '';
+
+// City/country/staff-name substring match, case-insensitive — the same
+// three fields the toolbar's placeholder advertises. Staff is checked by
+// name only (not role), since role isn't what anyone searching for a
+// specific ministry would type.
+function matchesMinistriesSearch(row, query) {
+  if (!query) return true;
+  const haystack = [row.city, row.country, ...row.staff.map((s) => s.name)]
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+function wireMinistriesSearch() {
+  $('ministries-search').addEventListener('input', (e) => {
+    ministriesSearch = e.target.value.trim().toLowerCase();
+    renderMinistriesTable();
+  });
+}
+
 function renderMinistriesTable() {
   const container = $('ministries-report');
   container.innerHTML = '';
+
+  const visibleRows = state.rows.filter((row) => matchesMinistriesSearch(row, ministriesSearch));
 
   // Group by division (same key used to color the public map) so ministries
   // read the same way the Images tab already does. Rows whose country isn't
@@ -525,7 +548,7 @@ function renderMinistriesTable() {
   // their own uncolored group rather than being silently dropped.
   const byDivision = new Map();
   const other = [];
-  for (const row of state.rows) {
+  for (const row of visibleRows) {
     const divisionKey = state.divisionByCountry.get(row.country);
     if (!divisionKey) { other.push(row); continue; }
     if (!byDivision.has(divisionKey)) byDivision.set(divisionKey, []);
@@ -563,7 +586,13 @@ function renderMinistriesTable() {
     container.appendChild(section);
   }
 
-  $('ministries-count').textContent = `${state.rows.length} ministr${state.rows.length === 1 ? 'y' : 'ies'}`;
+  if (ministriesSearch && !groups.length) {
+    container.innerHTML = '<p class="status-text">No ministries match that search.</p>';
+  }
+
+  $('ministries-count').textContent = ministriesSearch
+    ? `${visibleRows.length} of ${state.rows.length} ministr${state.rows.length === 1 ? 'y' : 'ies'}`
+    : `${state.rows.length} ministr${state.rows.length === 1 ? 'y' : 'ies'}`;
 
   container.querySelectorAll('[data-edit]').forEach((btn) => {
     btn.addEventListener('click', () => openDialog(state.rows.find((r) => r.id === btn.dataset.edit)));
@@ -1351,4 +1380,5 @@ async function renderImagesTab() {
 
 wireTabs();
 wireDialog();
+wireMinistriesSearch();
 loadMinistries();
