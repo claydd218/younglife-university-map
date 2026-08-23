@@ -1065,7 +1065,7 @@ async function init() {
 
       const stageKey = String(row.is_developing).trim().toLowerCase() === 'true' ? 'developing' : 'established';
       const marker = L.marker([lat, lng], { icon: markerIcon(divisionKey, stageKey) });
-      marker.bindTooltip(row.city, { direction: 'top', offset: [0, -10], className: 'marker-tooltip' });
+      marker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
       marker.bindPopup(buildPopupHtml(row, divisionKey), {
         maxWidth: 380,
         className: 'vintage-popup-wrapper',
