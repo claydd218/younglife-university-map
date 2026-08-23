@@ -28,23 +28,27 @@ const map = L.map('map', {
   // Caps north/south panning so the empty parchment beyond the poles isn't
   // reachable — without this, Web Mercator's unproject() has no natural
   // vertical limit and dragging north/south just keeps computing
-  // increasingly extreme (and empty) coordinates forever. ±85.0511° is
+  // increasingly extreme (and empty) coordinates forever. North stays at
   // Web Mercator's own natural rendering limit (the standard EPSG:3857
-  // cutoff, e.g. https://epsg.io/3857), not an arbitrary tighter guess —
-  // using exactly that means this can never clamp a view any tighter than
-  // the projection already would on its own, so it can't fight the
-  // configured default center/zoom or clip a legitimate view on unusual
-  // (e.g. tall/narrow mobile) aspect ratios. A tighter bound (say, ±60°)
-  // sounds appealing but Leaflet's maxBounds re-centers to keep the whole
-  // viewport inside it, which silently drags the *default* view northward
-  // on any container taller than the bounds comfortably fit — confirmed
-  // live: -58/78 shifted the default center from lat 15 to lat ~27.6.
+  // cutoff, ±85.0511° — see https://epsg.io/3857) since there was nothing
+  // to trim there. South is tightened past that on purpose, to cut down how
+  // much empty Antarctic interior is reachable — but NOT past -66.2°, which
+  // is how far south the *default* center/zoom (CONFIG.MAP_CENTER/MAP_ZOOM)
+  // already reaches on its own (measured via map.getBounds() at that view).
+  // Below that, Leaflet's maxBounds starts re-centering to keep the full
+  // viewport inside the bound, which silently drags the default view
+  // northward — confirmed live: a -58° bound shifted the default center
+  // from lat 15 to lat ~27.6. -68° leaves a couple degrees of buffer past
+  // -66.2° so this can't happen. The one remaining edge case: at the fully-
+  // zoomed-out minimum (CONFIG.MIN_ZOOM), the natural reach is -78.6°, past
+  // this bound — zooming all the way out will snap the view north a bit
+  // when it gets there, a much smaller and rarer jump than one on load.
   // Longitude is left effectively unbounded (±1e8°) rather than literally
   // ±Infinity — Leaflet's pixel-bounds math on a true Infinity produces
   // NaN mid-drag and hangs the page — so worldCopyJump's east/west wrap
   // keeps working unrestricted. maxBoundsViscosity:1 makes the lat clamp a
   // hard stop rather than Leaflet's default rubber-band overshoot past it.
-  maxBounds: [[-85.0511, -1e8], [85.0511, 1e8]],
+  maxBounds: [[-68, -1e8], [85.0511, 1e8]],
   maxBoundsViscosity: 1.0,
   zoomControl: false,
   attributionControl: false,
