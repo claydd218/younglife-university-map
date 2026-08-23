@@ -25,6 +25,27 @@ const map = L.map('map', {
   zoomSnap: 0.25,
   zoomDelta: 1,
   worldCopyJump: true,
+  // Caps north/south panning so the empty parchment beyond the poles isn't
+  // reachable — without this, Web Mercator's unproject() has no natural
+  // vertical limit and dragging north/south just keeps computing
+  // increasingly extreme (and empty) coordinates forever. ±85.0511° is
+  // Web Mercator's own natural rendering limit (the standard EPSG:3857
+  // cutoff, e.g. https://epsg.io/3857), not an arbitrary tighter guess —
+  // using exactly that means this can never clamp a view any tighter than
+  // the projection already would on its own, so it can't fight the
+  // configured default center/zoom or clip a legitimate view on unusual
+  // (e.g. tall/narrow mobile) aspect ratios. A tighter bound (say, ±60°)
+  // sounds appealing but Leaflet's maxBounds re-centers to keep the whole
+  // viewport inside it, which silently drags the *default* view northward
+  // on any container taller than the bounds comfortably fit — confirmed
+  // live: -58/78 shifted the default center from lat 15 to lat ~27.6.
+  // Longitude is left effectively unbounded (±1e8°) rather than literally
+  // ±Infinity — Leaflet's pixel-bounds math on a true Infinity produces
+  // NaN mid-drag and hangs the page — so worldCopyJump's east/west wrap
+  // keeps working unrestricted. maxBoundsViscosity:1 makes the lat clamp a
+  // hard stop rather than Leaflet's default rubber-band overshoot past it.
+  maxBounds: [[-85.0511, -1e8], [85.0511, 1e8]],
+  maxBoundsViscosity: 1.0,
   zoomControl: false,
   attributionControl: false,
   // Leaflet's legacy touch "tap" shim (built for old browsers with a 300ms
