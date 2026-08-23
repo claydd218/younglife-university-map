@@ -31,7 +31,7 @@ const CONFIG = {
   IMAGE_EXTENSIONS: ['png', 'jpg', 'jpeg', 'webp'],
 
   // Initial map view.
-  MAP_CENTER: [15, 25],
+  MAP_CENTER: [12, 25],
   MAP_ZOOM: 2.5,
   MIN_ZOOM: 2,
   MAX_ZOOM: 10,
