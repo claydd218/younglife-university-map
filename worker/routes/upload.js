@@ -8,9 +8,15 @@ import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.j
 const IMAGES_DIR = 'images';
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB — defense in depth; the client is
 // expected to have already compressed the image (canvas re-encode pipeline).
-const OUTPUT_EXT = 'jpg'; // Always written as .jpg — see the stale-extension
-// note below for why an existing file of a different extension must be
-// removed, not just left alongside the new one.
+// Staff photos stay .jpg — CONFIG.IMAGE_EXTENSIONS on the public site
+// guesses staff photo extensions by trying each in turn, so an existing
+// staff photo's extension has to keep matching what this always writes (see
+// the stale-extension note below). City/ministry photos have no such
+// guessing (the exact filename is stored in ministries.csv), so they're
+// free to use .webp for the real size win — see bigtime/admin.js's
+// reencodeImage for why staff photos aren't switched too.
+const STAFF_OUTPUT_EXT = 'jpg';
+const CITY_OUTPUT_EXT = 'webp';
 
 function decodedByteLength(base64) {
   const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, '');
@@ -54,9 +60,9 @@ export async function onRequestPost({ request, env }) {
   const existing = await listDir(env, IMAGES_DIR);
 
   if (kind === 'staff') {
-    const targetPath = `${IMAGES_DIR}/${slug}.${OUTPUT_EXT}`;
+    const targetPath = `${IMAGES_DIR}/${slug}.${STAFF_OUTPUT_EXT}`;
     const existingForSlug = existing.filter((f) => f.name.startsWith(`${slug}.`));
-    const sameExt = existingForSlug.find((f) => f.name === `${slug}.${OUTPUT_EXT}`);
+    const sameExt = existingForSlug.find((f) => f.name === `${slug}.${STAFF_OUTPUT_EXT}`);
 
     // CONFIG.IMAGE_EXTENSIONS on the public site tries .png before .jpg —
     // if an existing photo is slug.png and this endpoint always writes
@@ -65,7 +71,7 @@ export async function onRequestPost({ request, env }) {
     // keep showing. Clear out any other-extension file for this slug
     // first (its own commit) before writing the new one.
     for (const stale of existingForSlug) {
-      if (stale.name === `${slug}.${OUTPUT_EXT}`) continue;
+      if (stale.name === `${slug}.${STAFF_OUTPUT_EXT}`) continue;
       try {
         await deleteFile(env, stale.path, stale.sha, `Remove stale photo: ${stale.name}`, commit);
       } catch (err) {
@@ -86,11 +92,11 @@ export async function onRequestPost({ request, env }) {
       throw err;
     }
 
-    return jsonResponse({ ok: true, path: targetPath, filename: `${slug}.${OUTPUT_EXT}`, sha: result.sha });
+    return jsonResponse({ ok: true, path: targetPath, filename: `${slug}.${STAFF_OUTPUT_EXT}`, sha: result.sha });
   }
 
   // kind === 'city': a ministry can have multiple photos, so each upload
-  // adds a new numbered file (slug-1.jpg, slug-2.jpg, ...) rather than
+  // adds a new numbered file (slug-1.webp, slug-2.webp, ...) rather than
   // overwriting — the admin's photo manager owns ordering/deletion.
   const numberedPattern = new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)\\.`);
   let nextIndex = 1;
@@ -98,7 +104,7 @@ export async function onRequestPost({ request, env }) {
     const match = f.name.match(numberedPattern);
     if (match) nextIndex = Math.max(nextIndex, parseInt(match[1], 10) + 1);
   }
-  const filename = `${slug}-${nextIndex}.${OUTPUT_EXT}`;
+  const filename = `${slug}-${nextIndex}.${CITY_OUTPUT_EXT}`;
   const targetPath = `${IMAGES_DIR}/${filename}`;
 
   let result;

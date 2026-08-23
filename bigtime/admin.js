@@ -118,8 +118,16 @@ function wireTabs() {
 
 // Re-encodes any image (including iPhone HEIC — see createImageBitmap's
 // WebKit HEIC decode, which every iOS browser uses regardless of vendor)
-// to a size/quality-capped JPEG before it's ever base64'd and sent.
-async function reencodeToJpeg(file) {
+// to a size/quality-capped JPEG or WebP before it's ever base64'd and sent.
+// City (ministry) photos go to WebP for the real size win — they have no
+// extension-guessing to stay compatible with (the exact filename is stored
+// in ministries.csv), unlike staff photos, which CONFIG.IMAGE_EXTENSIONS on
+// the public site finds by trying each extension in turn against the slug;
+// switching staff output would just add a failed guess in that chain for no
+// benefit until/unless that guessing logic changes too. Mirrors the
+// server's own STAFF_OUTPUT_EXT/CITY_OUTPUT_EXT split (worker/routes/upload.js).
+async function reencodeImage(file, kind) {
+  const mime = kind === 'city' ? 'image/webp' : 'image/jpeg';
   let bitmap;
   try {
     bitmap = await createImageBitmap(file);
@@ -151,10 +159,10 @@ async function reencodeToJpeg(file) {
 
   const TARGET_BYTES = 800 * 1024;
   let quality = 0.82;
-  let blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+  let blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
   for (let i = 0; i < 3 && blob.size > TARGET_BYTES; i++) {
     quality -= 0.15;
-    blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
   }
   return blob;
 }
@@ -331,7 +339,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
     }
     setReplaceStatus('Uploading…', 'uploading');
     try {
-      const jpeg = await reencodeToJpeg(file);
+      const jpeg = await reencodeImage(file, kind);
       const imageBase64 = await blobToBase64(jpeg);
       const result = await apiFetch('/upload', {
         method: 'POST',
@@ -481,7 +489,7 @@ async function handleAddMinistryPhoto(file) {
   addBtn.disabled = true;
   addBtn.textContent = 'Uploading…';
   try {
-    const jpeg = await reencodeToJpeg(file);
+    const jpeg = await reencodeImage(file, 'city');
     const imageBase64 = await blobToBase64(jpeg);
     const result = await apiFetch('/upload', {
       method: 'POST',
@@ -804,7 +812,7 @@ async function reconcilePhotoWidget(widget, parts) {
   const oldUrl = await findExistingImageUrl(oldSlug);
   if (!oldUrl) return; // nothing on disk to move
   const sourceBlob = await (await fetch(oldUrl, { cache: 'no-store' })).blob();
-  const jpeg = await reencodeToJpeg(sourceBlob);
+  const jpeg = await reencodeImage(sourceBlob, parts.kind);
   const imageBase64 = await blobToBase64(jpeg);
   await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ ...parts, imageBase64 }) });
   await apiFetch(`/photos/${encodeURIComponent(oldSlug)}`, { method: 'DELETE' });
@@ -813,7 +821,7 @@ async function reconcilePhotoWidget(widget, parts) {
 
 // Same idea as reconcilePhotoWidget, but for the ministry's whole photo
 // list: each filename embeds the slug it was uploaded under
-// (slug-1.jpg, slug-2.jpg, ...), so a city/country edit can leave any of
+// (slug-1.webp, slug-2.webp, ...), so a city/country edit can leave any of
 // them stale. Checked (and fixed) individually rather than all-or-nothing,
 // since photos added earlier in this same edit may already be current.
 async function reconcileMinistryPhotos(city, country) {
@@ -824,7 +832,7 @@ async function reconcileMinistryPhotos(city, country) {
     const oldSlug = match ? match[1] : null;
     if (!oldSlug || oldSlug === newSlug) continue;
     const sourceBlob = await (await fetch(ministryPhotoUrl(filename), { cache: 'no-store' })).blob();
-    const jpeg = await reencodeToJpeg(sourceBlob);
+    const jpeg = await reencodeImage(sourceBlob, 'city');
     const imageBase64 = await blobToBase64(jpeg);
     const result = await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ kind: 'city', city, country, imageBase64 }) });
     await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });

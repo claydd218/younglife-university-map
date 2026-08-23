@@ -33,7 +33,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 32,Yamoussoukro,Ivory Coast,6.8276,-5.2893,,false,,N'gouan Ebu Noel (College Coordinator); Josiane Laurine (College Coordinator),,
 33,Accra,Ghana,5.6037,-0.187,,false,,Hannah Nettey (College Coordinator); Daniel Tengey (College Coordinator); Dofila Wazum (College Coordinator); Atitsogbe Collins Yao (College Coordinator),,
 34,Kinshasa,Democratic Republic of the Congo,-4.4419,15.2663,,false,,Dominique Djonga (College Coordinator); Cedrick Mukuna Kanyinda (College Coordinator); Joseph Kalunga (College Coordinator); Bienheureuse Tshilanda Tshitenga (College Coordinator); Bukabau Iukelu Merveille (College Coordinator); Ngampo Ngalula Clovis (College Coordinator),,
-35,Abuja,Nigeria,9.0643,7.4893,,false,,Uchechukwu Emmanuel (College Coordinator); Anifowoshe Temitope (College Coordinator); Daniel Njoku (College Coordinator),,abuja-nigeria-4.jpg; abuja-nigeria-1.jpg; abuja-nigeria-3.jpg
+35,Abuja,Nigeria,9.0643,7.4893,,false,,Uchechukwu Emmanuel (College Coordinator); Anifowoshe Temitope (College Coordinator); Daniel Njoku (College Coordinator),,
 36,Tanzania,United Republic of Tanzania,-6.5247123,35.7878438,,false,,Steven Felex Tesha (College Coordinator); Godfrey Cosmas Ndulu (College Coordinator); Grace Paulo Oscar (College Coordinator); Warren W Shempemba (College Coordinator),,
 37,Senegal,Senegal,14.4750607,-14.4529612,,false,,Joseph Ahimann Preira (College Coordinator); Paul Bernanding Coly (College Coordinator),,
 38,Cameroon,Cameroon,4.6125522,13.1535811,,false,,Babila Brandon Ngamcha (College Coordinator); Constance M'ramadji Mbaïbarem (College Coordinator),,
@@ -58,10 +58,10 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 57,North Nicaragua,Nicaragua,13.0929621,-86.3561571,,false,,Sabony Rizo (Staff),,
 58,South Nicaragua,Nicaragua,11.4416741,-85.7591501,,false,,Rosa Baca (Staff),,
 59,Puebla,Mexico,18.8333330,-98.0000000,,false,,Jae Jung (Staff),,
-60,Buenos Aires,Argentina,-34.6095579,-58.3887904,,false,,Milton Mischuk (Staff),,buenos-aires-argentina-1.jpg; buenos-aires-argentina-2.jpg; buenos-aires-argentina-3.jpg; buenos-aires-argentina-4.jpg
-61,Bogota,Colombia,4.6047,-77.2394,,false,,Diego Rojas (Staff),,bogota-colombia-2.jpg; bogota-colombia-1.jpg
+60,Buenos Aires,Argentina,-34.6095579,-58.3887904,,false,,Milton Mischuk (Staff),,
+61,Bogota,Colombia,4.6047,-77.2394,,false,,Diego Rojas (Staff),,
 62,Santiago,Chile,-33.4376995,-70.6510671,,false,,Daniela Celis (Staff),,
-63,Cuenca,Ecuador,-2.8974072,-79.0041726,,false,,Pedro Diaz (Staff),,cuenca-ecuador-1.jpg
+63,Cuenca,Ecuador,-2.8974072,-79.0041726,,false,,Pedro Diaz (Staff),,
 64,Shell,Ecuador,-1.4999375,-78.0615532,,false,,David Caceras (Staff),,
 65,Nassau,The Bahamas,25.0782266,-77.3383438,,false,,Yvana McDonald (Staff),,
 67,Krakow,Poland,50.0469432,19.9971534,,false,,Sonya Nikolayeva (Staff),,
