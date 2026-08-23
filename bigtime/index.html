@@ -240,7 +240,16 @@
   }
 
   /* --- Ministry photos (multi-photo manager) --- */
-  .ministry-photos { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 10px; }
+  .ministry-photos-dropzone {
+    border: 1px dashed #ccc;
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 6px;
+  }
+  .ministry-photos-dropzone.dragover { background: #eef4fb; border-color: #7aa8d8; }
+  .ministry-photos-add-row { display: flex; align-items: center; gap: 10px; }
+  .ministry-photos-drop-hint { font-size: 12.5px; color: #888; }
+  .ministry-photos { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
   .ministry-photo-empty { font-size: 13px; color: #888; padding: 4px 2px; }
   .ministry-photo-item {
     display: grid;
@@ -423,9 +432,14 @@
 
         <div class="field">
           <label>Ministry Photos</label>
-          <div class="ministry-photos" id="ministry-photos"></div>
-          <button type="button" class="btn secondary btn-small" id="add-ministry-photo-btn">+ Add Photo</button>
-          <input type="file" id="ministry-photo-input" class="hidden-file-input" accept="image/*">
+          <div class="ministry-photos-dropzone" id="ministry-photos-dropzone">
+            <div class="ministry-photos" id="ministry-photos"></div>
+            <div class="ministry-photos-add-row">
+              <button type="button" class="btn secondary btn-small" id="add-ministry-photo-btn">+ Add Photo(s)</button>
+              <span class="ministry-photos-drop-hint">or drop photos here</span>
+            </div>
+          </div>
+          <input type="file" id="ministry-photo-input" class="hidden-file-input" accept="image/*" multiple>
           <div class="ministry-photo-hint">First photo is the main one shown on the map popup — use the arrows to reorder. Recommended: at least 1200×900px (4:3).</div>
         </div>
 

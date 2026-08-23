@@ -477,8 +477,14 @@ function renderMinistryPhotos() {
   });
 }
 
-async function handleAddMinistryPhoto(file) {
-  if (!file) return;
+// Uploads are sequential (awaited one at a time), not parallel — each
+// upload adds a new numbered file (slug-1, slug-2, ...) computed
+// server-side from what's already on disk at request time, so firing them
+// concurrently risks two uploads racing to the same number. A failure
+// partway through still keeps whatever uploaded before it rather than
+// losing the whole batch.
+async function handleAddMinistryPhotos(files) {
+  if (!files || !files.length) return;
   const city = $('field-city').value.trim();
   const country = $('field-country').value.trim();
   if (!city || !country) {
@@ -487,30 +493,42 @@ async function handleAddMinistryPhoto(file) {
   }
   const addBtn = $('add-ministry-photo-btn');
   addBtn.disabled = true;
-  addBtn.textContent = 'Uploading…';
   try {
-    const jpeg = await reencodeImage(file, 'city');
-    const imageBase64 = await blobToBase64(jpeg);
-    const result = await apiFetch('/upload', {
-      method: 'POST',
-      body: JSON.stringify({ kind: 'city', city, country, imageBase64 }),
-    });
-    ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(jpeg);
-    currentMinistryPhotos.push(result.filename);
-    renderMinistryPhotos();
-    markDialogDirty();
-  } catch (err) {
-    showBanner('error', `Upload failed: ${err.message || err}`);
+    for (let i = 0; i < files.length; i++) {
+      addBtn.textContent = files.length > 1 ? `Uploading ${i + 1} of ${files.length}…` : 'Uploading…';
+      try {
+        const jpeg = await reencodeImage(files[i], 'city');
+        const imageBase64 = await blobToBase64(jpeg);
+        const result = await apiFetch('/upload', {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'city', city, country, imageBase64 }),
+        });
+        ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(jpeg);
+        currentMinistryPhotos.push(result.filename);
+        renderMinistryPhotos();
+        markDialogDirty();
+      } catch (err) {
+        showBanner('error', `Upload failed (${files[i].name}): ${err.message || err}`);
+      }
+    }
   } finally {
     addBtn.disabled = false;
-    addBtn.textContent = '+ Add Photo';
+    addBtn.textContent = '+ Add Photo(s)';
     $('ministry-photo-input').value = '';
   }
 }
 
 function wireMinistryPhotoAdd() {
+  const dropzone = $('ministry-photos-dropzone');
   $('add-ministry-photo-btn').addEventListener('click', () => $('ministry-photo-input').click());
-  $('ministry-photo-input').addEventListener('change', (e) => handleAddMinistryPhoto(e.target.files[0]));
+  $('ministry-photo-input').addEventListener('change', (e) => handleAddMinistryPhotos(Array.from(e.target.files)));
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    handleAddMinistryPhotos(Array.from(e.dataTransfer.files));
+  });
 }
 
 // --- Ministries tab: table -------------------------------------------------
