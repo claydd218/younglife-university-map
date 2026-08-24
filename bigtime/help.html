@@ -57,6 +57,13 @@
   <h2>Ministries Tab</h2>
   <p>Lists every ministry, grouped by division (Africa, Asia Pacific, Europe, etc.) in the same colors the public map uses for each region.</p>
 
+  <h3>Searching and filtering</h3>
+  <ul>
+    <li>The search box matches city, country, or staff name as you type; the &times; button clears it.</li>
+    <li><strong>Recent</strong>, <strong>Developing</strong>, <strong>No Staff</strong>, and <strong>No Universities</strong> are toggle filters above the list — click one to narrow the list to matching ministries, click again to turn it off. Multiple filters combine together (e.g. Recent + No Staff shows only ministries that are both), and the list starts unfiltered.</li>
+    <li><strong>Recent</strong> matches any ministry saved in the last 24 hours — that includes a staff member being moved into or out of it, not just a direct edit.</li>
+  </ul>
+
   <h3>Adding or editing a ministry</h3>
   <ul>
     <li><strong>+ Add New Ministry</strong> opens a blank form; clicking <strong>Edit</strong> on an existing row opens it pre-filled.</li>
@@ -71,12 +78,17 @@
     <li>Once Latitude and Longitude have any value, an <strong>Adjust Pin Placement</strong> button appears. Click it to open a small map — drag the pin or click anywhere on the map to fine-tune the exact spot, and the Latitude/Longitude fields update to match.</li>
   </ul>
 
+  <h3>Video link</h3>
+  <p>The optional Video Link field takes a YouTube or Vimeo URL; <strong>Preview</strong> opens it the same way a visitor would see it, in an overlay on the map. Video Link Text is what visitors click on the map — leave it blank and it defaults to "Watch a [City] Story"; type your own to override it.</p>
+
   <h3>Ministry photos</h3>
-  <p>A ministry can have several photos. <strong>+ Add Photo</strong> uploads a new one; the arrows reorder the list; the first photo is the "main" one — it's what shows in the map popup, and the rest appear when a visitor taps the photo to open the carousel. Remove deletes a photo from the live site immediately, no confirmation step beyond the prompt.</p>
+  <p>A ministry can have several photos. <strong>+ Add Photo</strong> uploads a new one — drag and drop one or several files at once, or use Choose File. The arrows reorder the list; the first photo is the "main" one — it's what shows in the map popup, and the rest appear when a visitor taps the photo to open the carousel. Remove deletes a photo from the live site immediately, no confirmation step beyond the prompt.</p>
 
   <h3>Staff and Universities</h3>
   <ul>
     <li><strong>+ Add Staff Member</strong> / <strong>+ Add University</strong> add a new row with a Name/Role or Name/Year pair. Each staff row has its own profile photo widget, same drag-and-drop/Choose File pattern as the city photo.</li>
+    <li>The &uarr; / &darr; arrows on each row reorder staff and universities independently — this controls the order they're listed in on the public map popup.</li>
+    <li><strong>Move…</strong> on a staff row relocates that person to a different ministry: it opens a searchable list of every ministry, and on confirmation the staff member is removed from this ministry and added to the one you picked. Both ministries count as recently edited afterward.</li>
     <li>Both kinds of row can be removed with the red <strong>Remove</strong> button, which asks for confirmation first — this can't be undone after the ministry is saved.</li>
     <li>The ministry's "date opened" isn't a separate field — it's derived automatically from the earliest year listed among its universities.</li>
   </ul>
