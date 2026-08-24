@@ -1236,6 +1236,27 @@ map.on('popupopen', (e) => {
   const margin = 12;
   const header = document.querySelector('.site-header');
   const safeTop = header.getBoundingClientRect().bottom + margin;
+
+  // A popup always grows upward from its marker, so a marker near the
+  // map's usable northern edge (e.g. Iceland) may not have enough room
+  // above it at typical zoom, no matter how the panning below is tuned —
+  // there's nothing further north to pan into. Zoom in a step at a time,
+  // recentered on the marker, until there's enough room or we run out of
+  // zoom levels; each +1 zoom roughly doubles the pixel room available.
+  // This has to be synchronous (animate: false) — an animated zoom here
+  // raced with Leaflet.markercluster's own reveal/recenter-on-click pan
+  // and silently lost, leaving the popup positioned as if this never ran.
+  for (let guard = 0; guard < 4; guard++) {
+    const rect = popupEl.getBoundingClientRect();
+    if (rect.top >= safeTop) break; // already fits, nothing to do
+    const markerPt = map.latLngToContainerPoint(marker.getLatLng());
+    if (rect.top + markerPt.y >= safeTop) break; // the pan below can reach this from here
+    const nextZoom = Math.min(map.getZoom() + 1, CONFIG.MAX_ZOOM);
+    if (nextZoom === map.getZoom()) break; // already maxed out, can't buy more room
+    map.setZoomAround(marker.getLatLng(), nextZoom, { animate: false });
+    e.popup.update();
+  }
+
   const rect = popupEl.getBoundingClientRect();
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
@@ -1285,7 +1306,7 @@ map.on('popupopen', (e) => {
     panX = Math.min(panX, ceiling);
   }
 
-  map.panBy([panX, panY], { animate: true, duration: 0.2 });
+  map.panBy([panX, panY], { animate: false });
 });
 
 // Mobile browsers resize the visual viewport after load as the address bar
