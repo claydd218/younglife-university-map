@@ -664,6 +664,29 @@ img.popup-photo {
   background: rgba(10, 8, 4, 0.96);
 }
 
+/* No JS-measured --ratio needed here the way .lightbox-viewport has —
+   every YouTube/Vimeo embed is the same fixed 16:9, so the box can just
+   hold that ratio directly. Same size-to-fit reasoning as .lightbox-
+   viewport otherwise (biggest 16:9 box within the 92vw/85vh/900px caps). */
+.video-lightbox-content {
+  width: min(92vw, calc(85vh * 16 / 9), calc(900px * 16 / 9));
+}
+.video-embed-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
+  background: #000;
+}
+.video-embed-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 /* Three slides — prev/current/next — always loaded and sitting side by
    side, so an outgoing and incoming photo are both visible while the
    whole track slides. Rests at translateX(-33.3333%) so the middle
@@ -842,6 +865,37 @@ img.popup-photo {
   line-height: 1.5;
   font-style: italic;
   color: var(--ink);
+}
+
+.popup-video-body {
+  padding: 12px 16px 0;
+}
+
+.popup-video-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--card-bg);
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.popup-video-link:hover {
+  background: var(--ink-soft);
+  border-color: var(--ink-soft);
+}
+
+.popup-video-link svg {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
 }
 
 /* ---------- Leaflet control chrome (zoom + search), matched to the legend ---------- */

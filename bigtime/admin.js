@@ -618,6 +618,62 @@ function wireMinistryPhotoAdd() {
   });
 }
 
+// --- Video link --------------------------------------------------------
+
+// Tracks whether the label field holds a real custom choice rather than
+// the auto-generated default — set from openDialog() when loading a row,
+// and updated live as the user types into the label field itself.
+let videoLabelManuallyEdited = false;
+
+function defaultVideoLabel() {
+  return `Learn about ${$('field-city').value.trim()}`;
+}
+
+function updateVideoLabelVisibility() {
+  $('video-label-row').hidden = !$('field-video-url').value.trim();
+}
+
+function wireVideoLinkFields() {
+  const urlInput = $('field-video-url');
+  const labelInput = $('field-video-label');
+
+  urlInput.addEventListener('input', () => {
+    updateVideoLabelVisibility();
+    if (!videoLabelManuallyEdited) labelInput.value = defaultVideoLabel();
+  });
+
+  // Keeps "Learn about {city}" following a city rename, same as the auto-
+  // fill above, as long as the label hasn't been hand-edited away from it.
+  $('field-city').addEventListener('input', () => {
+    if (!videoLabelManuallyEdited && urlInput.value.trim()) labelInput.value = defaultVideoLabel();
+  });
+
+  // Clearing the field back to empty is treated as "give the default
+  // back," not as a custom empty choice — there's no reasonable saved
+  // state that means "a video with a blank link label."
+  labelInput.addEventListener('input', () => {
+    const value = labelInput.value.trim();
+    videoLabelManuallyEdited = value !== '' && value !== defaultVideoLabel();
+  });
+
+  $('video-preview-btn').addEventListener('click', () => {
+    const parsed = parseVideoEmbedUrl(urlInput.value.trim());
+    if (!parsed) {
+      validateVideoUrlInForm();
+      return;
+    }
+    $('video-preview-embed').innerHTML = `<iframe src="${escapeHtml(parsed.embedUrl)}" title="Video preview" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    $('video-preview-dialog').showModal();
+  });
+
+  // Clearing the iframe (not just closing the dialog) stops playback —
+  // an <iframe> keeps running in the background otherwise.
+  $('video-preview-close-btn').addEventListener('click', () => {
+    $('video-preview-embed').innerHTML = '';
+    $('video-preview-dialog').close();
+  });
+}
+
 // --- Ministries tab: table -------------------------------------------------
 
 let ministriesSearch = '';
@@ -884,6 +940,8 @@ async function confirmMoveStaff(targetId) {
     staff: newStaff,
     universities: target.universities,
     photos: target.photos,
+    video_url: target.video_url,
+    video_label: target.video_label,
   };
 
   try {
@@ -969,6 +1027,14 @@ function openDialog(row) {
   $('field-lng').value = row ? row.lng : '';
   $('field-blurb').value = row ? row.blurb : '';
   $('field-is-developing').checked = row ? !!row.is_developing : false;
+  $('field-video-url').value = row ? row.video_url : '';
+  $('field-video-label').value = row ? row.video_label : '';
+  // A loaded label that doesn't match what auto-fill would generate for
+  // this city is a real custom choice (or came from a different city
+  // before a rename) — either way, don't let city/URL edits silently
+  // overwrite it going forward.
+  videoLabelManuallyEdited = !!(row && row.video_label && row.video_label !== defaultVideoLabel());
+  updateVideoLabelVisibility();
   setLatLngLookupStatus('');
   closePinPlacementMap();
   updatePinPlacementVisibility();
@@ -1049,6 +1115,16 @@ function stripParens(value) {
   return (value || '').replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
 }
 
+// Mirrors the server's own rejection (rowFromBody) for instant feedback —
+// an empty field is fine (no video), a non-empty one has to actually parse.
+function validateVideoUrlInForm() {
+  const url = $('field-video-url').value.trim();
+  const bad = url && !parseVideoEmbedUrl(url);
+  $('video-url-error').hidden = !bad;
+  $('video-url-error').textContent = bad ? 'Must be a YouTube or Vimeo link' : '';
+  return !bad;
+}
+
 // If a photo was uploaded under a name that's since been edited — or the
 // dialog was opened on an existing photo and the row got renamed — the
 // file on disk drifts from what the fields now say. Editing has no Cancel
@@ -1112,9 +1188,11 @@ async function reconcileAllPhotos() {
 
 async function saveMinistry() {
   if (!validateNoParensInForm()) return;
+  if (!validateVideoUrlInForm()) return;
 
   const universities = collectRepeatable($('universities-group'), 'name', 'year')
     .map(({ name, year }) => ({ name: stripParens(name), year: stripParens(year) }));
+  const videoUrl = $('field-video-url').value.trim();
   const body = {
     sha: state.sha,
     city: $('field-city').value.trim(),
@@ -1124,6 +1202,11 @@ async function saveMinistry() {
     date_opened: deriveDateOpened(universities),
     is_developing: $('field-is-developing').checked,
     blurb: $('field-blurb').value.trim(),
+    video_url: videoUrl,
+    // Same fallback the server applies — mirrored here so state.rows
+    // (updated from this body after save, not re-fetched) matches what
+    // actually got written, same reasoning as stripParens above.
+    video_label: videoUrl ? ($('field-video-label').value.trim() || `Learn about ${$('field-city').value.trim()}`) : '',
     staff: collectRepeatable($('staff-group'), 'name', 'role'),
     universities,
     // Reference, not a copy — reconcileAllPhotos() (called below, before
@@ -1303,6 +1386,7 @@ function wireDialog() {
   $('add-staff-btn').addEventListener('click', () => { addStaffRow(); markDialogDirty(); });
   $('add-university-btn').addEventListener('click', () => { addUniversityRow(); markDialogDirty(); });
   wireMinistryPhotoAdd();
+  wireVideoLinkFields();
   $('latlng-lookup-btn').addEventListener('click', lookupLatLng);
   $('pin-placement-btn').addEventListener('click', togglePinPlacementMap);
   $('dialog-close-btn').addEventListener('click', saveMinistry);

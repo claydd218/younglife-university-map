@@ -112,6 +112,19 @@
     </div>
   </div>
 
+  <!-- Separate from #ministry-lightbox rather than a "video slide" bolted
+       onto the photo carousel — a video never swipes/spiderfies between
+       multiple items the way photos do, so sharing that machinery would
+       mean threading video-specific cases through logic that doesn't
+       otherwise need to know videos exist. -->
+  <div id="video-lightbox" class="ministry-lightbox" aria-hidden="true">
+    <div class="lightbox-backdrop"></div>
+    <div class="lightbox-content video-lightbox-content">
+      <button type="button" class="lightbox-close" aria-label="Close">&times;</button>
+      <div class="video-embed-wrap" id="video-lightbox-embed"></div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>

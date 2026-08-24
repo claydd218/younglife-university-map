@@ -236,6 +236,24 @@
   }
   .move-staff-option:hover { background: #f4f4f4; border-color: #ccc; }
 
+  dialog#video-preview-dialog {
+    width: min(720px, 92vw);
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+  dialog#video-preview-dialog[open] { display: flex; flex-direction: column; }
+  dialog#video-preview-dialog::backdrop { background: rgba(0,0,0,0.4); }
+  .video-label-row { display: flex; gap: 8px; align-items: center; }
+  .video-label-row input { flex: 1; }
+  /* 16:9 is standard for both YouTube and Vimeo — aspect-ratio keeps the
+     iframe sized correctly without a JS-measured height like the photo
+     lightbox needs (every video embed is the same fixed ratio, so there's
+     no per-item variation to account for). */
+  .video-embed-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+  .video-embed-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
   .field-checkbox label { display: flex; align-items: center; gap: 8px; font-weight: 400; margin-bottom: 0; }
@@ -534,6 +552,19 @@
         </div>
 
         <div class="field">
+          <label for="field-video-url">Video Link (optional)</label>
+          <input type="text" id="field-video-url" placeholder="https://www.youtube.com/watch?v=… or https://vimeo.com/…">
+          <div class="field-error" id="video-url-error" hidden></div>
+        </div>
+        <div class="field" id="video-label-row" hidden>
+          <label for="field-video-label">Video Link Text</label>
+          <div class="video-label-row">
+            <input type="text" id="field-video-label" placeholder="Learn about …">
+            <button type="button" class="btn secondary btn-small" id="video-preview-btn">Preview</button>
+          </div>
+        </div>
+
+        <div class="field">
           <label for="field-blurb">Ministry Blurb</label>
           <textarea id="field-blurb"></textarea>
         </div>
@@ -570,6 +601,18 @@
     <div class="dialog-body">
       <input type="text" id="move-staff-search" class="move-staff-search" placeholder="Search city or country…" autocomplete="off">
       <div id="move-staff-list" class="move-staff-list"></div>
+    </div>
+  </dialog>
+
+  <dialog id="video-preview-dialog">
+    <div class="dialog-header">
+      <h2>Video Preview</h2>
+      <div class="dialog-header-actions">
+        <button type="button" class="btn secondary" id="video-preview-close-btn">Close</button>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <div class="video-embed-wrap" id="video-preview-embed"></div>
     </div>
   </dialog>
 

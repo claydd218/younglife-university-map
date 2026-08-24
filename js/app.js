@@ -257,6 +257,21 @@ function buildPopupHtml(row, divisionKey) {
       </div>`
     : `<div class="popup-photo popup-photo-fallback" style="--fallback-color:${escapeHtml(div.country)}"><span>${escapeHtml(row.city || '?')}</span></div>`;
 
+  // Re-parsed from the stored original URL (not a canonicalized embed URL
+  // saved separately) so there's one place — parseVideoEmbedUrl — that
+  // knows how to turn a link into a player, shared with the admin's
+  // Preview button. Malformed/legacy video_url data (hand-edited CSV,
+  // pre-validation rows) just silently omits the link rather than
+  // rendering something that can't actually play.
+  const videoHtml = row.video_url && parseVideoEmbedUrl(row.video_url)
+    ? `<div class="popup-body popup-video-body">
+        <a href="#" class="popup-video-link" data-video-url="${escapeHtml(row.video_url)}">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          ${escapeHtml(row.video_label || `Learn about ${row.city}`)}
+        </a>
+      </div>`
+    : '';
+
   return `
     <div class="popup-card">
       <div class="popup-body popup-header-body">
@@ -264,6 +279,7 @@ function buildPopupHtml(row, divisionKey) {
       </div>
       ${cityPhoto}
       ${row.blurb ? `<div class="popup-body popup-blurb-body"><p class="popup-blurb">${escapeHtml(row.blurb)}</p></div>` : ''}
+      ${videoHtml}
       <div class="popup-body">
         ${staffHtml}
         ${universitiesHtml}
@@ -967,6 +983,40 @@ function wireMinistryPhotoCarousel() {
   map.on('movestart', close);
 }
 
+// Fullscreen embed for a ministry's video link — separate overlay from
+// #ministry-lightbox (see the HTML comment there) since a single video has
+// none of the swipe/multi-slide machinery photos need.
+function wireVideoLightbox() {
+  const lightbox = document.getElementById('video-lightbox');
+  const embedWrap = document.getElementById('video-lightbox-embed');
+
+  function open(embedUrl) {
+    embedWrap.innerHTML = `<iframe src="${embedUrl}" title="Ministry video" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    lightbox.classList.add('visible');
+  }
+
+  // Clearing the iframe (not just hiding the overlay) actually stops
+  // playback — an <iframe> left in the DOM keeps running otherwise.
+  function close() {
+    lightbox.classList.remove('visible');
+    embedWrap.innerHTML = '';
+  }
+
+  lightbox.querySelector('.lightbox-close').addEventListener('click', close);
+  lightbox.querySelector('.lightbox-backdrop').addEventListener('click', close);
+
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('.popup-video-link');
+    if (!link) return;
+    e.preventDefault();
+    const parsed = parseVideoEmbedUrl(link.dataset.videoUrl);
+    if (parsed) open(parsed.embedUrl);
+  });
+
+  map.on('popupclose', close);
+  map.on('movestart', close);
+}
+
 // Easter egg: triple-clicking the page title swaps it for a joke variant,
 // and swaps back on the next triple-click. Triple-click (not single/double)
 // so it's not something a visitor stumbles into by accident.
@@ -1144,6 +1194,7 @@ async function init() {
     wireDirectoryControls();
     wirePhotoPreview();
     wireMinistryPhotoCarousel();
+    wireVideoLightbox();
     wireTitleEasterEgg();
     wireBackButtonReset();
 

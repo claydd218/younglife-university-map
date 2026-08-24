@@ -86,3 +86,46 @@ export function assertNoParens(value, fieldLabel) {
 export function stripParens(value) {
   return (value || '').replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
 }
+
+// Byte-for-byte copy of js/utils.js's parseVideoEmbedUrl() — used here to
+// validate a video_url at save time (reject it outright rather than
+// silently storing an unplayable link), same reasoning as keeping
+// slugify/parseParenList in sync above.
+export function parseVideoEmbedUrl(url) {
+  const trimmed = (url || '').trim();
+  if (!trimmed) return null;
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.replace(/^www\.|^m\./, '');
+  const YOUTUBE_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+
+  if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    let id = parsed.searchParams.get('v');
+    if (!id) {
+      const match = parsed.pathname.match(/^\/(?:embed|shorts)\/([a-zA-Z0-9_-]{11})/);
+      if (match) id = match[1];
+    }
+    return id && YOUTUBE_ID_RE.test(id)
+      ? { provider: 'youtube', embedUrl: `https://www.youtube.com/embed/${id}` }
+      : null;
+  }
+  if (host === 'youtu.be') {
+    const id = parsed.pathname.slice(1).split('/')[0];
+    return id && YOUTUBE_ID_RE.test(id)
+      ? { provider: 'youtube', embedUrl: `https://www.youtube.com/embed/${id}` }
+      : null;
+  }
+  if (host === 'vimeo.com') {
+    const match = parsed.pathname.match(/^\/(\d+)/);
+    return match ? { provider: 'vimeo', embedUrl: `https://player.vimeo.com/video/${match[1]}` } : null;
+  }
+  if (host === 'player.vimeo.com') {
+    const match = parsed.pathname.match(/^\/video\/(\d+)/);
+    return match ? { provider: 'vimeo', embedUrl: `https://player.vimeo.com/video/${match[1]}` } : null;
+  }
+  return null;
+}

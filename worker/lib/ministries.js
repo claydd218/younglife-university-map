@@ -4,11 +4,11 @@
 
 import { getFile } from './github.js';
 import { parseCsv } from './csv.js';
-import { parseParenList, joinParenList, assertNoParens, stripParens, ValidationError } from './text.js';
+import { parseParenList, joinParenList, assertNoParens, stripParens, parseVideoEmbedUrl, ValidationError } from './text.js';
 
 export const MINISTRIES_PATH = 'data/ministries.csv';
 export const DIVISIONS_PATH = 'data/country-divisions.csv';
-export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'blurb', 'photos'];
+export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'blurb', 'photos', 'video_url', 'video_label'];
 
 // country -> division, per data/country-divisions.csv.
 export async function loadDivisions(env) {
@@ -45,6 +45,8 @@ export function rowToApi(row) {
     universities: parseParenList(row.universities).map(({ name, meta }) => ({ name, year: meta })),
     blurb: row.blurb,
     photos: (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean),
+    video_url: row.video_url || '',
+    video_label: row.video_label || '',
   };
 }
 
@@ -65,6 +67,18 @@ export function rowFromBody(id, body) {
     assertNoParens(s.role, 'Staff role');
   }
 
+  // Rejected outright rather than sanitized (unlike university names) —
+  // there's no reasonable way to "clean up" a link that doesn't point at a
+  // playable video, unlike stripping a stray paren out of a name.
+  const videoUrl = (body.video_url || '').trim();
+  if (videoUrl && !parseVideoEmbedUrl(videoUrl)) {
+    throw new ValidationError('Video link must be a YouTube or Vimeo URL', 'video_url');
+  }
+  // Only meaningful (and only defaulted) alongside an actual video — an
+  // empty video_url means no video at all, so any label is discarded too
+  // rather than left dangling with nothing to attach to.
+  const videoLabel = videoUrl ? ((body.video_label || '').trim() || `Learn about ${body.city.trim()}`) : '';
+
   const staffMeta = (body.staff || []).map(({ name, role }) => ({ name, meta: role }));
   // Universities get sanitized rather than rejected — see stripParens.
   const universitiesMeta = (body.universities || []).map(({ name, year }) => ({
@@ -84,6 +98,8 @@ export function rowFromBody(id, body) {
     staff: joinParenList(staffMeta),
     blurb: (body.blurb || '').trim(),
     photos: (body.photos || []).join('; '),
+    video_url: videoUrl,
+    video_label: videoLabel,
   };
 }
 

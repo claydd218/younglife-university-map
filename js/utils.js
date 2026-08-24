@@ -52,6 +52,50 @@ function lastNameOf(name) {
   return parts.length ? parts[parts.length - 1] : '';
 }
 
+// A pasted YouTube/Vimeo page URL -> { provider, embedUrl } for an <iframe>
+// src, or null if it's not a recognized link from either. Used both by the
+// admin's Preview button and the public site's video overlay, so the
+// stored video_url (the original pasted link, not a canonicalized embed
+// URL) always resolves to a player the same way in both places.
+function parseVideoEmbedUrl(url) {
+  const trimmed = (url || '').trim();
+  if (!trimmed) return null;
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.replace(/^www\.|^m\./, '');
+  const YOUTUBE_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+
+  if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    let id = parsed.searchParams.get('v');
+    if (!id) {
+      const match = parsed.pathname.match(/^\/(?:embed|shorts)\/([a-zA-Z0-9_-]{11})/);
+      if (match) id = match[1];
+    }
+    return id && YOUTUBE_ID_RE.test(id)
+      ? { provider: 'youtube', embedUrl: `https://www.youtube.com/embed/${id}` }
+      : null;
+  }
+  if (host === 'youtu.be') {
+    const id = parsed.pathname.slice(1).split('/')[0];
+    return id && YOUTUBE_ID_RE.test(id)
+      ? { provider: 'youtube', embedUrl: `https://www.youtube.com/embed/${id}` }
+      : null;
+  }
+  if (host === 'vimeo.com') {
+    const match = parsed.pathname.match(/^\/(\d+)/);
+    return match ? { provider: 'vimeo', embedUrl: `https://player.vimeo.com/video/${match[1]}` } : null;
+  }
+  if (host === 'player.vimeo.com') {
+    const match = parsed.pathname.match(/^\/video\/(\d+)/);
+    return match ? { provider: 'vimeo', embedUrl: `https://player.vimeo.com/video/${match[1]}` } : null;
+  }
+  return null;
+}
+
 // "PH" -> 🇵🇭. Flag emoji are just two Regional Indicator Symbol characters,
 // one per letter (A -> U+1F1E6 ... Z -> U+1F1FF), so any ISO 3166-1 alpha-2
 // code converts directly with no per-country lookup table needed.
