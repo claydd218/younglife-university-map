@@ -197,6 +197,45 @@
   .dialog-header-actions { display: flex; gap: 8px; }
   .dialog-body { padding: 16px 20px 28px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 
+  /* Same "only display:flex under [open]" approach as #ministry-dialog —
+     this one has no unconditional display rule to begin with, so no
+     override is needed, but keeping it scoped to [open] here too avoids
+     the same trap if properties ever get added outside that selector. */
+  dialog#move-staff-dialog {
+    width: min(420px, 92vw);
+    max-height: 80vh;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+  dialog#move-staff-dialog[open] { display: flex; flex-direction: column; }
+  dialog#move-staff-dialog::backdrop { background: rgba(0,0,0,0.4); }
+  .move-staff-search {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+  }
+  .move-staff-list { display: flex; flex-direction: column; gap: 4px; }
+  .move-staff-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    font-size: 14px;
+    padding: 9px 11px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+    background: #fff;
+    cursor: pointer;
+  }
+  .move-staff-option:hover { background: #f4f4f4; border-color: #ccc; }
+
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
   .field-checkbox label { display: flex; align-items: center; gap: 8px; font-weight: 400; margin-bottom: 0; }
@@ -234,6 +273,7 @@
   .repeatable-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
   .repeatable-item .field { flex: none; width: 100%; margin-bottom: 0; }
   .repeatable-item .remove-row { align-self: flex-end; }
+  .staff-row-actions { display: flex; gap: 8px; align-self: flex-end; }
 
   .photo-widget {
     display: grid;
@@ -518,6 +558,19 @@
         </div>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="move-staff-dialog">
+    <div class="dialog-header">
+      <h2 id="move-staff-title">Move to Ministry</h2>
+      <div class="dialog-header-actions">
+        <button type="button" class="btn secondary" id="move-staff-cancel-btn">Cancel</button>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <input type="text" id="move-staff-search" class="move-staff-search" placeholder="Search city or country…" autocomplete="off">
+      <div id="move-staff-list" class="move-staff-list"></div>
+    </div>
   </dialog>
 
   <script src="../js/utils.js"></script>

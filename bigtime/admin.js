@@ -782,15 +782,32 @@ function addStaffRow(prefill = {}) {
     name: prefill.name, meta: prefill.role,
   });
   const nameInput = item.querySelector('.row-name');
+  const metaInput = item.querySelector('.row-meta');
   const photoWidget = document.createElement('div');
   photoWidget.className = 'photo-widget';
   item.appendChild(photoWidget);
 
-  item.appendChild(makeRemoveButton({
+  const moveBtn = document.createElement('button');
+  moveBtn.type = 'button';
+  moveBtn.className = 'btn secondary btn-small';
+  moveBtn.textContent = 'Move…';
+  moveBtn.addEventListener('click', () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      showBanner('error', 'Fill in the staff member’s name before moving them.');
+      return;
+    }
+    openMoveStaffDialog(name, metaInput.value.trim(), item);
+  });
+
+  const actionsRow = document.createElement('div');
+  actionsRow.className = 'staff-row-actions';
+  actionsRow.append(moveBtn, makeRemoveButton({
     danger: true,
     confirmMessage: 'Remove this staff member? This can’t be undone after you save the ministry.',
     onRemove: () => item.remove(),
   }));
+  item.appendChild(actionsRow);
 
   const slug = prefill.name ? slugify(prefill.name) : null;
   const wireWidget = (initialUrl) => createPhotoWidget(photoWidget, {
@@ -805,6 +822,91 @@ function addStaffRow(prefill = {}) {
   } else {
     wireWidget(null);
   }
+}
+
+// --- Move staff to another ministry -----------------------------------
+
+// { name, role, item } for whichever staff row's Move… was clicked —
+// item is the DOM row so confirmMoveStaff can remove it once the target
+// ministry's write succeeds.
+let moveStaffContext = null;
+
+function openMoveStaffDialog(name, role, item) {
+  moveStaffContext = { name, role, item };
+  const search = $('move-staff-search');
+  search.value = '';
+  renderMoveStaffList('');
+  $('move-staff-dialog').showModal();
+  search.focus();
+}
+
+function renderMoveStaffList(query) {
+  const list = $('move-staff-list');
+  const q = query.trim().toLowerCase();
+  // The ministry currently open in the edit dialog isn't a valid move
+  // target — moving a staff member "to" the ministry they're already on
+  // doesn't mean anything.
+  const candidates = state.rows
+    .filter((r) => r.id !== state.editingId)
+    .filter((r) => !q || `${r.city} ${r.country}`.toLowerCase().includes(q))
+    .sort((a, b) => a.city.localeCompare(b.city));
+
+  list.innerHTML = candidates.length
+    ? candidates.map((r) => `<button type="button" class="move-staff-option" data-id="${escapeHtml(r.id)}">${escapeHtml(r.city)}, ${escapeHtml(r.country)}</button>`).join('')
+    : '<p class="status-text">No ministries match that search.</p>';
+
+  list.querySelectorAll('[data-id]').forEach((btn) => {
+    btn.addEventListener('click', () => confirmMoveStaff(btn.dataset.id));
+  });
+}
+
+// Writes straight to the target ministry's last-known-saved data
+// (state.rows), not the currently open form's draft — moving a staff
+// member is its own self-contained action and shouldn't also commit
+// whatever unrelated field edits happen to be sitting in the open dialog.
+async function confirmMoveStaff(targetId) {
+  const target = state.rows.find((r) => r.id === targetId);
+  if (!target || !moveStaffContext) return;
+  const { name, role, item } = moveStaffContext;
+  if (!window.confirm(`Move ${name} to ${target.city}, ${target.country}?`)) return;
+
+  $('move-staff-dialog').close();
+  const newStaff = [...target.staff, { name, role }];
+  const body = {
+    sha: state.sha,
+    city: target.city,
+    country: target.country,
+    lat: target.lat,
+    lng: target.lng,
+    date_opened: target.date_opened,
+    is_developing: target.is_developing,
+    blurb: target.blurb,
+    staff: newStaff,
+    universities: target.universities,
+    photos: target.photos,
+  };
+
+  try {
+    const result = await apiFetch(`/ministries/${encodeURIComponent(targetId)}`, { method: 'PUT', body: JSON.stringify(body) });
+    state.sha = result.sha;
+    trackDeployVersion(result.deployVersion);
+    const targetIndex = state.rows.findIndex((r) => r.id === targetId);
+    state.rows[targetIndex] = { ...target, staff: newStaff };
+    item.remove();
+    markDialogDirty();
+  } catch (err) {
+    handleWriteError(err, loadMinistries);
+  } finally {
+    moveStaffContext = null;
+  }
+}
+
+function wireMoveStaffDialog() {
+  $('move-staff-search').addEventListener('input', (e) => renderMoveStaffList(e.target.value));
+  $('move-staff-cancel-btn').addEventListener('click', () => {
+    moveStaffContext = null;
+    $('move-staff-dialog').close();
+  });
 }
 
 function addUniversityRow(prefill = {}) {
@@ -1517,4 +1619,5 @@ wireTabs();
 wireDialog();
 wireMinistriesSearch();
 wireDeployToast();
+wireMoveStaffDialog();
 loadMinistries();
