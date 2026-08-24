@@ -527,18 +527,42 @@ function wireLegendToggle() {
   const toggle = document.getElementById('legend-toggle');
   const swipeZone = document.getElementById('legend-swipe-zone');
 
-  function setCollapsed(collapsed) {
+  const COLLAPSED_COOKIE = 'legend_collapsed';
+
+  function readCollapsedCookie() {
+    const match = document.cookie.match(new RegExp(`(?:^|; )${COLLAPSED_COOKIE}=([^;]*)`));
+    return match ? match[1] === 'true' : null;
+  }
+
+  // A year is long enough to read as "remembered," short enough that an
+  // abandoned browser profile doesn't pin this forever.
+  function writeCollapsedCookie(collapsed) {
+    document.cookie = `${COLLAPSED_COOKIE}=${collapsed}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+  }
+
+  // persist is only true from an actual click/swipe below — the initial
+  // call that applies either a saved cookie or the device default isn't a
+  // real choice yet, so it shouldn't overwrite (or prematurely create) one.
+  function setCollapsed(collapsed, { persist = false } = {}) {
     legend.classList.toggle('legend-collapsed', collapsed);
     toggle.setAttribute('aria-expanded', String(!collapsed));
     toggle.setAttribute('aria-label', collapsed ? 'Expand legend' : 'Minimize legend');
+    if (persist) writeCollapsedCookie(collapsed);
   }
 
-  // Start collapsed on every screen size so the legend doesn't cover the
-  // map on first load.
-  setCollapsed(true);
+  // A saved cookie always wins — it's a real choice the user already
+  // made. Otherwise default to open on desktop (there's room for it) and
+  // collapsed on touch devices, where it'd otherwise cover the map on
+  // first load — any-pointer:coarse is the same touch signal the
+  // lightbox arrows use elsewhere for this.
+  const savedCollapsed = readCollapsedCookie();
+  const initialCollapsed = savedCollapsed !== null
+    ? savedCollapsed
+    : window.matchMedia('(any-pointer: coarse)').matches;
+  setCollapsed(initialCollapsed);
 
   toggle.addEventListener('click', () => {
-    setCollapsed(!legend.classList.contains('legend-collapsed'));
+    setCollapsed(!legend.classList.contains('legend-collapsed'), { persist: true });
   });
 
   const SWIPE_THRESHOLD = 24;
@@ -565,8 +589,8 @@ function wireLegendToggle() {
   swipeZone.addEventListener('pointerup', (e) => {
     if (startY == null) return;
     const deltaY = e.clientY - startY;
-    if (deltaY > SWIPE_THRESHOLD) setCollapsed(true); // swiped down
-    else if (deltaY < -SWIPE_THRESHOLD) setCollapsed(false); // swiped up
+    if (deltaY > SWIPE_THRESHOLD) setCollapsed(true, { persist: true }); // swiped down
+    else if (deltaY < -SWIPE_THRESHOLD) setCollapsed(false, { persist: true }); // swiped up
     startY = null;
     pointerId = null;
     captured = false;
