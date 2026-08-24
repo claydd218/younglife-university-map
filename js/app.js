@@ -269,7 +269,13 @@ function buildPopupHtml(row, divisionKey) {
   // already gets — only when a video link actually precedes it, since
   // that CSS only matches when the two are direct siblings.
   const videoHtml = row.video_url && parseVideoEmbedUrl(row.video_url)
-    ? `<a href="#" class="popup-video-link" data-video-url="${escapeHtml(row.video_url)}">${escapeHtml(row.video_label || `Learn about ${row.city}`)}</a>`
+    ? `<a href="#" class="popup-video-link" data-video-url="${escapeHtml(row.video_url)}">
+        <svg class="popup-video-play-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="12"/>
+          <path d="M9.5 7.5v9l7-4.5z" fill="#fff"/>
+        </svg>
+        ${escapeHtml(row.video_label || `Watch a ${row.city} Story`)}
+      </a>`
     : '';
 
   return `

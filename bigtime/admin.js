@@ -626,7 +626,7 @@ function wireMinistryPhotoAdd() {
 let videoLabelManuallyEdited = false;
 
 function defaultVideoLabel() {
-  return `Learn about ${$('field-city').value.trim()}`;
+  return `Watch a ${$('field-city').value.trim()} Story`;
 }
 
 function updateVideoLabelVisibility() {
@@ -642,8 +642,9 @@ function wireVideoLinkFields() {
     if (!videoLabelManuallyEdited) labelInput.value = defaultVideoLabel();
   });
 
-  // Keeps "Learn about {city}" following a city rename, same as the auto-
-  // fill above, as long as the label hasn't been hand-edited away from it.
+  // Keeps "Watch a {City} Story" following a city rename, same as the
+  // auto-fill above, as long as the label hasn't been hand-edited away
+  // from it.
   $('field-city').addEventListener('input', () => {
     if (!videoLabelManuallyEdited && urlInput.value.trim()) labelInput.value = defaultVideoLabel();
   });
@@ -1203,10 +1204,11 @@ async function saveMinistry() {
     is_developing: $('field-is-developing').checked,
     blurb: $('field-blurb').value.trim(),
     video_url: videoUrl,
-    // Same fallback the server applies — mirrored here so state.rows
-    // (updated from this body after save, not re-fetched) matches what
-    // actually got written, same reasoning as stripParens above.
-    video_label: videoUrl ? ($('field-video-label').value.trim() || `Learn about ${$('field-city').value.trim()}`) : '',
+    // Same fallback the server applies — mirrored here (via
+    // defaultVideoLabel, not a re-typed template) so state.rows (updated
+    // from this body after save, not re-fetched) matches what actually
+    // got written, same reasoning as stripParens above.
+    video_label: videoUrl ? ($('field-video-label').value.trim() || defaultVideoLabel()) : '',
     staff: collectRepeatable($('staff-group'), 'name', 'role'),
     universities,
     // Reference, not a copy — reconcileAllPhotos() (called below, before

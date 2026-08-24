@@ -868,15 +868,28 @@ img.popup-photo {
 }
 
 .popup-video-link {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: #1a56c4;
-  font-size: 16px;
+  font-size: 18px;
   text-decoration: underline;
   cursor: pointer;
 }
 
 .popup-video-link:hover {
   color: #123f8f;
+}
+
+/* The circle picks up the link's own color (blue, darker on hover) via
+   currentColor/inheritance since it has no fill of its own; the triangle
+   keeps its explicit white fill regardless — same shape as the play
+   button on most video platforms, just recolored to match the link. */
+.popup-video-play-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  fill: currentColor;
 }
 
 /* Same separator (and same whitespace) staff->universities already gets —

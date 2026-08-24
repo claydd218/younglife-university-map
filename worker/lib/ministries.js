@@ -77,7 +77,7 @@ export function rowFromBody(id, body) {
   // Only meaningful (and only defaulted) alongside an actual video — an
   // empty video_url means no video at all, so any label is discarded too
   // rather than left dangling with nothing to attach to.
-  const videoLabel = videoUrl ? ((body.video_label || '').trim() || `Learn about ${body.city.trim()}`) : '';
+  const videoLabel = videoUrl ? ((body.video_label || '').trim() || `Watch a ${body.city.trim()} Story`) : '';
 
   const staffMeta = (body.staff || []).map(({ name, role }) => ({ name, meta: role }));
   // Universities get sanitized rather than rejected — see stripParens.
