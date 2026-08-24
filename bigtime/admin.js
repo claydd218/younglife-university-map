@@ -710,29 +710,55 @@ function wireMinistriesSearch() {
 
 const RECENT_MS = 24 * 60 * 60 * 1000;
 
-// A "history" icon (circular arrow + clock hands) prefixed onto the
-// City/Area cell for any ministry saved in the last 24 hours — updated_at
-// is stamped server-side (rowFromBody) on every real write to that row,
-// including the target side of a staff Move, so this always reflects an
-// actual edit rather than e.g. when the admin happened to load the page.
-function recentBadge(row) {
-  if (!row.updated_at) return '';
+// updated_at is stamped server-side (rowFromBody) on every real write to a
+// ministry row, including the target side of a staff Move, so this always
+// reflects an actual edit rather than e.g. when the admin happened to load
+// the page.
+function isRecent(row) {
+  if (!row.updated_at) return false;
   const editedMsAgo = Date.now() - new Date(row.updated_at).getTime();
-  if (!(editedMsAgo >= 0 && editedMsAgo < RECENT_MS)) return '';
-  return `<span class="recent-badge" title="Edited in the last 24 hours">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M3 12a9 9 0 1 0 3-6.7"/>
-      <path d="M3 4v4h4"/>
-      <path d="M12 8v4l3 2"/>
-    </svg>
-  </span>`;
+  return editedMsAgo >= 0 && editedMsAgo < RECENT_MS;
+}
+
+// Each key narrows the list when on; all active filters combine with AND
+// (e.g. Recent + No Staff shows only ministries that are both). Off by
+// default so the list starts unfiltered.
+let ministriesFilter = { recent: false, developing: false, established: false, noStaff: false, noUniversities: false };
+
+function matchesMinistriesFilter(row) {
+  if (ministriesFilter.recent && !isRecent(row)) return false;
+  if (ministriesFilter.developing && !row.is_developing) return false;
+  if (ministriesFilter.established && row.is_developing) return false;
+  if (ministriesFilter.noStaff && row.staff.length !== 0) return false;
+  if (ministriesFilter.noUniversities && row.universities.length !== 0) return false;
+  return true;
+}
+
+function wireMinistriesFilterBar() {
+  const bar = $('ministries-filter-bar');
+  const defs = [
+    { key: 'recent', status: 'recent', label: 'Recent' },
+    { key: 'developing', status: 'developing', label: 'Developing' },
+    { key: 'established', status: 'established', label: 'Established' },
+    { key: 'noStaff', status: 'no-staff', label: 'No Staff' },
+    { key: 'noUniversities', status: 'no-universities', label: 'No Universities' },
+  ];
+  bar.innerHTML = defs.map((d) => `<button type="button" class="filter-toggle status-${d.status} ${ministriesFilter[d.key] ? 'on' : ''}" data-key="${d.key}">${d.label}</button>`).join('');
+  bar.querySelectorAll('.filter-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      ministriesFilter[key] = !ministriesFilter[key];
+      btn.classList.toggle('on', ministriesFilter[key]);
+      renderMinistriesTable();
+    });
+  });
 }
 
 function renderMinistriesTable() {
   const container = $('ministries-report');
   container.innerHTML = '';
 
-  const visibleRows = state.rows.filter((row) => matchesMinistriesSearch(row, ministriesSearch));
+  const visibleRows = state.rows.filter((row) => matchesMinistriesSearch(row, ministriesSearch) && matchesMinistriesFilter(row));
 
   // Group by division (same key used to color the public map) so ministries
   // read the same way the Images tab already does. Rows whose country isn't
@@ -758,7 +784,7 @@ function renderMinistriesTable() {
     const rowsHtml = sorted.map((row) => `
       <tr>
         <td>${escapeHtml(row.country)}</td>
-        <td>${recentBadge(row)}${escapeHtml(row.city)}</td>
+        <td>${escapeHtml(row.city)}</td>
         <td>${row.staff.map((s) => escapeHtml(s.name)).join(', ') || '—'}</td>
         <td class="actions">
           <button type="button" class="btn secondary btn-small" data-edit="${escapeHtml(row.id)}">Edit</button>
@@ -779,11 +805,13 @@ function renderMinistriesTable() {
     container.appendChild(section);
   }
 
-  if (ministriesSearch && !groups.length) {
-    container.innerHTML = '<p class="status-text">No ministries match that search.</p>';
+  const filtered = Boolean(ministriesSearch) || Object.values(ministriesFilter).some(Boolean);
+
+  if (filtered && !groups.length) {
+    container.innerHTML = '<p class="status-text">No ministries match that search/filter.</p>';
   }
 
-  $('ministries-count').textContent = ministriesSearch
+  $('ministries-count').textContent = filtered
     ? `${visibleRows.length} of ${state.rows.length} ministr${state.rows.length === 1 ? 'y' : 'ies'}`
     : `${state.rows.length} ministr${state.rows.length === 1 ? 'y' : 'ies'}`;
 
@@ -1789,6 +1817,7 @@ async function renderImagesTab() {
 wireTabs();
 wireDialog();
 wireMinistriesSearch();
+wireMinistriesFilterBar();
 wireDeployToast();
 wireMoveStaffDialog();
 loadMinistries();

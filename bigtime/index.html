@@ -156,13 +156,6 @@
 
   table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
   th, td { text-align: left; padding: 9px 12px; font-size: 13.5px; border-bottom: 1px solid #eee; }
-  .recent-badge {
-    display: inline-flex;
-    vertical-align: -2px;
-    margin-right: 5px;
-    color: #b85c1e;
-  }
-  .recent-badge svg { width: 14px; height: 14px; }
   th { background: #f4f4f4; font-weight: 600; color: #444; }
   tr:last-child td { border-bottom: none; }
   td.actions { white-space: nowrap; text-align: right; }
@@ -435,6 +428,11 @@
   .filter-toggle.on.status-missing { border-color: #c0392b; color: #c0392b; background: #fdecea; }
   .filter-toggle.on.status-low { border-color: #b8860b; color: #8a6500; background: #fff6e5; }
   .filter-toggle.on.status-good { border-color: #1e7a3c; color: #1e7a3c; background: #eafaf0; }
+  .filter-toggle.on.status-recent { border-color: #b85c1e; color: #b85c1e; background: #fdf1e8; }
+  .filter-toggle.on.status-developing { border-color: #b8860b; color: #8a6500; background: #fff6e5; }
+  .filter-toggle.on.status-established { border-color: #1e7a3c; color: #1e7a3c; background: #eafaf0; }
+  .filter-toggle.on.status-no-staff { border-color: #c0392b; color: #c0392b; background: #fdecea; }
+  .filter-toggle.on.status-no-universities { border-color: #c0392b; color: #c0392b; background: #fdecea; }
 
   h2.division { font-size: 17px; margin: 26px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #1a1a1a; }
   #ministries-report table { margin-bottom: 8px; }
@@ -493,6 +491,7 @@
       </div>
       <button type="button" class="btn" id="add-ministry-btn">+ Add New Ministry</button>
     </div>
+    <div class="filter-bar" id="ministries-filter-bar"></div>
     <div id="ministries-report"></div>
   </section>
 
