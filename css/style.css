@@ -251,7 +251,14 @@ h1, h2, h3, .legend-label, .cluster-badge {
   background: var(--card-bg);
 }
 
-.legend-toggle .chevron-icon {
+/* No transition on .chevron-icon itself — only under .legend-transitions-ready,
+   added one frame after the legend's initial collapsed/expanded state is
+   applied (see wireLegendToggle's rAF in js/app.js). Without that gate, the
+   very first synchronous class toggle on load (open->0deg, collapsed->180deg)
+   itself counts as a style change and plays the transition, visibly flipping
+   the chevron on every page load instead of just rendering in its already-
+   correct rotation. */
+.legend-transitions-ready .legend-toggle .chevron-icon {
   transition: transform 0.2s ease;
 }
 

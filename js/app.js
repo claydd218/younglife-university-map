@@ -563,6 +563,17 @@ function setLegendCollapsed(collapsed, { persist = false } = {}) {
 {
   const savedCollapsed = readLegendCollapsedCookie();
   setLegendCollapsed(savedCollapsed !== null ? savedCollapsed : window.matchMedia('(any-pointer: coarse)').matches);
+  // Deferred (not via requestAnimationFrame — rAF never fires in a hidden/
+  // backgrounded tab, e.g. one opened in the background, so this has to be
+  // a macrotask instead) so this initial class application, which the
+  // browser still treats as a genuine style change even applied this
+  // early, isn't itself what the chevron's transition animates — see the
+  // CSS comment on .legend-transitions-ready. By the time this runs the
+  // collapsed/expanded state above has already been painted, so enabling
+  // the transition here only affects later, real toggles.
+  setTimeout(() => {
+    document.getElementById('legend').classList.add('legend-transitions-ready');
+  }, 0);
 }
 
 function wireLegendToggle() {
