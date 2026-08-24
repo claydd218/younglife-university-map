@@ -723,12 +723,11 @@ function isRecent(row) {
 // Each key narrows the list when on; all active filters combine with AND
 // (e.g. Recent + No Staff shows only ministries that are both). Off by
 // default so the list starts unfiltered.
-let ministriesFilter = { recent: false, developing: false, established: false, noStaff: false, noUniversities: false };
+let ministriesFilter = { recent: false, developing: false, noStaff: false, noUniversities: false };
 
 function matchesMinistriesFilter(row) {
   if (ministriesFilter.recent && !isRecent(row)) return false;
   if (ministriesFilter.developing && !row.is_developing) return false;
-  if (ministriesFilter.established && row.is_developing) return false;
   if (ministriesFilter.noStaff && row.staff.length !== 0) return false;
   if (ministriesFilter.noUniversities && row.universities.length !== 0) return false;
   return true;
@@ -739,7 +738,6 @@ function wireMinistriesFilterBar() {
   const defs = [
     { key: 'recent', status: 'recent', label: 'Recent' },
     { key: 'developing', status: 'developing', label: 'Developing' },
-    { key: 'established', status: 'established', label: 'Established' },
     { key: 'noStaff', status: 'no-staff', label: 'No Staff' },
     { key: 'noUniversities', status: 'no-universities', label: 'No Universities' },
   ];
