@@ -156,6 +156,13 @@
 
   table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
   th, td { text-align: left; padding: 9px 12px; font-size: 13.5px; border-bottom: 1px solid #eee; }
+  .recent-badge {
+    display: inline-flex;
+    vertical-align: -2px;
+    margin-right: 5px;
+    color: #b85c1e;
+  }
+  .recent-badge svg { width: 14px; height: 14px; }
   th { background: #f4f4f4; font-weight: 600; color: #444; }
   tr:last-child td { border-bottom: none; }
   td.actions { white-space: nowrap; text-align: right; }
@@ -292,6 +299,8 @@
   .repeatable-item .field { flex: none; width: 100%; margin-bottom: 0; }
   .repeatable-item .remove-row { align-self: flex-end; }
   .staff-row-actions { display: flex; gap: 8px; align-self: flex-end; }
+  .repeatable-reorder { display: flex; gap: 4px; align-self: flex-end; }
+  .repeatable-reorder .btn { padding: 5px 9px; }
 
   .photo-widget {
     display: grid;

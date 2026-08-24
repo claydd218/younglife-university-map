@@ -708,6 +708,26 @@ function wireMinistriesSearch() {
   });
 }
 
+const RECENT_MS = 24 * 60 * 60 * 1000;
+
+// A "history" icon (circular arrow + clock hands) prefixed onto the
+// City/Area cell for any ministry saved in the last 24 hours — updated_at
+// is stamped server-side (rowFromBody) on every real write to that row,
+// including the target side of a staff Move, so this always reflects an
+// actual edit rather than e.g. when the admin happened to load the page.
+function recentBadge(row) {
+  if (!row.updated_at) return '';
+  const editedMsAgo = Date.now() - new Date(row.updated_at).getTime();
+  if (!(editedMsAgo >= 0 && editedMsAgo < RECENT_MS)) return '';
+  return `<span class="recent-badge" title="Edited in the last 24 hours">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7"/>
+      <path d="M3 4v4h4"/>
+      <path d="M12 8v4l3 2"/>
+    </svg>
+  </span>`;
+}
+
 function renderMinistriesTable() {
   const container = $('ministries-report');
   container.innerHTML = '';
@@ -733,11 +753,12 @@ function renderMinistriesTable() {
   if (other.length) groups.push({ label: 'Other (country not in country-divisions.csv)', color: '#888', rows: other });
 
   for (const group of groups) {
-    const sorted = group.rows.slice().sort((a, b) => a.city.localeCompare(b.city));
+    const sorted = group.rows.slice().sort((a, b) =>
+      a.country.localeCompare(b.country) || a.city.localeCompare(b.city));
     const rowsHtml = sorted.map((row) => `
       <tr>
-        <td>${escapeHtml(row.city)}</td>
         <td>${escapeHtml(row.country)}</td>
+        <td>${recentBadge(row)}${escapeHtml(row.city)}</td>
         <td>${row.staff.map((s) => escapeHtml(s.name)).join(', ') || '—'}</td>
         <td class="actions">
           <button type="button" class="btn secondary btn-small" data-edit="${escapeHtml(row.id)}">Edit</button>
@@ -750,7 +771,7 @@ function renderMinistriesTable() {
       <h2 class="division" style="color: ${group.color}; border-bottom-color: ${group.color};">${escapeHtml(group.label)}</h2>
       <table>
         <thead>
-          <tr><th>City</th><th>Country</th><th>Staff</th><th></th></tr>
+          <tr><th>Country</th><th>City / Area</th><th>Staff</th><th></th></tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
       </table>
@@ -817,6 +838,57 @@ function repeatableRow(group, { nameLabel, metaLabel, metaPlaceholder, name = ''
   return item;
 }
 
+// Shared by staff/university rows. Unlike the ministry photo carousel's
+// reorder (which shuffles a plain array, currentMinistryPhotos), these
+// swap actual DOM position — collectRepeatable() reads order straight
+// from the live .repeatable-item children, so moving the element IS the
+// reorder. No "main" badge here (unlike the first ministry photo) since
+// neither list has a row that's meaningfully "the main one."
+function makeReorderButtons(group, item) {
+  const upBtn = document.createElement('button');
+  upBtn.type = 'button';
+  upBtn.className = 'btn secondary btn-small';
+  upBtn.textContent = '↑';
+  upBtn.title = 'Move earlier';
+  upBtn.addEventListener('click', () => {
+    const prev = item.previousElementSibling;
+    if (!prev) return;
+    group.insertBefore(item, prev);
+    updateReorderButtonStates(group);
+    markDialogDirty();
+  });
+
+  const downBtn = document.createElement('button');
+  downBtn.type = 'button';
+  downBtn.className = 'btn secondary btn-small';
+  downBtn.textContent = '↓';
+  downBtn.title = 'Move later';
+  downBtn.addEventListener('click', () => {
+    const next = item.nextElementSibling;
+    if (!next) return;
+    group.insertBefore(next, item);
+    updateReorderButtonStates(group);
+    markDialogDirty();
+  });
+
+  const row = document.createElement('div');
+  row.className = 'repeatable-reorder';
+  row.append(upBtn, downBtn);
+  return row;
+}
+
+// Called after every add/remove/reorder — disables ↑ on whichever row is
+// currently first and ↓ on whichever is currently last, recomputed fresh
+// each time since a swap or removal changes who's at either end.
+function updateReorderButtonStates(group) {
+  const items = group.querySelectorAll('.repeatable-item');
+  items.forEach((item, index) => {
+    const buttons = item.querySelectorAll('.repeatable-reorder button');
+    if (buttons[0]) buttons[0].disabled = index === 0;
+    if (buttons[1]) buttons[1].disabled = index === items.length - 1;
+  });
+}
+
 // `confirmMessage`, when set, guards the click with window.confirm — used
 // for staff rows since removing one (unlike a university) also abandons an
 // attached photo upload.
@@ -857,14 +929,21 @@ function addStaffRow(prefill = {}) {
     openMoveStaffDialog(name, metaInput.value.trim(), item);
   });
 
+  const staffGroup = $('staff-group');
+  item.appendChild(makeReorderButtons(staffGroup, item));
+
   const actionsRow = document.createElement('div');
   actionsRow.className = 'staff-row-actions';
   actionsRow.append(moveBtn, makeRemoveButton({
     danger: true,
     confirmMessage: 'Remove this staff member? This can’t be undone after you save the ministry.',
-    onRemove: () => item.remove(),
+    onRemove: () => {
+      item.remove();
+      updateReorderButtonStates(staffGroup);
+    },
   }));
   item.appendChild(actionsRow);
+  updateReorderButtonStates(staffGroup);
 
   const slug = prefill.name ? slugify(prefill.name) : null;
   const wireWidget = (initialUrl) => createPhotoWidget(photoWidget, {
@@ -969,15 +1048,21 @@ function wireMoveStaffDialog() {
 }
 
 function addUniversityRow(prefill = {}) {
-  const item = repeatableRow($('universities-group'), {
+  const universitiesGroup = $('universities-group');
+  const item = repeatableRow(universitiesGroup, {
     nameLabel: 'University', metaLabel: 'Year', metaPlaceholder: 'e.g. 2025',
     name: prefill.name, meta: prefill.year,
   });
+  item.appendChild(makeReorderButtons(universitiesGroup, item));
   item.appendChild(makeRemoveButton({
     danger: true,
     confirmMessage: 'Remove this university? This can’t be undone after you save the ministry.',
-    onRemove: () => item.remove(),
+    onRemove: () => {
+      item.remove();
+      updateReorderButtonStates(universitiesGroup);
+    },
   }));
+  updateReorderButtonStates(universitiesGroup);
 }
 
 function clearFieldErrors() {

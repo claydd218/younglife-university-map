@@ -8,7 +8,7 @@ import { parseParenList, joinParenList, assertNoParens, stripParens, parseVideoE
 
 export const MINISTRIES_PATH = 'data/ministries.csv';
 export const DIVISIONS_PATH = 'data/country-divisions.csv';
-export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'blurb', 'photos', 'video_url', 'video_label'];
+export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'blurb', 'photos', 'video_url', 'video_label', 'updated_at'];
 
 // country -> division, per data/country-divisions.csv.
 export async function loadDivisions(env) {
@@ -47,6 +47,7 @@ export function rowToApi(row) {
     photos: (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean),
     video_url: row.video_url || '',
     video_label: row.video_label || '',
+    updated_at: row.updated_at || '',
   };
 }
 
@@ -100,6 +101,10 @@ export function rowFromBody(id, body) {
     photos: (body.photos || []).join('; '),
     video_url: videoUrl,
     video_label: videoLabel,
+    // Server-stamped, never taken from the client — every call through
+    // here is a real write to this row (a plain save, or the target side
+    // of a staff Move), so "now" is always correct and can't be spoofed.
+    updated_at: new Date().toISOString(),
   };
 }
 
