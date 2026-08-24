@@ -7,6 +7,10 @@ const DEFAULT_LAND_FILL = '#e4d4ae';
 const DEFAULT_LAND_BORDER = '#8a7a5e';
 const HIGHLIGHT_BORDER = '#3b2a1a';
 
+// Ministry pins at or above this latitude open their popup below the pin
+// instead of above it — see the popup-creation loop in init() for why.
+const OPEN_POPUP_BELOW_LAT = 60;
+
 const state = {
   countryDivisionByName: new Map(),
   countryIsoByName: new Map(), // country name -> ISO 3166-1 alpha-2, for flag emoji
@@ -1166,7 +1170,7 @@ async function init() {
       const stageKey = String(row.is_developing).trim().toLowerCase() === 'true' ? 'developing' : 'established';
       const marker = L.marker([lat, lng], { icon: markerIcon(divisionKey, stageKey) });
       marker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
-      marker.bindPopup(buildPopupHtml(row, divisionKey), {
+      const popupOptions = {
         maxWidth: 380,
         className: 'vintage-popup-wrapper',
         // Leaflet's autoPan (map.panBy, fired at the moment the popup opens)
@@ -1177,7 +1181,19 @@ async function init() {
         // the header-overlap avoidance this provided; a popup opening very
         // near the top can land partly under the header again for now.
         autoPan: false,
-      });
+      };
+      // Above OPEN_POPUP_BELOW_LAT, the world map at typical zoom is
+      // already close to its northern maxBounds edge, so the popupopen
+      // handler further down has no room left to pan the popup into view
+      // above the pin — it just sits half under the header with nowhere
+      // to go. Opening below instead works because there's plenty of
+      // south to pan into. The actual repositioning happens in the
+      // popupopen handler (Leaflet has no "open below" option to just
+      // set here); this class is what that handler keys off of.
+      if (lat >= OPEN_POPUP_BELOW_LAT) {
+        popupOptions.className += ' popup-below';
+      }
+      marker.bindPopup(buildPopupHtml(row, divisionKey), popupOptions);
       state.clusterGroups[divisionKey].addLayer(marker);
 
       if (!state.markersByCountry.has(countryName)) state.markersByCountry.set(countryName, []);
@@ -1233,6 +1249,21 @@ map.on('popupopen', (e) => {
   const marker = e.popup._source;
   if (!popupEl || !marker || typeof marker.getLatLng !== 'function') return;
 
+  // Leaflet only knows how to grow a popup upward from its anchor point —
+  // there's no "open below" option — so for a .popup-below popup (see
+  // OPEN_POPUP_BELOW_LAT), this measures where Leaflet put it (still
+  // above the marker, per usual) and shifts it down by the difference so
+  // its top edge lands just below the marker icon instead. Runs before
+  // the edge-fit logic below so that logic sees the corrected position.
+  if (popupEl.classList.contains('popup-below')) {
+    const mapRect = map.getContainer().getBoundingClientRect();
+    const markerPt = map.latLngToContainerPoint(marker.getLatLng());
+    const desiredTop = mapRect.top + markerPt.y + 14; // ~half icon height + a small gap
+    const deltaY = desiredTop - popupEl.getBoundingClientRect().top;
+    const currentBottom = parseFloat(popupEl.style.bottom) || 0;
+    popupEl.style.bottom = (currentBottom - deltaY) + 'px';
+  }
+
   const margin = 12;
   const header = document.querySelector('.site-header');
   const safeTop = header.getBoundingClientRect().bottom + margin;
@@ -1262,6 +1293,11 @@ map.on('popupopen', (e) => {
   let panY = 0;
   if (rect.top < safeTop) {
     panY = rect.top - safeTop; // negative: shifts content down
+  } else if (rect.bottom > viewportHeight - margin) {
+    // Only reachable in practice by a .popup-below popup taller than the
+    // remaining viewport — an upward-opening popup grows away from the
+    // bottom edge, not toward it, so this was never live before that.
+    panY = rect.bottom - (viewportHeight - margin); // positive: shifts content up
   }
 
   if (panX === 0 && panY === 0) return; // already fully visible
@@ -1276,6 +1312,9 @@ map.on('popupopen', (e) => {
   if (panY < 0) {
     const floor = -Math.max(viewportHeight - edgeMarginY - markerPt.y, 0);
     panY = Math.max(panY, floor);
+  } else if (panY > 0) {
+    const ceiling = Math.max(markerPt.y - safeTop - edgeMarginY, 0);
+    panY = Math.min(panY, ceiling);
   }
   if (panX < 0) {
     const floor = -Math.max(viewportWidth - edgeMarginXRight - markerPt.x, 0);
