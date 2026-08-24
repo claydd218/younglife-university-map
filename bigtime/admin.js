@@ -1466,6 +1466,15 @@ function wireCitySuggestions() {
     }
     citySuggestTimer = setTimeout(() => fetchCitySuggestions(query), 350);
   });
+
+  // Picking an option from the datalist fires 'change' but doesn't blur
+  // the field on its own, so the dropdown (and the cursor sitting in it)
+  // can linger until the admin clicks elsewhere. Blur it explicitly so
+  // picking a suggestion visibly closes the popup.
+  $('field-city').addEventListener('change', () => {
+    clearTimeout(citySuggestTimer);
+    $('field-city').blur();
+  });
 }
 
 async function fetchCitySuggestions(query) {
