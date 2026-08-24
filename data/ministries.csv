@@ -75,7 +75,6 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 75,St. Peterburg,Russia,59.9332,30.3348,,false,,,,
 76,Moscow,Russia,55.6256,37.6064,,false,,,,
 78,Dagestan,Russia,43.0000,47.0000,,false,,,,
-79,Vladivostak,Russia,64.6863,97.7453,,false,,,,
 80,Siberia,Russia,60.0000,100.0000,,false,,,,
 81,Almaty,Kazakhstan,43.2364,76.9457,,false,,,,
 82,Astanan,Kazakhstan,48.1013,66.7781,,false,,,,
