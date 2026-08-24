@@ -454,29 +454,6 @@ h1, h2, h3, .legend-label, .cluster-badge {
   border: 1px solid var(--ink);
 }
 
-/* Flips the popup to open below the pin instead of above it (see
-   OPEN_POPUP_BELOW_LAT in js/app.js). Leaflet always renders the tip
-   after the content box in DOM order and lets it fall below in normal
-   flow, which is what makes the popup "open upward" from the pin by
-   default; reversing that stacking order with flex achieves the flip
-   without touching Leaflet's own positioning math. */
-.leaflet-popup.popup-below {
-  display: flex;
-  flex-direction: column-reverse;
-  margin-bottom: 0;
-  margin-top: 20px;
-}
-.leaflet-popup.popup-below .leaflet-popup-tip-container {
-  position: static;
-  align-self: center;
-  margin: -1px 0 0;
-  /* The container's overflow-clipped diamond is what makes the default
-     tip read as a downward-pointing chevron; that clipping math is
-     unchanged here; mirroring the rendered result vertically is simpler
-     than recomputing it to point up instead. */
-  transform: scaleY(-1);
-}
-
 /* Leaflet's own rule is ".leaflet-container a.leaflet-popup-close-button"
    (two classes + a tag) — a plain ".leaflet-popup-close-button" loses to
    that on specificity regardless of source order, so match it exactly. */
