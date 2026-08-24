@@ -1142,7 +1142,7 @@ async function init() {
     for (const key of Object.keys(DIVISIONS)) {
       state.clusterGroups[key] = L.markerClusterGroup({
         iconCreateFunction: clusterIconFactory(key),
-        maxClusterRadius: 55,
+        maxClusterRadius: 50,
         spiderfyOnMaxZoom: true,
         showCoverageOnHover: false,
       });
