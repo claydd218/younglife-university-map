@@ -1436,6 +1436,81 @@ async function lookupLatLng() {
   }
 }
 
+// City typed into the datalist doesn't have to be picked, it's just a
+// suggestion — same "suggest, don't gate" philosophy as lookupLatLng's
+// country-only fallback below. Scoped to Country when it's already filled
+// in, both for relevance (a bare "Springfield" query is otherwise a coin
+// flip) and because that's the order user testing showed people naturally
+// reach for; falls back to an unscoped query so it still helps if Country
+// is empty or the city field gets filled in first.
+//
+// This uses Photon (photon.komoot.io, Komoot's free geocoder built on the
+// same OSM data as Nominatim) rather than Nominatim itself — Nominatim's
+// search requires a near-complete match and returns nothing for a partial
+// prefix like "Bogo", which defeats live suggestions while typing. Photon
+// is built for prefix/fuzzy search and handles it (and even tolerates a
+// misspelled country, e.g. "Columbia" -> Colombia). lookupLatLng below
+// stays on Nominatim since that's a discrete "look it up now" click on a
+// (usually) complete city name, not live typing, where Nominatim works
+// fine.
+let citySuggestAbort = null;
+let citySuggestTimer = null;
+
+function wireCitySuggestions() {
+  $('field-city').addEventListener('input', () => {
+    clearTimeout(citySuggestTimer);
+    const query = $('field-city').value.trim();
+    if (query.length < 2) {
+      $('city-list').innerHTML = '';
+      return;
+    }
+    citySuggestTimer = setTimeout(() => fetchCitySuggestions(query), 350);
+  });
+}
+
+async function fetchCitySuggestions(query) {
+  // Cancel any still-in-flight request from a prior keystroke — without
+  // this, a slow early response can land after a faster later one and
+  // clobber the datalist with stale suggestions.
+  if (citySuggestAbort) citySuggestAbort.abort();
+  citySuggestAbort = new AbortController();
+
+  const country = $('field-country').value.trim();
+  // Country is applied as a client-side filter, not folded into the query
+  // text — appending it to `q` (e.g. "Bogo, Colombia") confused Photon's
+  // relevance ranking on short/partial prefixes and dropped the actual
+  // match (Bogotá) from the results entirely.
+  const params = new URLSearchParams({ q: query, limit: '10', osm_tag: 'place', lang: 'en' });
+
+  try {
+    const res = await fetch(`https://photon.komoot.io/api/?${params}`, { signal: citySuggestAbort.signal });
+    if (!res.ok) return;
+    const data = await res.json();
+    let results = (data.features || [])
+      .map((f) => ({ name: f.properties?.name, country: f.properties?.country }))
+      .filter((r) => r.name);
+
+    if (country) {
+      // Substring match, not equality — our country list uses formal
+      // names ("United Republic of Tanzania", "The Bahamas") that don't
+      // always match Photon's shorter ones ("Tanzania", "The Bahamas")
+      // exactly. Falls back to the unfiltered list rather than showing
+      // nothing if the selected country doesn't match anything returned.
+      const lower = country.toLowerCase();
+      const inCountry = results.filter((r) => r.country
+        && (lower.includes(r.country.toLowerCase()) || r.country.toLowerCase().includes(lower)));
+      if (inCountry.length) results = inCountry;
+    }
+
+    const names = Array.from(new Set(results.map((r) => r.name))).slice(0, 6);
+    $('city-list').innerHTML = names.map((n) => `<option value="${escapeHtml(n)}">`).join('');
+  } catch (err) {
+    // Rate-limited/offline/aborted — the field still works for manual
+    // typing either way, so this is silent aside from the console note.
+    if (err.name !== 'AbortError') console.warn('City suggestion lookup failed:', err);
+  }
+}
+
 // --- Ministries tab: pin placement map --------------------------------------
 
 let pinPlacementMap = null; // Leaflet instances, only exist while the panel is open
@@ -1816,6 +1891,7 @@ wireTabs();
 wireDialog();
 wireMinistriesSearch();
 wireMinistriesFilterBar();
+wireCitySuggestions();
 wireDeployToast();
 wireMoveStaffDialog();
 loadMinistries();
