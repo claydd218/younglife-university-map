@@ -867,35 +867,27 @@ img.popup-photo {
   color: var(--ink);
 }
 
-.popup-video-body {
-  padding: 12px 16px 0;
-}
-
 .popup-video-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--ink);
-  background: var(--ink);
-  color: var(--card-bg);
-  font-family: 'Cinzel', serif;
-  font-size: 13px;
-  letter-spacing: 0.03em;
-  text-decoration: none;
+  display: block;
+  color: #1a56c4;
+  font-size: 16px;
+  text-decoration: underline;
   cursor: pointer;
 }
 
 .popup-video-link:hover {
-  background: var(--ink-soft);
-  border-color: var(--ink-soft);
+  color: #123f8f;
 }
 
-.popup-video-link svg {
-  width: 11px;
-  height: 11px;
-  flex: 0 0 auto;
+/* Same separator (and same whitespace) staff->universities already gets —
+   see .popup-universities above — applied here so it only shows up when a
+   video link is actually the thing directly before staff/universities,
+   rather than unconditionally on .popup-staff itself. */
+.popup-video-link + .popup-staff,
+.popup-video-link + .popup-universities {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
 }
 
 /* ---------- Leaflet control chrome (zoom + search), matched to the legend ---------- */

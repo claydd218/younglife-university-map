@@ -245,8 +245,8 @@
   }
   dialog#video-preview-dialog[open] { display: flex; flex-direction: column; }
   dialog#video-preview-dialog::backdrop { background: rgba(0,0,0,0.4); }
-  .video-label-row { display: flex; gap: 8px; align-items: center; }
-  .video-label-row input { flex: 1; }
+  .field-inline-btn { display: flex; gap: 8px; align-items: center; }
+  .field-inline-btn input { flex: 1; }
   /* 16:9 is standard for both YouTube and Vimeo — aspect-ratio keeps the
      iframe sized correctly without a JS-measured height like the photo
      lightbox needs (every video embed is the same fixed ratio, so there's
@@ -553,15 +553,15 @@
 
         <div class="field">
           <label for="field-video-url">Video Link (optional)</label>
-          <input type="text" id="field-video-url" placeholder="https://www.youtube.com/watch?v=… or https://vimeo.com/…">
+          <div class="field-inline-btn">
+            <input type="text" id="field-video-url" placeholder="https://www.youtube.com/watch?v=… or https://vimeo.com/…">
+            <button type="button" class="btn secondary btn-small" id="video-preview-btn">Preview</button>
+          </div>
           <div class="field-error" id="video-url-error" hidden></div>
         </div>
         <div class="field" id="video-label-row" hidden>
           <label for="field-video-label">Video Link Text</label>
-          <div class="video-label-row">
-            <input type="text" id="field-video-label" placeholder="Learn about …">
-            <button type="button" class="btn secondary btn-small" id="video-preview-btn">Preview</button>
-          </div>
+          <input type="text" id="field-video-label" placeholder="Learn about …">
         </div>
 
         <div class="field">

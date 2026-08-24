@@ -263,13 +263,13 @@ function buildPopupHtml(row, divisionKey) {
   // Preview button. Malformed/legacy video_url data (hand-edited CSV,
   // pre-validation rows) just silently omits the link rather than
   // rendering something that can't actually play.
+  // Placed alongside staffHtml/universitiesHtml (not its own .popup-body)
+  // so the .popup-video-link + .popup-staff / + .popup-universities CSS
+  // adjacent-sibling rule can add the same separator staff->universities
+  // already gets — only when a video link actually precedes it, since
+  // that CSS only matches when the two are direct siblings.
   const videoHtml = row.video_url && parseVideoEmbedUrl(row.video_url)
-    ? `<div class="popup-body popup-video-body">
-        <a href="#" class="popup-video-link" data-video-url="${escapeHtml(row.video_url)}">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
-          ${escapeHtml(row.video_label || `Learn about ${row.city}`)}
-        </a>
-      </div>`
+    ? `<a href="#" class="popup-video-link" data-video-url="${escapeHtml(row.video_url)}">${escapeHtml(row.video_label || `Learn about ${row.city}`)}</a>`
     : '';
 
   return `
@@ -279,8 +279,8 @@ function buildPopupHtml(row, divisionKey) {
       </div>
       ${cityPhoto}
       ${row.blurb ? `<div class="popup-body popup-blurb-body"><p class="popup-blurb">${escapeHtml(row.blurb)}</p></div>` : ''}
-      ${videoHtml}
       <div class="popup-body">
+        ${videoHtml}
         ${staffHtml}
         ${universitiesHtml}
       </div>
