@@ -25,31 +25,20 @@ const map = L.map('map', {
   zoomSnap: 0.25,
   zoomDelta: 1,
   worldCopyJump: true,
-  // Caps north/south panning so the empty parchment beyond the poles isn't
-  // reachable — without this, Web Mercator's unproject() has no natural
-  // vertical limit and dragging north/south just keeps computing
-  // increasingly extreme (and empty) coordinates forever. North stays at
-  // Web Mercator's own natural rendering limit (the standard EPSG:3857
-  // cutoff, ±85.0511° — see https://epsg.io/3857) since there was nothing
-  // to trim there. South is tightened past that on purpose, to cut down how
-  // much empty Antarctic interior is reachable — but NOT past -66.2°, which
-  // is how far south the *default* center/zoom (CONFIG.MAP_CENTER/MAP_ZOOM)
-  // already reaches on its own (measured via map.getBounds() at that view).
-  // Below that, Leaflet's maxBounds starts re-centering to keep the full
-  // viewport inside the bound, which silently drags the default view
-  // northward — confirmed live: a -58° bound shifted the default center
-  // from lat 15 to lat ~27.6. -68° leaves a couple degrees of buffer past
-  // -66.2° so this can't happen. The one remaining edge case: at the fully-
-  // zoomed-out minimum (CONFIG.MIN_ZOOM), the natural reach is -78.6°, past
-  // this bound — zooming all the way out will snap the view north a bit
-  // when it gets there, a much smaller and rarer jump than one on load.
-  // Longitude is left effectively unbounded (±1e8°) rather than literally
-  // ±Infinity — Leaflet's pixel-bounds math on a true Infinity produces
-  // NaN mid-drag and hangs the page — so worldCopyJump's east/west wrap
-  // keeps working unrestricted. maxBoundsViscosity:1 makes the lat clamp a
-  // hard stop rather than Leaflet's default rubber-band overshoot past it.
-  maxBounds: [[-68, -1e8], [85.0511, 1e8]],
-  maxBoundsViscosity: 1.0,
+  // No maxBounds here — south panning is clamped manually further down
+  // instead (see SOUTH_LIMIT_LAT/clampSouth). maxBounds can't do this:
+  // Leaflet computes the pixel restriction it enforces by *projecting*
+  // the bound's corners, and SphericalMercator.project() silently clamps
+  // any latitude past 85.0511° (Web Mercator's own rendering limit) down
+  // to exactly that value — so a maxBounds north value of 90, 150, or
+  // 500 all collapse to the identical restriction as 85.0511 itself,
+  // permanently capping north panning right at the point that made a
+  // high-latitude ministry's popup clip under the header, with no way to
+  // configure around it. map.getCenter() goes through unproject(), which
+  // has no such clamp, so leaving north unrestricted and panning there
+  // via plain map.panBy/panTo works fine — confirmed live, reaching
+  // 89.7° with nothing rendered above Greenland but open ocean, same as
+  // this map behaved before any north/south limit was added.
   zoomControl: false,
   attributionControl: false,
   // Leaflet's legacy touch "tap" shim (built for old browsers with a 300ms
@@ -89,6 +78,25 @@ const DirectoryControl = L.Control.extend({
 // control added last ends up on top — add zoom first so ours lands above it.
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 map.addControl(new DirectoryControl());
+
+// Replaces maxBounds' south restriction (see the map options above for
+// why maxBounds itself can't be used at all here). Cuts down how much
+// empty Antarctic interior is reachable, but NOT past -66.2°, which is
+// how far south the *default* center/zoom (CONFIG.MAP_CENTER/MAP_ZOOM)
+// already reaches on its own (measured via map.getBounds() at that
+// view) — -68° leaves a couple degrees of buffer past that so the
+// default view is never itself in violation and re-centered on load.
+// Runs on every 'move' (not just 'moveend') so dragging past the limit
+// snaps back immediately rather than rubber-banding past it and
+// correcting only after release.
+const SOUTH_LIMIT_LAT = -68;
+function clampSouth() {
+  const center = map.getCenter();
+  if (center.lat < SOUTH_LIMIT_LAT) {
+    map.panTo([SOUTH_LIMIT_LAT, center.lng], { animate: false });
+  }
+}
+map.on('move', clampSouth);
 
 function showStatus(message, isError) {
   const el = document.getElementById('status');
