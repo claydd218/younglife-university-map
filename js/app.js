@@ -827,6 +827,7 @@ function wireMinistryPhotoCarousel() {
   // before, which otherwise flashes the outgoing photo right as the new
   // one should already be in place.
   async function loadCurrentSlide() {
+    resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
     slideCurrent.src = urlFor(index);
     await whenLoaded(slideCurrent);
     applyViewportRatio(slideCurrent);
@@ -959,8 +960,43 @@ function wireMinistryPhotoCarousel() {
   let touchStartY = 0;
   let axis = null; // 'x' | 'y' | null
 
+  // Two-finger pinch on the current photo — scales it up live, then
+  // always springs back to 1x on release rather than staying zoomed;
+  // there's no pan-while-zoomed mode to keep in bounds, so this is just a
+  // transform tied directly to finger distance plus a CSS transition back.
+  // Kept separate from the single-finger drag state above: a touchstart
+  // with 2 touches switches straight to pinch mode (cancelling any
+  // in-progress swipe rather than fighting it), and touchmove branches on
+  // the CURRENT touch count every time rather than on which gesture
+  // started the sequence, since a second finger can land mid-swipe.
+  let pinching = false;
+  let pinchStartDist = 0;
+  const PINCH_MAX_SCALE = 2.5;
+
+  function touchDistance(touches) {
+    return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  }
+
+  function resetPinch() {
+    pinching = false;
+    slideCurrent.style.transition = '';
+    slideCurrent.style.transform = '';
+  }
+
   content.addEventListener('touchstart', (e) => {
-    if (sliding || photos.length < 2) return;
+    if (sliding) return;
+    if (e.touches.length === 2) {
+      dragging = false;
+      pinching = true;
+      pinchStartDist = touchDistance(e.touches);
+      const rect = slideCurrent.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+      slideCurrent.style.transformOrigin = `${midX}px ${midY}px`;
+      slideCurrent.style.transition = 'none';
+      return;
+    }
+    if (photos.length < 2) return;
     dragging = true;
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
@@ -969,6 +1005,13 @@ function wireMinistryPhotoCarousel() {
   }, { passive: true });
 
   content.addEventListener('touchmove', (e) => {
+    if (pinching) {
+      if (e.touches.length < 2) return;
+      e.preventDefault(); // also keeps the browser's own page-pinch-zoom from firing alongside this
+      const scale = Math.min(PINCH_MAX_SCALE, Math.max(1, touchDistance(e.touches) / pinchStartDist));
+      slideCurrent.style.transform = `scale(${scale})`;
+      return;
+    }
     if (!dragging) return;
     const dx = e.touches[0].clientX - touchStartX;
     const dy = e.touches[0].clientY - touchStartY;
@@ -982,6 +1025,18 @@ function wireMinistryPhotoCarousel() {
   }, { passive: false });
 
   content.addEventListener('touchend', (e) => {
+    if (pinching) {
+      if (e.touches.length > 0) return; // wait for every finger to lift
+      slideCurrent.style.transition = `transform ${SLIDE_MS}ms ease`;
+      // Forces the browser to commit the transition before the transform
+      // below changes — same reasoning as the identical line in slideTo:
+      // without it, writing both in the same tick coalesces into no
+      // visible animation on some engines instead of springing back.
+      void slideCurrent.offsetWidth;
+      slideCurrent.style.transform = 'scale(1)';
+      pinching = false;
+      return;
+    }
     if (!dragging) return;
     if (axis === 'x') {
       const dx = e.changedTouches[0].clientX - touchStartX;
