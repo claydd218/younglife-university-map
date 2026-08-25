@@ -960,21 +960,28 @@ function wireMinistryPhotoCarousel() {
   let touchStartY = 0;
   let axis = null; // 'x' | 'y' | null
 
-  // Two-finger pinch on the current photo — scales it up live, then
-  // always springs back to 1x on release rather than staying zoomed;
-  // there's no pan-while-zoomed mode to keep in bounds, so this is just a
-  // transform tied directly to finger distance plus a CSS transition back.
-  // Kept separate from the single-finger drag state above: a touchstart
-  // with 2 touches switches straight to pinch mode (cancelling any
-  // in-progress swipe rather than fighting it), and touchmove branches on
-  // the CURRENT touch count every time rather than on which gesture
-  // started the sequence, since a second finger can land mid-swipe.
+  // Two-finger pinch on the current photo — scales it up live and pans as
+  // the fingers' midpoint moves, then always springs back to 1x/centered
+  // on release rather than staying zoomed; there's no persistent pan-
+  // while-zoomed mode to keep in bounds (or clamp panning within), so
+  // this is just a transform tied directly to the two touches plus a CSS
+  // transition back. Kept separate from the single-finger drag state
+  // above: a touchstart with 2 touches switches straight to pinch mode
+  // (cancelling any in-progress swipe rather than fighting it), and
+  // touchmove branches on the CURRENT touch count every time rather than
+  // on which gesture started the sequence, since a second finger can
+  // land mid-swipe.
   let pinching = false;
   let pinchStartDist = 0;
+  let pinchStartMidX = 0;
+  let pinchStartMidY = 0;
   const PINCH_MAX_SCALE = 2.5;
 
   function touchDistance(touches) {
     return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  }
+  function touchMidpoint(touches) {
+    return { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 };
   }
 
   function resetPinch() {
@@ -989,10 +996,11 @@ function wireMinistryPhotoCarousel() {
       dragging = false;
       pinching = true;
       pinchStartDist = touchDistance(e.touches);
+      const mid = touchMidpoint(e.touches);
+      pinchStartMidX = mid.x;
+      pinchStartMidY = mid.y;
       const rect = slideCurrent.getBoundingClientRect();
-      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-      slideCurrent.style.transformOrigin = `${midX}px ${midY}px`;
+      slideCurrent.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
       slideCurrent.style.transition = 'none';
       return;
     }
@@ -1009,7 +1017,10 @@ function wireMinistryPhotoCarousel() {
       if (e.touches.length < 2) return;
       e.preventDefault(); // also keeps the browser's own page-pinch-zoom from firing alongside this
       const scale = Math.min(PINCH_MAX_SCALE, Math.max(1, touchDistance(e.touches) / pinchStartDist));
-      slideCurrent.style.transform = `scale(${scale})`;
+      const mid = touchMidpoint(e.touches);
+      const dx = mid.x - pinchStartMidX;
+      const dy = mid.y - pinchStartMidY;
+      slideCurrent.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
       return;
     }
     if (!dragging) return;
