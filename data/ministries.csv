@@ -12,7 +12,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 11,Khulna,Bangladesh,22.8456,89.5403,2026,false,Northern University of Business & Technology (2026),Francesca Rodela (Staff Associate),"A newly opened ministry at NUBT, following Bangladesh's standard six months of contact work before Club activities began.",,,,
 12,Gopalganj,Bangladesh,23.0050,89.8266,2026,false,,Palash Das Joshi (Staff Associate),A new YLU ministry launched by Joshi after handing off the Mongla site he started in 2025.,,,,
 13,Madhupur,Bangladesh,24.8825,89.9950,2026,false,Anondo Mohon College (2026),Hibrun Mrong (Staff Associate),"A newly opened ministry among tribal-area youth in northern Bangladesh, led by a longtime local volunteer leader turned staff.",,,,
-14,Mongla,Bangladesh,22.4793,89.6083,2025,true,,,"Bangladesh's first YLU site, launched in 2025 and now led by trained local volunteer leaders.",,,,
+14,Mongla,Bangladesh,22.4793,89.6083,,false,,,"Bangladesh's first YLU site, launched in 2025 and now led by trained local volunteer leaders.",,,,2026-08-25T21:21:16.478Z
 15,Western Kenya,Kenya,0.2827,34.7519,,false,,Seif Okanga (College Coordinator),,,,,
 16,Kenya Coast,Kenya,-4.0435,39.6682,,false,,Isaiah Juma (College Coordinator),,,,,
 17,Kenya North Rift,Kenya,0.5143,35.2698,,false,,Belvis Kageha (College Coordinator),,,,,
