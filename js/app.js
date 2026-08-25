@@ -81,22 +81,48 @@ map.addControl(new DirectoryControl());
 
 // Replaces maxBounds' south restriction (see the map options above for
 // why maxBounds itself can't be used at all here). Cuts down how much
-// empty Antarctic interior is reachable, but NOT past -66.2°, which is
-// how far south the *default* center/zoom (CONFIG.MAP_CENTER/MAP_ZOOM)
-// already reaches on its own (measured via map.getBounds() at that
-// view) — -68° leaves a couple degrees of buffer past that so the
-// default view is never itself in violation and re-centered on load.
-// Runs on every 'move' (not just 'moveend') so dragging past the limit
-// snaps back immediately rather than rubber-banding past it and
-// correcting only after release.
-const SOUTH_LIMIT_LAT = -68;
+// empty Antarctic interior is reachable — clamped against the *bottom
+// edge* of the visible viewport (map.getBounds().getSouth()), not the
+// center point. Clamping the center alone let plenty of Antarctica stay
+// visible below it at any zoom wide enough for the viewport to extend
+// past the center's own limit, which is most of them. Runs on every
+// 'move' (not just 'moveend') so dragging past the limit snaps back
+// immediately rather than rubber-banding past it and correcting only
+// after release; doesn't run until the first 'move', so the landing
+// view itself is untouched even though it reaches past this limit on
+// its own (confirmed via map.getBounds() at CONFIG.MAP_CENTER/MAP_ZOOM).
+const SOUTH_LIMIT_LAT = -71;
 function clampSouth() {
-  const center = map.getCenter();
-  if (center.lat < SOUTH_LIMIT_LAT) {
-    map.panTo([SOUTH_LIMIT_LAT, center.lng], { animate: false });
+  const overshoot = SOUTH_LIMIT_LAT - map.getBounds().getSouth();
+  if (overshoot > 0) {
+    const center = map.getCenter();
+    map.panTo([center.lat + overshoot, center.lng], { animate: false });
   }
 }
 map.on('move', clampSouth);
+
+// Caps how much blank ocean is reachable above real content (nothing
+// north of 85.0511° renders at all — see the map options above), in
+// PIXELS rather than degrees — degrees don't work here. Any target
+// latitude at or past 85.0511° is unreachable via setView/panTo: they
+// go through map.project(), and SphericalMercator.project() clamps any
+// input past that point to the exact same pixel position, so "move to
+// 88°" and "already at 89.95°" compute as the identical spot and
+// silently no-op (confirmed live — this is also why clampSouth clamps
+// the viewport edge in real degrees but this one can't take the same
+// approach). Pixels sidestep the clamp entirely: 85.0511° itself
+// projects exactly (it's the clamp boundary, not past it), so measuring
+// its current on-screen position and panning back by however far past
+// NORTH_LIMIT_PX it's drifted works regardless of how far north the
+// camera has gone.
+const NORTH_LIMIT_PX = 700;
+function clampNorth() {
+  const trueEdgePt = map.latLngToContainerPoint([85.0511, map.getCenter().lng]);
+  if (trueEdgePt.y > NORTH_LIMIT_PX) {
+    map.panBy([0, trueEdgePt.y - NORTH_LIMIT_PX], { animate: false });
+  }
+}
+map.on('move', clampNorth);
 
 function showStatus(message, isError) {
   const el = document.getElementById('status');
