@@ -3,10 +3,14 @@
 // timestamp plus an HMAC over that timestamp (keyed by ADMIN_SESSION_SECRET),
 // so a session is valid iff the signature checks out and it hasn't expired —
 // nothing to look up, nothing to invalidate server-side on logout beyond
-// clearing the cookie.
+// clearing the cookie. SESSION_DAYS is a sliding window, not a fixed
+// expiry from login — worker/index.js re-issues the cookie via
+// createSessionCookie on every authenticated request, so staying active
+// keeps a session alive indefinitely; only SESSION_DAYS of real
+// inactivity actually signs someone out.
 
 const COOKIE_NAME = 'admin_session';
-const SESSION_DAYS = 30;
+const SESSION_DAYS = 90;
 
 async function hmacHex(secret, message) {
   const key = await crypto.subtle.importKey(

@@ -1894,6 +1894,19 @@ async function renderImagesTab() {
   applyImagesFilter();
 }
 
+function wireSignOut() {
+  $('sign-out-btn').addEventListener('click', async () => {
+    if (!window.confirm('Sign out?')) return;
+    try {
+      await fetch(`${API_BASE}/logout`, { method: 'POST' });
+    } catch {
+      // Nothing more useful to do client-side with a failed request here
+      // — still send the user to the login page either way.
+    }
+    window.location.href = 'login.html';
+  });
+}
+
 // --- init --------------------------------------------------------------
 
 wireTabs();
@@ -1903,4 +1916,5 @@ wireMinistriesFilterBar();
 wireCitySuggestions();
 wireDeployToast();
 wireMoveStaffDialog();
+wireSignOut();
 loadMinistries();

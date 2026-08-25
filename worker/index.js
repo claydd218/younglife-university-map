@@ -21,7 +21,7 @@ import { onRequestPut as ministryPut, onRequestDelete as ministryDelete } from '
 import { onRequestPost as uploadPost } from './routes/upload.js';
 import { onRequestDelete as photoDelete } from './routes/photo.js';
 import { login, logout } from './routes/login.js';
-import { hasValidSession } from './lib/session.js';
+import { hasValidSession, createSessionCookie } from './lib/session.js';
 
 function jsonError(status, message) {
   return new Response(JSON.stringify({ error: 'error', message }), {
@@ -47,46 +47,68 @@ export default {
 
     try {
       const isAdminPath = pathname === '/bigtime' || pathname.startsWith('/bigtime/');
-      if (isAdminPath && !PUBLIC_ADMIN_PATHS.has(pathname) && !(await hasValidSession(request, env))) {
+      const needsSession = isAdminPath && !PUBLIC_ADMIN_PATHS.has(pathname);
+      const sessionValid = needsSession && (await hasValidSession(request, env));
+      if (needsSession && !sessionValid) {
         if (pathname.startsWith('/bigtime/api/')) return jsonError(401, 'Not logged in');
         // The extensionless path, not /bigtime/login.html directly — skips
         // the extra 307 hop from Cloudflare's own *.html canonicalization.
         return Response.redirect(new URL('/bigtime/login', request.url), 302);
       }
 
-      if (pathname === '/bigtime/api/login' && method === 'POST') return await login(request, env);
-      if (pathname === '/bigtime/api/logout' && method === 'POST') return await logout(request);
+      const routeRequest = async () => {
+        if (pathname === '/bigtime/api/login' && method === 'POST') return await login(request, env);
+        if (pathname === '/bigtime/api/logout' && method === 'POST') return await logout(request);
 
-      if (pathname === '/bigtime/api/ministries') {
-        if (method === 'GET') return await ministriesGet({ request, env, ctx });
-        if (method === 'POST') return await ministriesPost({ request, env, ctx });
+        if (pathname === '/bigtime/api/ministries') {
+          if (method === 'GET') return await ministriesGet({ request, env, ctx });
+          if (method === 'POST') return await ministriesPost({ request, env, ctx });
+        }
+
+        const ministryMatch = pathname.match(/^\/bigtime\/api\/ministries\/([^/]+)$/);
+        if (ministryMatch) {
+          const params = { id: decodeURIComponent(ministryMatch[1]) };
+          if (method === 'PUT') return await ministryPut({ request, env, ctx, params });
+          if (method === 'DELETE') return await ministryDelete({ request, env, ctx, params });
+        }
+
+        if (pathname === '/bigtime/api/upload' && method === 'POST') {
+          return await uploadPost({ request, env, ctx });
+        }
+
+        const photoMatch = pathname.match(/^\/bigtime\/api\/photos\/([^/]+)$/);
+        if (photoMatch && method === 'DELETE') {
+          const params = { slug: decodeURIComponent(photoMatch[1]) };
+          return await photoDelete({ request, env, ctx, params });
+        }
+
+        if (pathname.startsWith('/bigtime/api/')) {
+          return jsonError(404, `No admin API route for ${method} ${pathname}`);
+        }
+
+        // Everything else — the public map, bigtime/index.html (once past
+        // the session check above), bigtime/admin.js, bigtime/login.html,
+        // css/js/images/data — is a plain static file.
+        return await env.ASSETS.fetch(request);
+      };
+
+      const response = await routeRequest();
+
+      // Sliding-window session: every authenticated request re-issues the
+      // cookie with a fresh SESSION_DAYS expiry (see session.js) from
+      // *now*, rather than a fixed expiry set once at login — so staying
+      // active keeps you logged in indefinitely, and only that many days
+      // of real inactivity signs you out. login() already sets its own
+      // first cookie on the response it returns (that path never reaches
+      // here — it's in PUBLIC_ADMIN_PATHS, so sessionValid is always
+      // false for it), so this only needs to cover requests made with an
+      // existing session.
+      if (sessionValid) {
+        const renewed = new Response(response.body, response);
+        renewed.headers.append('Set-Cookie', await createSessionCookie(env));
+        return renewed;
       }
-
-      const ministryMatch = pathname.match(/^\/bigtime\/api\/ministries\/([^/]+)$/);
-      if (ministryMatch) {
-        const params = { id: decodeURIComponent(ministryMatch[1]) };
-        if (method === 'PUT') return await ministryPut({ request, env, ctx, params });
-        if (method === 'DELETE') return await ministryDelete({ request, env, ctx, params });
-      }
-
-      if (pathname === '/bigtime/api/upload' && method === 'POST') {
-        return await uploadPost({ request, env, ctx });
-      }
-
-      const photoMatch = pathname.match(/^\/bigtime\/api\/photos\/([^/]+)$/);
-      if (photoMatch && method === 'DELETE') {
-        const params = { slug: decodeURIComponent(photoMatch[1]) };
-        return await photoDelete({ request, env, ctx, params });
-      }
-
-      if (pathname.startsWith('/bigtime/api/')) {
-        return jsonError(404, `No admin API route for ${method} ${pathname}`);
-      }
-
-      // Everything else — the public map, bigtime/index.html (once past the
-      // session check above), bigtime/admin.js, bigtime/login.html,
-      // css/js/images/data — is a plain static file.
-      return await env.ASSETS.fetch(request);
+      return response;
     } catch (err) {
       console.error('Unhandled error in admin API:', err);
       return jsonError(500, err.message || 'Internal error');

@@ -15,6 +15,7 @@
     background: #fafafa;
   }
   h1 { font-size: 22px; margin-bottom: 4px; }
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
   .help-link {
     font-size: 17px;
     color: #888;
@@ -287,8 +288,9 @@
   /* Stacked (name, then role, full-width each) rather than side by side —
      splitting the row in half left both fields too cramped for a full
      name/title. */
-  .repeatable-item { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #ddd; }
-  .repeatable-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+  .repeatable-item { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; padding: 10px; border-radius: 4px; }
+  .repeatable-item:last-child { margin-bottom: 0; }
+  .repeatable-item:nth-child(even) { background: #f4f4f4; }
   .repeatable-item .field { flex: none; width: 100%; margin-bottom: 0; }
   .repeatable-item .remove-row { align-self: flex-end; }
   .staff-row-actions { display: flex; gap: 8px; align-self: flex-end; }
@@ -464,7 +466,10 @@
 </head>
 <body>
 
-  <h1>Young Life University International Admin <a href="help.html" target="_blank" rel="noopener" class="help-link" title="Help" aria-label="Help">&#9432;</a></h1>
+  <div class="page-header">
+    <h1>Young Life University International Admin <a href="help.html" target="_blank" rel="noopener" class="help-link" title="Help" aria-label="Help">&#9432;</a></h1>
+    <button type="button" id="sign-out-btn" class="btn secondary btn-small">Sign Out</button>
+  </div>
 
   <div id="banner" class="banner" hidden></div>
 
