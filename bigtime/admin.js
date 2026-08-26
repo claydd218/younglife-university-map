@@ -1586,7 +1586,10 @@ function togglePinPlacementMap() {
 function updateCityCountryMatchNote() {
   const city = $('field-city').value.trim();
   const country = $('field-country').value.trim();
-  $('city-country-match-note').hidden = !(city && city === country);
+  const matches = Boolean(city) && city === country;
+  const note = $('city-country-match-note');
+  note.hidden = !matches;
+  if (matches) note.textContent = `City / Area and Country match exactly, so the public map will display as "${city}"`;
 }
 
 function wireDialog() {
