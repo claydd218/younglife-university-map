@@ -1439,11 +1439,11 @@ async function lookupLatLng() {
 
 // City typed into the datalist doesn't have to be picked, it's just a
 // suggestion — same "suggest, don't gate" philosophy as lookupLatLng's
-// country-only fallback below. Scoped to Country when it's already filled
-// in, both for relevance (a bare "Springfield" query is otherwise a coin
-// flip) and because that's the order user testing showed people naturally
-// reach for; falls back to an unscoped query so it still helps if Country
-// is empty or the city field gets filled in first.
+// country-only fallback below. Scoped (strictly — see fetchCitySuggestions)
+// to Country when it's already filled in, both for relevance (a bare
+// "Springfield" query is otherwise a coin flip) and because that's the
+// order user testing showed people naturally reach for; the query stays
+// unscoped only if Country is empty or the city field gets filled in first.
 //
 // This uses Photon (photon.komoot.io, Komoot's free geocoder built on the
 // same OSM data as Nominatim) rather than Nominatim itself — Nominatim's
@@ -1490,7 +1490,15 @@ async function fetchCitySuggestions(query) {
   // text — appending it to `q` (e.g. "Bogo, Colombia") confused Photon's
   // relevance ranking on short/partial prefixes and dropped the actual
   // match (Bogotá) from the results entirely.
-  const params = new URLSearchParams({ q: query, limit: '10', osm_tag: 'place', lang: 'en' });
+  //
+  // osm_tag is repeated (not just 'place') to pin results to actual
+  // populated-place levels — a bare 'place' tag also matches Photon's
+  // state- and country-level entities (e.g. typing "Texas" or "Ukraine"
+  // surfaced the state/country itself as a suggestion), which isn't ever
+  // a valid City / Area value.
+  const params = new URLSearchParams({ q: query, limit: '10', lang: 'en' });
+  ['city', 'town', 'village', 'hamlet', 'locality', 'district', 'suburb']
+    .forEach((t) => params.append('osm_tag', `place:${t}`));
 
   try {
     const res = await fetch(`https://photon.komoot.io/api/?${params}`, { signal: citySuggestAbort.signal });
@@ -1504,12 +1512,13 @@ async function fetchCitySuggestions(query) {
       // Substring match, not equality — our country list uses formal
       // names ("United Republic of Tanzania", "The Bahamas") that don't
       // always match Photon's shorter ones ("Tanzania", "The Bahamas")
-      // exactly. Falls back to the unfiltered list rather than showing
-      // nothing if the selected country doesn't match anything returned.
+      // exactly. No fallback to the unfiltered list on a miss (there used
+      // to be one) — that was letting other countries' cities leak into
+      // the suggestions whenever the match failed, which defeats the
+      // point of scoping to Country in the first place.
       const lower = country.toLowerCase();
-      const inCountry = results.filter((r) => r.country
+      results = results.filter((r) => r.country
         && (lower.includes(r.country.toLowerCase()) || r.country.toLowerCase().includes(lower)));
-      if (inCountry.length) results = inCountry;
     }
 
     const names = Array.from(new Set(results.map((r) => r.name))).slice(0, 6);
