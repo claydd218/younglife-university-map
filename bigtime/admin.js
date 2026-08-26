@@ -1407,16 +1407,12 @@ async function geocode(query) {
 // can't be found, falls back to a country-only query so the fields always
 // end up with *something* plausible to fine-tune with pin placement, rather
 // than staying blank.
-// Runs the same lookup as the button, automatically, the first time City
-// is left with both City and Country filled in and lat/lng still blank.
-// Guarded on lat/lng being empty (not e.g. a per-dialog "already ran" flag)
-// so it stays a no-op once *anything* has lat/lng — a prior auto-run, a
-// manual button click, hand-typed coordinates, or a pin fine-tuned via
-// Adjust Pin Placement — rather than silently overwriting it on a later
-// blur (a typo fix, tabbing back through the field, picking a city
-// suggestion). The button stays for a deliberate re-run/override.
-function maybeAutoLookupLatLng() {
-  if ($('field-lat').value.trim() || $('field-lng').value.trim()) return;
+// Runs the lookup automatically every time City is blurred with both City
+// and Country filled in — no button anymore, so there's no separate
+// "deliberate re-run" trigger; a re-blur (typo fix, tabbing back through
+// the field, picking a city suggestion) always re-runs it and overwrites
+// lat/lng, including over a pin fine-tuned via Adjust Pin Placement.
+function autoLookupLatLngOnBlur() {
   if (!$('field-city').value.trim() || !$('field-country').value.trim()) return;
   lookupLatLng();
 }
@@ -1428,8 +1424,6 @@ async function lookupLatLng() {
     setLatLngLookupStatus('Fill in City and Country first.', 'error');
     return;
   }
-  const btn = $('latlng-lookup-btn');
-  btn.disabled = true;
   setLatLngLookupStatus('Looking up…');
   try {
     let result = await geocode(`${city}, ${country}`);
@@ -1455,8 +1449,6 @@ async function lookupLatLng() {
     markDialogDirty();
   } catch (err) {
     setLatLngLookupStatus(`Lookup failed: ${err.message || err}`, 'error');
-  } finally {
-    btn.disabled = false;
   }
 }
 
@@ -1630,8 +1622,7 @@ function wireDialog() {
   $('add-university-btn').addEventListener('click', () => { addUniversityRow(); markDialogDirty(); });
   wireMinistryPhotoAdd();
   wireVideoLinkFields();
-  $('latlng-lookup-btn').addEventListener('click', lookupLatLng);
-  $('field-city').addEventListener('blur', maybeAutoLookupLatLng);
+  $('field-city').addEventListener('blur', autoLookupLatLngOnBlur);
   $('pin-placement-btn').addEventListener('click', togglePinPlacementMap);
   $('dialog-close-btn').addEventListener('click', saveMinistry);
   $('dialog-cancel-btn').addEventListener('click', () => $('ministry-dialog').close());
