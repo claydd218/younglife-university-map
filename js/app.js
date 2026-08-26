@@ -315,7 +315,7 @@ function buildPopupHtml(row, divisionKey) {
   return `
     <div class="popup-card">
       <div class="popup-body popup-header-body">
-        <h3>${flag ? `${flag} ` : ''}${escapeHtml(row.city)}, ${escapeHtml(row.country)}</h3>
+        <h3>${flag ? `${flag} ` : ''}${escapeHtml(row.city)}${row.city === row.country ? '' : `, ${escapeHtml(row.country)}`}</h3>
       </div>
       ${cityPhoto}
       ${row.blurb ? `<div class="popup-body popup-blurb-body"><p class="popup-blurb">${escapeHtml(row.blurb)}</p></div>` : ''}
