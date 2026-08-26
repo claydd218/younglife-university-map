@@ -1135,6 +1135,7 @@ function openDialog(row) {
 
   $('field-city').value = row ? row.city : '';
   $('field-country').value = row ? row.country : '';
+  updateCityCountryMatchNote();
   $('field-lat').value = row ? row.lat : '';
   $('field-lng').value = row ? row.lng : '';
   $('field-blurb').value = row ? row.blurb : '';
@@ -1578,6 +1579,16 @@ function togglePinPlacementMap() {
   else openPinPlacementMap();
 }
 
+// Mirrors the exact-match check buildPopupHtml uses on the public site
+// (row.city === row.country, no case-folding) — trimmed here only
+// because these are live, still-being-typed-in field values rather than
+// the already-trimmed values rowFromBody saves to the CSV.
+function updateCityCountryMatchNote() {
+  const city = $('field-city').value.trim();
+  const country = $('field-country').value.trim();
+  $('city-country-match-note').hidden = !(city && city === country);
+}
+
 function wireDialog() {
   $('add-ministry-btn').addEventListener('click', () => openDialog(null));
   $('add-staff-btn').addEventListener('click', () => { addStaffRow(); markDialogDirty(); });
@@ -1595,6 +1606,9 @@ function wireDialog() {
   $('ministry-form').addEventListener('change', markDialogDirty);
   ['field-city', 'field-country', 'field-lat', 'field-lng'].forEach((id) => {
     $(id).addEventListener('input', updateSaveButtonState);
+  });
+  ['field-city', 'field-country'].forEach((id) => {
+    $(id).addEventListener('input', updateCityCountryMatchNote);
   });
   ['field-lat', 'field-lng'].forEach((id) => {
     $(id).addEventListener('input', () => {
