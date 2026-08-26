@@ -82,3 +82,4 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 84,Bishkek,Kyrgyzstan,42.8761,74.6037,,false,,,,,,,
 85,San Cristobal,Mexico,16.7354,-92.6387,,false,,Marta (College Director),,,,,2026-08-24T16:49:43.802Z
 86,Reykjavik,Iceland,64.1074,-21.4673,2024,false,uni 1 (2024); uni 2 (2025),Pastor Brother (Master of the Universe); Zach Rodgers (Son of Pastor Brother),This is a ministry blurb,reykjavik-iceland-7.webp; reykjavik-iceland-5.webp; reykjavik-iceland-6.webp; reykjavik-iceland-8.webp,https://www.youtube.com/watch?v=_TtxERZpfto,Watch a Reykjavik Story,2026-08-26T12:09:11.305Z
+87,Karlovy Vary,Iceland,64.9842,-18.1059,,false,,,,,,,2026-08-26T12:09:51.682Z
