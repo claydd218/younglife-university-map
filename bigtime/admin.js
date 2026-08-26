@@ -737,9 +737,9 @@ function wireMinistriesFilterBar() {
   const bar = $('ministries-filter-bar');
   const defs = [
     { key: 'recent', status: 'recent', label: 'Recent' },
-    { key: 'developing', status: 'developing', label: 'Developing' },
     { key: 'noStaff', status: 'no-staff', label: 'No Staff' },
     { key: 'noUniversities', status: 'no-universities', label: 'No Universities' },
+    { key: 'developing', status: 'developing', label: 'Developing' },
   ];
   bar.innerHTML = defs.map((d) => `<button type="button" class="filter-toggle status-${d.status} ${ministriesFilter[d.key] ? 'on' : ''}" data-key="${d.key}">${d.label}</button>`).join('');
   bar.querySelectorAll('.filter-toggle').forEach((btn) => {
