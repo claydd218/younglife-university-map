@@ -1336,6 +1336,12 @@ async function saveMinistry() {
   }
 
   const { sha: _staleSha, ...rowFields } = body;
+  // Mirrors rowFromBody's server-side stamp (worker/lib/ministries.js) so
+  // the locally-patched state.rows entry (updated from this request body,
+  // not re-fetched) matches what the server actually wrote — otherwise
+  // the new/edited row has no updated_at until the next full reload, and
+  // silently drops out of the Recent filter until then.
+  rowFields.updated_at = new Date().toISOString();
 
   const closeBtn = $('dialog-close-btn');
   closeBtn.disabled = true;
