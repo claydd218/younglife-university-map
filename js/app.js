@@ -1256,10 +1256,20 @@ async function init() {
         // otherwise zoom to an empty country with nothing to see, but every
         // country still gets its name tooltip on click.
         layer.on('click', (e) => {
+          // A click on a country turns out to ALSO fire the map's own
+          // 'click' (see the map.on('click', ...) below) in the same
+          // event — without this flag, that would immediately close the
+          // tooltip this same click just opened.
+          suppressNextMapClickClose = true;
           if (state.openCountryTooltipLayer && state.openCountryTooltipLayer !== layer) {
             state.openCountryTooltipLayer.closeTooltip();
           }
-          layer.openTooltip(e.latlng);
+          // If this were ever undefined, Leaflet's Tooltip._prepareOpen
+          // silently falls back to the country's own center instead of the
+          // click position — computing it ourselves guarantees that never
+          // happens, regardless of why e.latlng could come back empty.
+          const clickLatLng = e.latlng || map.mouseEventToLatLng(e.originalEvent);
+          layer.openTooltip(clickLatLng);
           state.openCountryTooltipLayer = layer;
 
           const name = normalizeCountryName(feature.properties.name);
@@ -1284,21 +1294,49 @@ async function init() {
       },
     };
 
-    // Dismissed as soon as the mouse actually moves, so it doesn't linger
-    // once you're no longer paying attention to that spot.
-    map.on('mousemove', () => {
+    // Clicking a different country already closes the previous tooltip
+    // (see the click handler above). This covers the other two ways it
+    // should go away: clicking blank map area (a click that lands on no
+    // interactive layer at all only ever reaches the map itself, never a
+    // country click, so this can't double-close the one just opened), and
+    // starting a drag — 'dragstart' specifically, not 'movestart', so the
+    // pan/zoom our own click handler triggers for a ministry country
+    // doesn't immediately close the tooltip that same click just opened.
+    function closeOpenCountryTooltip() {
       if (state.openCountryTooltipLayer) {
         state.openCountryTooltipLayer.closeTooltip();
         state.openCountryTooltipLayer = null;
       }
+    }
+    let suppressNextMapClickClose = false;
+    map.on('click', () => {
+      if (suppressNextMapClickClose) {
+        suppressNextMapClickClose = false;
+        return;
+      }
+      closeOpenCountryTooltip();
     });
+    map.on('dragstart', closeOpenCountryTooltip);
 
     // Leaflet makes every interactive vector layer keyboard-focusable for
     // accessibility, which with ~258 countries turns Tab into a country-by-
     // country crawl. Strip the tab stop but leave hover/click untouched.
+    //
+    // Also: bindTooltip's own focus listener (Layer._addFocusListenersOnLayer)
+    // opens the tooltip with no lat/lng at all when the path gets focused —
+    // falling back to the country's own center. Chrome turns out to let an
+    // SVG path take focus even with no tabindex, so a real mousedown
+    // focuses it *before* the eventual 'click' fires: the tooltip flashes
+    // open at the country's center, then jumps to the right spot once our
+    // click handler runs on release. preventDefault on mousedown stops the
+    // browser from focusing it in the first place, so that never happens.
+    // (Layers only get a real _path once actually added to the map, hence
+    // this runs here rather than in onEachFeature, same as the tabindex fix.)
     function stripCountryTabIndex(geoJsonLayer) {
       geoJsonLayer.eachLayer((layer) => {
-        if (layer._path) layer._path.removeAttribute('tabindex');
+        if (!layer._path) return;
+        layer._path.removeAttribute('tabindex');
+        layer._path.addEventListener('mousedown', (ev) => ev.preventDefault());
       });
     }
 
