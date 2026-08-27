@@ -35,11 +35,6 @@ const CONFIG = {
   MAP_ZOOM: 2.5,
   MIN_ZOOM: 2,
   MAX_ZOOM: 10,
-
-  // Country name labels (added for countries with a ministry site) only
-  // show once zoomed in this far — countries are close enough together
-  // that even medium zoom had labels overrunning their neighbors.
-  COUNTRY_LABEL_MIN_ZOOM: 7,
 };
 
 // Decorative ocean name labels, styled in a script font like an antique atlas.

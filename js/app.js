@@ -19,7 +19,7 @@ const state = {
   geoLayerGhosts: [],
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
-  countryLabelGroup: null, // L.layerGroup of country-name labels, shown past a zoom threshold
+  openCountryTooltipLayer: null, // the one country layer whose tooltip is open, if any
 };
 
 const map = L.map('map', {
@@ -30,12 +30,25 @@ const map = L.map('map', {
   zoomSnap: 0.25,
   zoomDelta: 1,
   worldCopyJump: true,
+  // A fast flick used to leave Leaflet's own momentum animation running
+  // for a second or more afterward, firing 'move' on every frame. The
+  // south/north clamps below correcting live on each of those frames
+  // was fighting that animation in real time, badly enough to cause a
+  // real, reproduced freeze (runaway movement, sometimes in a direction
+  // that was never actually being panned). No inertia means no animation
+  // left for those clamps to fight, so they can safely go back to
+  // correcting live on every 'move' too (see clampSouth/clampNorth).
+  inertia: false,
   // Leaflet's SVG renderer only pre-draws country paths slightly beyond the
-  // viewport (default padding: 0.1, i.e. 10% per side) and only redraws that
-  // buffer on 'moveend', not continuously during a drag — a fast or long
-  // drag can outrun it, leaving blank space until release. Only ~217 country
-  // paths, so a much larger buffer is cheap; this keeps them drawn well
-  // beyond any single drag's reach.
+  // viewport (default padding: 0.1, i.e. 10% per side) and only redraws
+  // that buffer on 'moveend', not continuously during a drag — a fast or
+  // long drag can outrun it, leaving blank space (just the countries —
+  // markers are a separate pane, unaffected) until release. This briefly
+  // dropped to 0.5 on a guess that it wasn't needed anymore now that real
+  // west/east world copies exist (see shiftGeoJSONLng), but that was
+  // speculative and wrong — countries actually disappearing mid-drag
+  // confirmed the bigger buffer was doing real work. Back to covering a
+  // full world's width per side.
   renderer: L.svg({ padding: 1.5 }),
   // No maxBounds here — south panning is clamped manually further down
   // instead (see SOUTH_LIMIT_LAT/clampSouth). maxBounds can't do this:
@@ -94,21 +107,32 @@ map.addControl(new DirectoryControl());
 // Replaces maxBounds' south restriction (see the map options above for
 // why maxBounds itself can't be used at all here). Cuts down how much
 // empty Antarctic interior is reachable — clamped against the *bottom
-// edge* of the visible viewport (map.getBounds().getSouth()), not the
-// center point. Clamping the center alone let plenty of Antarctica stay
-// visible below it at any zoom wide enough for the viewport to extend
-// past the center's own limit, which is most of them. Runs on every
-// 'move' (not just 'moveend') so dragging past the limit snaps back
-// immediately rather than rubber-banding past it and correcting only
-// after release; doesn't run until the first 'move', so the landing
-// view itself is untouched even though it reaches past this limit on
-// its own (confirmed via map.getBounds() at CONFIG.MAP_CENTER/MAP_ZOOM).
+// edge* of the visible viewport, not the center point. Clamping the
+// center alone let plenty of Antarctica stay visible below it at any
+// zoom wide enough for the viewport to extend past the center's own
+// limit, which is most of them.
+//
+// Pixel-based, same reasoning as clampNorth below: this used to correct
+// by adding the degrees of overshoot straight to the center's latitude,
+// which assumes roughly 1 degree of latitude is a constant number of
+// pixels — only true near the equator. Mercator compresses distance
+// increasingly the closer you get to a pole, so a large enough overshoot
+// made that assumption wrong enough for the correction to not converge.
+//
+// Runs on every 'move' so dragging past the limit snaps back immediately
+// instead of letting you drag arbitrarily far past it and only
+// correcting on release. This briefly moved to 'moveend' only, because
+// correcting live on every 'move' was fighting Leaflet's own inertia/
+// momentum animation frame-by-frame after a fast flick, which caused a
+// real, reproduced freeze. inertia: false above (see map options)
+// removes that animation entirely, so there's no competing frame-by-
+// frame loop left for this to fight — safe to run live again.
 const SOUTH_LIMIT_LAT = -71;
 function clampSouth() {
-  const overshoot = SOUTH_LIMIT_LAT - map.getBounds().getSouth();
-  if (overshoot > 0) {
-    const center = map.getCenter();
-    map.panTo([center.lat + overshoot, center.lng], { animate: false });
+  const limitPt = map.latLngToContainerPoint([SOUTH_LIMIT_LAT, map.getCenter().lng]);
+  const bottomEdgePx = map.getSize().y;
+  if (limitPt.y < bottomEdgePx) {
+    map.panBy([0, limitPt.y - bottomEdgePx], { animate: false });
   }
 }
 map.on('move', clampSouth);
@@ -120,13 +144,14 @@ map.on('move', clampSouth);
 // go through map.project(), and SphericalMercator.project() clamps any
 // input past that point to the exact same pixel position, so "move to
 // 88°" and "already at 89.95°" compute as the identical spot and
-// silently no-op (confirmed live — this is also why clampSouth clamps
-// the viewport edge in real degrees but this one can't take the same
-// approach). Pixels sidestep the clamp entirely: 85.0511° itself
-// projects exactly (it's the clamp boundary, not past it), so measuring
-// its current on-screen position and panning back by however far past
-// NORTH_LIMIT_PX it's drifted works regardless of how far north the
-// camera has gone.
+// silently no-op (confirmed live). Pixels sidestep the clamp entirely:
+// 85.0511° itself projects exactly (it's the clamp boundary, not past
+// it), so measuring its current on-screen position and panning back by
+// however far past NORTH_LIMIT_PX it's drifted works regardless of how
+// far north the camera has gone.
+//
+// Runs on every 'move', same reasoning as clampSouth above — safe now
+// that inertia: false means there's no live animation left to fight.
 const NORTH_LIMIT_PX = 700;
 function clampNorth() {
   const trueEdgePt = map.latLngToContainerPoint([85.0511, map.getCenter().lng]);
@@ -411,62 +436,6 @@ function addOceanLabels() {
       }).addTo(map);
     }
   }
-}
-
-// Greedy word-wrap so a long name (e.g. "United Republic of Tanzania")
-// doesn't run past its country's borders — breaks into "\n"-joined lines,
-// same convention OCEAN_LABELS already uses for its hand-typed line breaks.
-function wrapLabelText(text, maxLineLength = 16) {
-  const words = text.split(' ');
-  const lines = [];
-  let current = '';
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length > maxLineLength && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.join('\n');
-}
-
-// One label per country that has at least one ministry pin, placed at that
-// country's polygon bounding-box center (not a true geometric centroid —
-// simple, and matches how OCEAN_LABELS are just reasonable hand-picked
-// points rather than anything more precise). For an archipelago/multi-part
-// country (e.g. the Philippines, Indonesia) that box center can land in
-// open water between land masses; no override list for that yet since it
-// hasn't been checked against every ministry country.
-function addCountryLabels() {
-  state.countryLabelGroup = L.layerGroup();
-  state.geoLayer.eachLayer((layer) => {
-    const name = normalizeCountryName(layer.feature.properties.name);
-    if (!state.countriesWithVisiblePins.has(name)) return;
-    const center = layer.getBounds().getCenter();
-    const lines = wrapLabelText(name).split('\n').map(escapeHtml).join('<br>');
-    L.marker(center, {
-      icon: L.divIcon({
-        className: 'country-name-label',
-        html: `<span>${lines}</span>`,
-        iconSize: [140, 44],
-        iconAnchor: [70, 22],
-      }),
-      interactive: false,
-      keyboard: false,
-    }).addTo(state.countryLabelGroup);
-  });
-  updateCountryLabelVisibility();
-  map.on('zoomend', updateCountryLabelVisibility);
-}
-
-function updateCountryLabelVisibility() {
-  const shouldShow = map.getZoom() >= CONFIG.COUNTRY_LABEL_MIN_ZOOM;
-  const isShown = map.hasLayer(state.countryLabelGroup);
-  if (shouldShow && !isShown) state.countryLabelGroup.addTo(map);
-  else if (!shouldShow && isShown) map.removeLayer(state.countryLabelGroup);
 }
 
 function refreshCountryStyles() {
@@ -1109,6 +1078,27 @@ function wireMinistryPhotoCarousel() {
     axis = null;
   });
 
+  // iOS fires touchcancel instead of touchend whenever the system steals a
+  // gesture mid-stream — the edge-swipe-back gesture, a Control Center
+  // pull, an incoming call, etc. Without this, pinching/dragging above
+  // would stay stuck true forever (nothing else ever resets them), which
+  // silently breaks all further touch input on this lightbox until the
+  // page is reloaded — no fancy springback needed here, just snap
+  // everything back immediately since the gesture genuinely didn't finish.
+  content.addEventListener('touchcancel', () => {
+    if (pinching) {
+      slideCurrent.style.transition = '';
+      slideCurrent.style.transform = '';
+      pinching = false;
+    }
+    if (dragging) {
+      track.style.transition = '';
+      track.style.transform = REST_TRANSFORM;
+      dragging = false;
+    }
+    axis = null;
+  });
+
   function photosFromImg(img) {
     try {
       const list = JSON.parse(img.dataset.photos);
@@ -1247,12 +1237,31 @@ async function init() {
       style: styleCountryFeature,
       onEachFeature: (feature, layer) => {
         layer.bindTooltip(feature.properties.name, { sticky: true, className: 'country-tooltip' });
-        layer.on('mouseover', () => layer.setStyle({ weight: 1.6 }));
-        layer.on('mouseout', () => layer.setStyle(styleCountryFeature(feature)));
+        // bindTooltip wires up hover (mouseover/mouseout/mousemove) AND
+        // click listeners on its own (Leaflet's Layer._initTooltipInteractions).
+        // Hover-triggered tooltips are disabled here — click is the only way
+        // to open one now, via our own handler below. Because it's a real
+        // geo-anchored tooltip, it opens right at the tap point and then
+        // naturally tracks/scales along with the pan+zoom triggered by the
+        // same click, landing correctly once the animation settles.
+        layer.off({
+          mouseover: layer._openTooltip,
+          mouseout: layer.closeTooltip,
+          mousemove: layer._moveTooltip,
+          click: layer._openTooltip,
+        }, layer);
+
         // Only countries actually holding a ministry pin are worth zooming
         // into — clicking anywhere else on the (uncolored) landmass would
-        // otherwise zoom to an empty country with nothing to see.
-        layer.on('click', () => {
+        // otherwise zoom to an empty country with nothing to see, but every
+        // country still gets its name tooltip on click.
+        layer.on('click', (e) => {
+          if (state.openCountryTooltipLayer && state.openCountryTooltipLayer !== layer) {
+            state.openCountryTooltipLayer.closeTooltip();
+          }
+          layer.openTooltip(e.latlng);
+          state.openCountryTooltipLayer = layer;
+
           const name = normalizeCountryName(feature.properties.name);
           const present = state.countriesWithVisiblePins.get(name);
           if (present && present.size) {
@@ -1274,6 +1283,15 @@ async function init() {
         });
       },
     };
+
+    // Dismissed as soon as the mouse actually moves, so it doesn't linger
+    // once you're no longer paying attention to that spot.
+    map.on('mousemove', () => {
+      if (state.openCountryTooltipLayer) {
+        state.openCountryTooltipLayer.closeTooltip();
+        state.openCountryTooltipLayer = null;
+      }
+    });
 
     // Leaflet makes every interactive vector layer keyboard-focusable for
     // accessibility, which with ~258 countries turns Tab into a country-by-
@@ -1385,8 +1403,6 @@ async function init() {
 
     recomputeCountriesWithVisiblePins(ministryRows);
     refreshCountryStyles();
-    // addCountryLabels(); — disabled for now, function kept in case this
-    // comes back later.
     buildLegend();
     wireLegendToggle();
     buildCountryDirectory(ministryRows);
