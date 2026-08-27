@@ -25,6 +25,13 @@ const map = L.map('map', {
   zoomSnap: 0.25,
   zoomDelta: 1,
   worldCopyJump: true,
+  // Leaflet's SVG renderer only pre-draws country paths slightly beyond the
+  // viewport (default padding: 0.1, i.e. 10% per side) and only redraws that
+  // buffer on 'moveend', not continuously during a drag — a fast or long
+  // drag can outrun it, leaving blank space until release. Only ~217 country
+  // paths, so a much larger buffer is cheap; this keeps them drawn well
+  // beyond any single drag's reach.
+  renderer: L.svg({ padding: 1.5 }),
   // No maxBounds here — south panning is clamped manually further down
   // instead (see SOUTH_LIMIT_LAT/clampSouth). maxBounds can't do this:
   // Leaflet computes the pixel restriction it enforces by *projecting*
