@@ -12,6 +12,11 @@ const state = {
   countryIsoByName: new Map(), // country name -> ISO 3166-1 alpha-2, for flag emoji
   countriesWithVisiblePins: new Map(), // country name -> Set of divisions present
   geoLayer: null,
+  // West/east twin copies of geoLayer (see shiftGeoJSONLng) — restyled
+  // alongside it in refreshCountryStyles, otherwise they'd be stuck showing
+  // whatever styleCountryFeature returned at creation time, before
+  // countriesWithVisiblePins was populated.
+  geoLayerGhosts: [],
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
   countryLabelGroup: null, // L.layerGroup of country-name labels, shown past a zoom threshold
@@ -341,6 +346,35 @@ function escapeHtml(str) {
   }[c]));
 }
 
+// Leaflet's tile layers repeat automatically as you pan past +/-180deg
+// longitude, but vector content (this map's countries, ministry pins, ocean
+// labels) only exists once, at its one true coordinate — nothing repeats it
+// for you. To make the west/east "extra world" panning feel continuous
+// instead of running out into blank ocean, the countries layer, ministry
+// markers, and ocean labels are each rendered three times: at their real
+// longitude, and shifted +/-360deg for the flanking copies. Recurses to
+// whatever depth a geometry's coordinate array needs (Polygon vs
+// MultiPolygon, etc.) — a leaf coordinate pair is just two numbers, so that
+// case is the recursion's base case.
+function shiftGeoJSONLng(geojson, offsetDeg) {
+  const shifted = JSON.parse(JSON.stringify(geojson));
+  function shiftCoords(coords) {
+    if (typeof coords[0] === 'number') {
+      coords[0] += offsetDeg;
+    } else {
+      coords.forEach(shiftCoords);
+    }
+  }
+  for (const feature of shifted.features) {
+    // A handful of features carry null geometry (e.g. disputed territories
+    // with no polygon in this dataset) — Leaflet's own GeoJSON parser
+    // already skips those silently, so just leave them as-is here too.
+    if (!feature.geometry) continue;
+    shiftCoords(feature.geometry.coordinates);
+  }
+  return shifted;
+}
+
 function styleCountryFeature(feature) {
   const name = normalizeCountryName(feature.properties.name);
   const present = state.countriesWithVisiblePins.get(name);
@@ -364,16 +398,18 @@ function styleCountryFeature(feature) {
 function addOceanLabels() {
   for (const ocean of OCEAN_LABELS) {
     const lines = ocean.name.split('\n').map(escapeHtml).join('<br>');
-    L.marker([ocean.lat, ocean.lng], {
-      icon: L.divIcon({
-        className: 'ocean-label',
-        html: `<span>${lines}</span>`,
-        iconSize: [170, 40],
-        iconAnchor: [85, 20],
-      }),
-      interactive: false,
-      keyboard: false,
-    }).addTo(map);
+    for (const offsetDeg of [-360, 0, 360]) {
+      L.marker([ocean.lat, ocean.lng + offsetDeg], {
+        icon: L.divIcon({
+          className: 'ocean-label',
+          html: `<span>${lines}</span>`,
+          iconSize: [170, 40],
+          iconAnchor: [85, 20],
+        }),
+        interactive: false,
+        keyboard: false,
+      }).addTo(map);
+    }
   }
 }
 
@@ -435,9 +471,11 @@ function updateCountryLabelVisibility() {
 
 function refreshCountryStyles() {
   if (!state.geoLayer) return;
-  state.geoLayer.eachLayer((layer) => {
-    layer.setStyle(styleCountryFeature(layer.feature));
-  });
+  for (const geoJsonLayer of [state.geoLayer, ...state.geoLayerGhosts]) {
+    geoJsonLayer.eachLayer((layer) => {
+      layer.setStyle(styleCountryFeature(layer.feature));
+    });
+  }
 }
 
 function recomputeCountriesWithVisiblePins(rows) {
@@ -1205,7 +1243,7 @@ async function init() {
       if (name && iso2) state.countryIsoByName.set(name, iso2);
     }
 
-    state.geoLayer = L.geoJSON(countryGeo, {
+    const countryLayerOptions = {
       style: styleCountryFeature,
       onEachFeature: (feature, layer) => {
         layer.bindTooltip(feature.properties.name, { sticky: true, className: 'country-tooltip' });
@@ -1235,14 +1273,28 @@ async function init() {
           }
         });
       },
-    }).addTo(map);
+    };
 
     // Leaflet makes every interactive vector layer keyboard-focusable for
     // accessibility, which with ~258 countries turns Tab into a country-by-
     // country crawl. Strip the tab stop but leave hover/click untouched.
-    state.geoLayer.eachLayer((layer) => {
-      if (layer._path) layer._path.removeAttribute('tabindex');
-    });
+    function stripCountryTabIndex(geoJsonLayer) {
+      geoJsonLayer.eachLayer((layer) => {
+        if (layer._path) layer._path.removeAttribute('tabindex');
+      });
+    }
+
+    // state.geoLayer stays the one true (offset 0) copy — it's the only one
+    // any other code needs to reference (country search/directory, etc.).
+    // The west/east copies are purely visual+interactive twins, built from
+    // the same data and never touched again after this.
+    state.geoLayer = L.geoJSON(countryGeo, countryLayerOptions).addTo(map);
+    stripCountryTabIndex(state.geoLayer);
+    for (const offsetDeg of [-360, 360]) {
+      const ghostLayer = L.geoJSON(shiftGeoJSONLng(countryGeo, offsetDeg), countryLayerOptions).addTo(map);
+      stripCountryTabIndex(ghostLayer);
+      state.geoLayerGhosts.push(ghostLayer);
+    }
 
     addOceanLabels();
 
@@ -1271,9 +1323,8 @@ async function init() {
       }
 
       const stageKey = String(row.is_developing).trim().toLowerCase() === 'true' ? 'developing' : 'established';
-      const marker = L.marker([lat, lng], { icon: markerIcon(divisionKey, stageKey) });
-      marker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
-      marker.bindPopup(buildPopupHtml(row, divisionKey), {
+      const popupHtml = buildPopupHtml(row, divisionKey);
+      const popupOptions = {
         maxWidth: 380,
         className: 'vintage-popup-wrapper',
         // Leaflet's autoPan (map.panBy, fired at the moment the popup opens)
@@ -1284,11 +1335,26 @@ async function init() {
         // the header-overlap avoidance this provided; a popup opening very
         // near the top can land partly under the header again for now.
         autoPan: false,
-      });
+      };
+
+      const marker = L.marker([lat, lng], { icon: markerIcon(divisionKey, stageKey) });
+      marker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
+      marker.bindPopup(popupHtml, popupOptions);
       state.clusterGroups[divisionKey].addLayer(marker);
 
       if (!state.markersByCountry.has(countryName)) state.markersByCountry.set(countryName, []);
       state.markersByCountry.get(countryName).push({ marker, row });
+
+      // West/east twins for the flanking world copies (see
+      // shiftGeoJSONLng's comment) — same icon/tooltip/popup, just offset.
+      // Not tracked in state.markersByCountry: search/directory should
+      // always fly to this one true marker, not one of its twins.
+      for (const offsetDeg of [-360, 360]) {
+        const ghostMarker = L.marker([lat, lng + offsetDeg], { icon: markerIcon(divisionKey, stageKey) });
+        ghostMarker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
+        ghostMarker.bindPopup(popupHtml, popupOptions);
+        state.clusterGroups[divisionKey].addLayer(ghostMarker);
+      }
 
       placed++;
     }
