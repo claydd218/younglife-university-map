@@ -1304,6 +1304,9 @@ async function init() {
         maxClusterRadius: 50,
         spiderfyOnMaxZoom: true,
         showCoverageOnHover: false,
+        // Off so the clusterclick handler below can cap the zoom itself —
+        // see that handler's comment for why.
+        zoomToBoundsOnClick: false,
       });
     }
 
@@ -1361,6 +1364,23 @@ async function init() {
 
     for (const group of Object.values(state.clusterGroups)) {
       map.addLayer(group);
+    }
+
+    // Leaflet.markercluster's default cluster-click zoom jumps straight to
+    // whatever level fully separates that cluster's members — fine for
+    // loosely-spaced pins, but a wild, disorienting jump for two ministries
+    // right on top of each other (tested interactively with a tunable
+    // slider to land on 3). spiderfyOnMaxZoom above still fans out any
+    // pins that stay clustered after hitting the cap, so nothing's ever
+    // unreachable — it may just take an extra tap.
+    const CLUSTER_CLICK_MAX_ZOOM_STEP = 3;
+    for (const group of Object.values(state.clusterGroups)) {
+      group.on('clusterclick', (e) => {
+        const cluster = e.layer;
+        const idealZoom = map.getBoundsZoom(cluster.getBounds());
+        const cap = map.getZoom() + CLUSTER_CLICK_MAX_ZOOM_STEP;
+        map.setView(cluster.getLatLng(), Math.min(idealZoom, cap, map.getMaxZoom()));
+      });
     }
 
     recomputeCountriesWithVisiblePins(ministryRows);
