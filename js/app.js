@@ -1244,22 +1244,30 @@ async function init() {
       if (name && iso2) state.countryIsoByName.set(name, iso2);
     }
 
-    // Some countries (Russia is the real case here) have far-flung
-    // territory whose GeoJSON coordinates wrap past +/-180deg — a MultiPolygon
-    // with, say, mainland Russia stopping at 180 and a small far-eastern
-    // island piece starting back at -180. layer.getBounds() naively spans
-    // the raw min/max across ALL of a MultiPolygon's parts, so that sliver
-    // corrupts the whole box into spanning the entire globe's longitude,
-    // landing its center near longitude 0 — which is why clicking Russia
-    // was jumping the view to just west of Norway. Using only the largest
-    // sub-polygon by bounding-box area sidesteps this: mainland Russia's
-    // own outer ring doesn't itself cross the antimeridian, only the much
-    // smaller separate pieces do.
+    // layer.getBounds() naively spans a MultiPolygon's raw lat/lng
+    // min/max across every sub-polygon, which breaks in two different
+    // ways: a piece that wraps past +/-180deg (Russia's mainland stops at
+    // 180, a small far-eastern island starts back at -180) corrupts the
+    // whole box into spanning the entire globe's longitude, landing its
+    // center near 0deg — just west of Norway instead of on Russia. And a
+    // genuinely remote piece (Ecuador's Galapagos, the US's Hawaii,
+    // France's overseas departments) drags the box out to cover empty
+    // ocean the country doesn't visually read as including.
+    //
+    // Using only the single largest sub-polygon fixes both, but breaks a
+    // third case: an archipelago of comparably-sized islands (Indonesia,
+    // the Philippines) zooms in on just the one biggest island instead of
+    // the whole country.
+    //
+    // So: anchor on the largest piece, then fold in any other piece that's
+    // either close to it (adjacent territory that only needs its longitude
+    // unwrapped across the antimeridian, or another major island nearby)
+    // or big enough to matter on its own (Mindanao next to Luzon) — only
+    // excluding pieces that are both small and far off.
     function computeMainLandBounds(feature) {
       const geom = feature.geometry;
       const polygons = geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
-      let best = null;
-      for (const poly of polygons) {
+      const boxes = polygons.map((poly) => {
         const ring = poly[0]; // outer ring; holes don't matter for a bbox
         let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
         for (const [lng, lat] of ring) {
@@ -1268,10 +1276,45 @@ async function init() {
           if (lat < minLat) minLat = lat;
           if (lat > maxLat) maxLat = lat;
         }
-        const area = (maxLng - minLng) * (maxLat - minLat);
-        if (!best || area > best.area) best = { minLng, maxLng, minLat, maxLat, area };
+        return { minLng, maxLng, minLat, maxLat, area: (maxLng - minLng) * (maxLat - minLat) };
+      });
+
+      let anchor = boxes[0];
+      for (const b of boxes) if (b.area > anchor.area) anchor = b;
+      const anchorCenterLng = (anchor.minLng + anchor.maxLng) / 2;
+      const anchorCenterLat = (anchor.minLat + anchor.maxLat) / 2;
+      // A fixed threshold, not scaled to the anchor's own size — that was
+      // tried first and broke on countries with an already-large anchor
+      // (the US: Alaska, at 45% of the continental bbox's area, correctly
+      // gets pulled in by the size rule below regardless of distance, but
+      // scaling the distance rule off that same large anchor also pulled
+      // in Hawaii and Guam from 40-80deg away). Checked against every
+      // country in this file's data: Galapagos sits 11-13deg from mainland
+      // Ecuador and needs to be excluded; every major archipelago island
+      // (Indonesia, the Philippines) that isn't caught by the size rule
+      // below sits within 8-14deg of its country's largest island. 10deg
+      // draws the line between those two groups correctly.
+      const CLOSE_ENOUGH_DEGREES = 10;
+
+      let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      for (const b of boxes) {
+        // Shift this piece's longitude by whichever multiple of 360 puts
+        // it closest to the anchor — undoes an antimeridian split without
+        // needing to know in advance which country crosses it.
+        const centerLng = (b.minLng + b.maxLng) / 2;
+        const shift = Math.round((anchorCenterLng - centerLng) / 360) * 360;
+        const shiftedMinLng = b.minLng + shift;
+        const shiftedMaxLng = b.maxLng + shift;
+        const dist = Math.hypot((centerLng + shift) - anchorCenterLng, (b.minLat + b.maxLat) / 2 - anchorCenterLat);
+        const closeEnough = dist <= CLOSE_ENOUGH_DEGREES;
+        const bigEnough = b.area >= anchor.area * 0.1;
+        if (b !== anchor && !closeEnough && !bigEnough) continue;
+        if (shiftedMinLng < minLng) minLng = shiftedMinLng;
+        if (shiftedMaxLng > maxLng) maxLng = shiftedMaxLng;
+        if (b.minLat < minLat) minLat = b.minLat;
+        if (b.maxLat > maxLat) maxLat = b.maxLat;
       }
-      return L.latLngBounds([best.minLat, best.minLng], [best.maxLat, best.maxLng]);
+      return L.latLngBounds([minLat, minLng], [maxLat, maxLng]);
     }
 
     const countryLayerOptions = {
