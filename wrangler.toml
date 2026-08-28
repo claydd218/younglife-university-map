@@ -1,6 +1,12 @@
 name = "younglife-university-map"
 main = "worker/index.js"
 compatibility_date = "2024-09-23"
+# Required by @cloudflare/puppeteer's dependency chain, which imports
+# Node.js built-ins (e.g. node:buffer) even on code paths this Worker
+# doesn't actually exercise — without this flag the whole deploy fails
+# validation with "No such module 'node:buffer'" before the Worker ever
+# runs, not just the report-screenshot route specifically.
+compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "."
