@@ -2,6 +2,7 @@ worker/
 scripts/
 node_modules/
 .wrangler/
+.git/
 .dev.vars
 package.json
 package-lock.json
