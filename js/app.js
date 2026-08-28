@@ -30,6 +30,17 @@ const map = L.map('map', {
   zoomSnap: 0.25,
   zoomDelta: 1,
   worldCopyJump: true,
+  // Default is true, which lets a pinch-zoom gesture briefly overshoot
+  // past minZoom before animating back — a soft bounce corrected only
+  // once the gesture ends, not clamped live. Ghost markers (the ±360°
+  // world copies of each pin — see the ghostMarker loop below) normally
+  // sit far enough apart on screen to never cluster together, but during
+  // that overshoot the effective world width can drop enough for them to
+  // land within the cluster group's merge radius, inflating a cluster's
+  // count (reported live: real counts tripled, matching the three world
+  // copies merging into one). False hard-clamps zoom at the limit
+  // instead, so it never dips low enough for that to happen.
+  bounceAtZoomLimits: false,
   // A fast flick used to leave Leaflet's own momentum animation running
   // for a second or more afterward, firing 'move' on every frame. The
   // south/north clamps below correcting live on each of those frames
@@ -1281,14 +1292,11 @@ async function init() {
             // among its neighbors rather than edge-to-edge alone.
             const bounds = layer.getBounds();
             const targetZoom = map.getBoundsZoom(bounds) - 1;
-            // Only zoom IN. If already zoomed in past that point (e.g.
-            // exploring a specific ministry already), clicking the country
-            // shouldn't zoom back out — just re-center on it instead.
-            if (map.getZoom() >= targetZoom) {
-              map.panTo(bounds.getCenter());
-            } else {
-              map.setView(bounds.getCenter(), targetZoom);
-            }
+            // Zooms in OR out to this fit, every time — e.g. clicking a
+            // small country while zoomed in on a big one now zooms back
+            // out to bring the small one into view, rather than staying
+            // zoomed in past it.
+            map.setView(bounds.getCenter(), targetZoom);
           }
         });
       },
