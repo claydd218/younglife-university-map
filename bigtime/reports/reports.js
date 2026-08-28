@@ -178,11 +178,11 @@ function paleColor(hex, amount = 0.7) {
 // since they aren't tied to any one division.
 function metricBoxesHtml(metrics, accent) {
   const boxStyle = accent ? ` style="border-color:${accent.pin};background:${paleColor(accent.country)};"` : '';
-  const numStyle = accent ? ` style="color:${accent.pin};"` : '';
+  const textStyle = accent ? ` style="color:${accent.pin};"` : '';
   return `<div class="report-metrics">${metrics.map(({ label, num }) => `
     <div class="report-metric"${boxStyle}>
-      <div class="report-metric-label">${escapeHtml(label)}</div>
-      <div class="report-metric-num"${numStyle}>${num}</div>
+      <div class="report-metric-label"${textStyle}>${escapeHtml(label)}</div>
+      <div class="report-metric-num"${textStyle}>${num}</div>
     </div>`).join('')}</div>`;
 }
 
