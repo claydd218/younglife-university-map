@@ -59,7 +59,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 58,South Nicaragua,Nicaragua,11.4416741,-85.7591501,,false,,Rosa Baca (Staff),,south-nicaragua-nicaragua-1.webp; south-nicaragua-nicaragua-2.webp; south-nicaragua-nicaragua-3.webp,,,2026-08-28T02:44:00.568Z
 59,Puebla,Mexico,18.8333330,-98.0000000,,false,,Jae Jung (Staff),,,,,
 60,Buenos Aires,Argentina,-34.5927,-58.5063,,false,,Milton Mischuk (Staff),,,,,2026-08-24T22:06:09.128Z
-61,Bogota,Colombia,4.6807,-74.0767,,false,,Diego Rojas (Staff),,,,,
+61,Bogota,Colombia,4.6807,-74.0767,,false,,Diego Rojas (Staff),,bogota-colombia-1.webp; bogota-colombia-2.webp; bogota-colombia-3.webp; bogota-colombia-4.webp,,,2026-08-28T02:57:09.593Z
 62,Santiago,Chile,-33.4376995,-70.6510671,,false,,Daniela Celis (Staff),,,,,
 63,Cuenca,Ecuador,-2.8974072,-79.0041726,,false,,Pedro Diaz (Staff),,,,,
 64,Shell,Ecuador,-1.4999375,-78.0615532,,false,,David Caceras (Staff),,,,,
