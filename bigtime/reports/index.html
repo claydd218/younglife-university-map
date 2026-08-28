@@ -113,7 +113,15 @@
      just continues under no header at all, rather than a repeated
      "Division (Continued)" label — plain CSS has no way to do that. */
   .division-section { break-before: page; }
-  .division-title { font-size: 22px; margin: 0 0 14px; border-bottom: 2px solid #1a1a1a; padding-bottom: 6px; }
+  .division-title {
+    display: flex;
+    flex-direction: column;
+    margin: 0 0 14px;
+    border-bottom: 2px solid #1a1a1a;
+    padding-bottom: 6px;
+  }
+  .division-title-report-name { font-size: 13px; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase; }
+  .division-title-division-name { font-size: 26px; }
 
   .ministry-area {
     display: grid;
