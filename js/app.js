@@ -1244,6 +1244,36 @@ async function init() {
       if (name && iso2) state.countryIsoByName.set(name, iso2);
     }
 
+    // Some countries (Russia is the real case here) have far-flung
+    // territory whose GeoJSON coordinates wrap past +/-180deg — a MultiPolygon
+    // with, say, mainland Russia stopping at 180 and a small far-eastern
+    // island piece starting back at -180. layer.getBounds() naively spans
+    // the raw min/max across ALL of a MultiPolygon's parts, so that sliver
+    // corrupts the whole box into spanning the entire globe's longitude,
+    // landing its center near longitude 0 — which is why clicking Russia
+    // was jumping the view to just west of Norway. Using only the largest
+    // sub-polygon by bounding-box area sidesteps this: mainland Russia's
+    // own outer ring doesn't itself cross the antimeridian, only the much
+    // smaller separate pieces do.
+    function computeMainLandBounds(feature) {
+      const geom = feature.geometry;
+      const polygons = geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
+      let best = null;
+      for (const poly of polygons) {
+        const ring = poly[0]; // outer ring; holes don't matter for a bbox
+        let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+        for (const [lng, lat] of ring) {
+          if (lng < minLng) minLng = lng;
+          if (lng > maxLng) maxLng = lng;
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+        }
+        const area = (maxLng - minLng) * (maxLat - minLat);
+        if (!best || area > best.area) best = { minLng, maxLng, minLat, maxLat, area };
+      }
+      return L.latLngBounds([best.minLat, best.minLng], [best.maxLat, best.maxLng]);
+    }
+
     const countryLayerOptions = {
       style: styleCountryFeature,
       onEachFeature: (feature, layer) => {
@@ -1286,12 +1316,11 @@ async function init() {
           const name = normalizeCountryName(feature.properties.name);
           const present = state.countriesWithVisiblePins.get(name);
           if (present && present.size) {
-            // One zoom level out from a tight fit halves the linear scale,
-            // so the country reads as roughly a quarter of the screen's
-            // area instead of filling it — enough to see it in context
-            // among its neighbors rather than edge-to-edge alone.
-            const bounds = layer.getBounds();
-            const targetZoom = map.getBoundsZoom(bounds) - 1;
+            // A touch out from a tight fit, so the country reads with a
+            // little breathing room and its neighbors are visible for
+            // context, without backing off as far as a full zoom level.
+            const bounds = computeMainLandBounds(feature);
+            const targetZoom = map.getBoundsZoom(bounds) - 0.5;
             // Zooms in OR out to this fit, every time — e.g. clicking a
             // small country while zoomed in on a big one now zooms back
             // out to bring the small one into view, rather than staying
