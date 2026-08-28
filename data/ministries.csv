@@ -67,7 +67,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 68,Santiago,Dominican Republic,19.4508,-70.6947,,false,,,,santiago-dominican-republic-1.webp; santiago-dominican-republic-2.webp,,,2026-08-28T02:45:24.166Z
 69,Santa Domingo,Dominican Republic,18.4714,-69.8918,,false,,,,santa-domingo-dominican-republic-1.webp; santa-domingo-dominican-republic-2.webp,,,2026-08-28T02:44:56.162Z
 70,Quito,Ecuador,-0.2202,-78.5123,,false,,,,,,,
-71,Sau Paulo,Brazil,-23.4648,-46.8584,,false,,Ivan Carvajal (College Coordinator),Ivan and his family moved from Colombia in 2026 and establishing ministry in Brazil.  He is a seasoned staff and brings a lot of wisdom and leadership.,,,,
+71,Sau Paulo,Brazil,-23.4648,-46.8584,,true,,Ivan Carvajal (College Coordinator),Ivan and his family moved from Colombia in 2026 and establishing ministry in Brazil.  He is a seasoned staff and brings a lot of wisdom and leadership.,,,,2026-08-28T16:14:58.315Z
 72,Pachuca,Mexico,20.1165,-98.7414,,false,,Fito Angeles (College Coordinator); Efrain Hernandez (College Coordinator),,pachuca-mexico-1.webp; pachuca-mexico-2.webp,,,2026-08-28T02:42:40.744Z
 73,Queretaro,Mexico,20.8052,-99.8837,,false,,Fede Arroyo (College Coordinator),,,,,
 74,Tashkent,Uzbekistan,41.3123,69.2787,,false,,,,,,,
