@@ -9,12 +9,13 @@ import puppeteer from '@cloudflare/puppeteer';
 import { errorResponse } from '../lib/http.js';
 
 // Taller than the public site's own aspect ratio — the extra height is
-// what keeps Patagonia in frame at REPORT_ZOOM below (verified against
-// map.getBounds(): south -57.8° at this exact width/height/zoom/center
-// combination, well past Tierra del Fuego's -55.9°). The displayed <img>
-// is capped back down via CSS (see index.html's .report-map-shot) so this
-// resolution doesn't dictate how large the map looks on the page.
-const VIEWPORT = { width: 1600, height: 1040 };
+// what keeps Patagonia comfortably in frame (with room to spare below it)
+// at REPORT_ZOOM below (verified against map.getBounds(): south -62.0° at
+// this exact width/height/zoom/center combination, well past Tierra del
+// Fuego's -55.9°). The displayed <img> is capped back down via CSS (see
+// index.html's .report-map-shot) so this resolution doesn't dictate how
+// large the map looks on the page.
+const VIEWPORT = { width: 1600, height: 1120 };
 // Tighter than the public map's own initial zoom (CONFIG.MAP_ZOOM, 2.5) —
 // at 2.5 the world is narrower than VIEWPORT.width, so Leaflet's
 // worldCopyJump repeats a second copy of the map and Russia shows up on
