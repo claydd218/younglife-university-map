@@ -743,13 +743,14 @@ function isRecent(row) {
 // Each key narrows the list when on; all active filters combine with AND
 // (e.g. Recent + No Staff shows only ministries that are both). Off by
 // default so the list starts unfiltered.
-let ministriesFilter = { recent: false, developing: false, noStaff: false, noUniversities: false };
+let ministriesFilter = { recent: false, developing: false, noStaff: false, noUniversities: false, noMinistryPhoto: false };
 
 function matchesMinistriesFilter(row) {
   if (ministriesFilter.recent && !isRecent(row)) return false;
   if (ministriesFilter.developing && !row.is_developing) return false;
   if (ministriesFilter.noStaff && row.staff.length !== 0) return false;
   if (ministriesFilter.noUniversities && row.universities.length !== 0) return false;
+  if (ministriesFilter.noMinistryPhoto && row.photos.length !== 0) return false;
   return true;
 }
 
@@ -759,6 +760,7 @@ function wireMinistriesFilterBar() {
     { key: 'recent', status: 'recent', label: 'Recent' },
     { key: 'noStaff', status: 'no-staff', label: 'No Staff' },
     { key: 'noUniversities', status: 'no-universities', label: 'No Universities' },
+    { key: 'noMinistryPhoto', status: 'no-ministry-photo', label: 'No Ministry Photo' },
     { key: 'developing', status: 'developing', label: 'Developing' },
   ];
   bar.innerHTML = defs.map((d) => `<button type="button" class="filter-toggle status-${d.status} ${ministriesFilter[d.key] ? 'on' : ''}" data-key="${d.key}">${d.label}</button>`).join('');
