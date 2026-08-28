@@ -50,7 +50,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 49,Poznan,Poland,52.4006632,16.9197326,,false,,Asia Mazur (Staff),,poznan-poland-1.webp; poznan-poland-2.webp; poznan-poland-3.webp,,,2026-08-28T02:47:14.159Z
 50,Belfast,United Kingdom,54.5963910,-5.9301829,2022,false,Queens University (2022); Ulster University (2022),Jamie Paterson (Staff); Chris Pyper (Staff); Katie Vaughn (Staff),,belfast-united-kingdom-1.webp; belfast-united-kingdom-2.webp,,,2026-08-28T02:58:39.443Z
 51,East London,South Africa,-33.0191604,27.8998573,,false,,Bonte Uwimana (Staff),,,,,
-52,Munich,Germany,48.1371079,11.5753822,,false,,Ryan Sandefur (Staff); Inga Horchler (Staff); Mia Mader (Staff),,,,,
+52,Munich,Germany,48.1371079,11.5753822,,false,,Ryan Sandefur (Staff); Inga Horchler (Staff); Mia Mader (Staff),,munich-germany-1.webp; munich-germany-2.webp,,,2026-08-28T02:59:56.247Z
 53,Magdeburg,Germany,52.1314783,11.6400789,,false,,Samuel Voigt (Staff),,,,,
 54,Gießen,Germany,50.5862066,8.6742306,,false,,Rickey Simpson (Staff),,,,,
 55,Brussels,Belgium,50.8467372,4.3524930,,false,,Alex Wautier (Staff),,,,,
