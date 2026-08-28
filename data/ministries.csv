@@ -86,3 +86,4 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 88,Timișoara,Romania,45.7538,21.2257,,false,,,,timisoara-romania-1.webp,,,2026-08-28T14:34:23.994Z
 89,Cluj-Napoca,Romania,46.7694,23.5900,,false,,,,cluj-napoca-romania-1.webp,,,2026-08-28T14:34:57.688Z
 90,Herefordshire,United Kingdom,52.0833,-2.7500,,false,University of Hertfordshire,Beth Ann Hunter (University Coordinator),,herefordshire-united-kingdom-1.webp,,,2026-08-28T14:49:36.604Z
+91,Tirana,Albania,41.3281,19.8184,,false,,David Qelemeni (Colege Coordinator),,tirana-albania-1.webp; tirana-albania-2.webp,,,2026-08-28T14:57:34.948Z
