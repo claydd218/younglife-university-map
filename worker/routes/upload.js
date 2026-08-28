@@ -19,12 +19,32 @@ const MAX_BYTES = 6 * 1024 * 1024; // 6MB — defense in depth; the client is
 // free to use .webp for the real size win — see bigtime/admin.js's
 // reencodeImage for why staff photos aren't switched too.
 const STAFF_OUTPUT_EXT = 'jpg';
-const CITY_OUTPUT_EXT = 'webp';
 
 function decodedByteLength(base64) {
   const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, '');
   const padding = (cleaned.match(/=+$/) || [''])[0].length;
   return Math.floor((cleaned.length * 3) / 4) - padding;
+}
+
+// City/ministry photos take their extension from the image's own actual
+// bytes rather than a fixed '.webp' constant. Safari's canvas.toBlob
+// silently substitutes PNG when asked to encode WebP (which it can't
+// encode at all) instead of erroring — bigtime/admin.js's reencodeImage
+// now catches that client-side and falls back to JPEG, but trusting a
+// fixed extension here would still mislabel anything that slips through
+// (an older cached admin.js, a future encoder change, direct API use).
+// Reading the real magic bytes keeps the stored filename honest no matter
+// what produced them.
+function detectImageExt(base64) {
+  const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, '');
+  // 24 base64 chars (a multiple of 4, so it decodes cleanly on its own)
+  // is 18 bytes — enough for every signature checked below.
+  const bytes = Uint8Array.from(atob(cleaned.slice(0, 24)), (c) => c.charCodeAt(0));
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'jpg';
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46
+    && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'webp';
+  return null;
 }
 
 export async function onRequestPost({ request, env }) {
@@ -100,15 +120,18 @@ export async function onRequestPost({ request, env }) {
   }
 
   // kind === 'city': a ministry can have multiple photos, so each upload
-  // adds a new numbered file (slug-1.webp, slug-2.webp, ...) rather than
+  // adds a new numbered file (slug-1.ext, slug-2.ext, ...) rather than
   // overwriting — the admin's photo manager owns ordering/deletion.
+  const cityExt = detectImageExt(imageBase64);
+  if (!cityExt) return errorResponse(400, "Couldn't recognize the image format (expected JPEG, PNG, or WebP)");
+
   const numberedPattern = new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)\\.`);
   let nextIndex = 1;
   for (const f of existing) {
     const match = f.name.match(numberedPattern);
     if (match) nextIndex = Math.max(nextIndex, parseInt(match[1], 10) + 1);
   }
-  const filename = `${slug}-${nextIndex}.${CITY_OUTPUT_EXT}`;
+  const filename = `${slug}-${nextIndex}.${cityExt}`;
   const targetPath = `${IMAGES_DIR}/${filename}`;
 
   let result;

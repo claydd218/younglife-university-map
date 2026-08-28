@@ -238,11 +238,24 @@ async function reencodeImage(file, kind) {
   canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
 
   const TARGET_BYTES = 800 * 1024;
+  let encodeMime = mime;
   let quality = 0.82;
-  let blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
+  let blob = await new Promise((resolve) => canvas.toBlob(resolve, encodeMime, quality));
+  // Safari doesn't support WebP encoding via canvas.toBlob and silently
+  // substitutes PNG instead of erroring or honoring the requested type —
+  // canvas.toBlob's spec-defined behavior for an unsupported type is to
+  // fall back to PNG with no signal that anything was substituted. PNG is
+  // also lossless, so the quality-based shrink loop below would do
+  // nothing and leave a multi-MB file mislabeled with a .webp extension
+  // once uploaded. Falling back to JPEG here — universally supported, and
+  // it actually responds to the quality parameter — catches that instead.
+  if (blob.type !== encodeMime && encodeMime === 'image/webp') {
+    encodeMime = 'image/jpeg';
+    blob = await new Promise((resolve) => canvas.toBlob(resolve, encodeMime, quality));
+  }
   for (let i = 0; i < 3 && blob.size > TARGET_BYTES; i++) {
     quality -= 0.15;
-    blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
+    blob = await new Promise((resolve) => canvas.toBlob(resolve, encodeMime, quality));
   }
   return blob;
 }
