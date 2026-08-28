@@ -53,7 +53,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 52,Munich,Germany,48.1371079,11.5753822,,false,,Ryan Sandefur (Staff); Inga Horchler (Staff); Mia Mader (Staff),,munich-germany-1.webp; munich-germany-2.webp,,,2026-08-28T02:59:56.247Z
 53,Magdeburg,Germany,52.1314783,11.6400789,,false,,Samuel Voigt (Staff),,,,,
 55,Brussels,Belgium,50.8467372,4.3524930,,false,,Alex Wautier (Staff),,brussels-belgium-1.webp,,,2026-08-28T15:21:35.936Z
-56,San Miguel de Allende,Mexico,20.9130501,-100.7356600,,false,,Christi (Vanderwerf),,,,,2026-08-27T13:38:26.785Z
+56,San Miguel de Allende,Mexico,20.9130501,-100.7356600,,false,,Christi (Vanderwerf),,san-miguel-de-allende-mexico-2.webp; san-miguel-de-allende-mexico-3.webp; san-miguel-de-allende-mexico-4.webp,,,2026-08-28T17:29:42.860Z
 57,North Nicaragua,Nicaragua,13.0929621,-86.3561571,,false,,Sabony Rizo (Staff),,north-nicaragua-nicaragua-1.webp; north-nicaragua-nicaragua-2.webp; north-nicaragua-nicaragua-3.webp; north-nicaragua-nicaragua-4.webp,,,2026-08-28T02:43:22.366Z
 58,South Nicaragua,Nicaragua,11.4416741,-85.7591501,,false,,Rosa Baca (Staff),,south-nicaragua-nicaragua-1.webp; south-nicaragua-nicaragua-2.webp; south-nicaragua-nicaragua-3.webp,,,2026-08-28T02:44:00.568Z
 59,Puebla,Mexico,18.8333330,-98.0000000,,false,,Jae Jung (Staff),,,,,
