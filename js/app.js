@@ -313,7 +313,7 @@ function buildPopupHtml(row, divisionKey) {
   const universities = parseParenList(row.universities);
   const universitiesHtml = universities.length
     ? `<ul class="popup-universities">${universities
-        .map((u) => `<li>${escapeHtml(u.name)}${u.meta ? ` <span class="university-year">— ${escapeHtml(u.meta)}</span>` : ''}</li>`)
+        .map((u) => `<li>${escapeHtml(u.name)}${u.meta ? ` <span class="university-year">(${escapeHtml(u.meta)})</span>` : ''}</li>`)
         .join('')}</ul>`
     : '';
 
