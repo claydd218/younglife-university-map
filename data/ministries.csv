@@ -80,7 +80,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 83,Karaganda,Kazakhstan,49.1767,74.1811,,false,,,,,,,
 84,Bishkek,Kyrgyzstan,42.8761,74.6037,,false,,,,,,,
 85,San Cristobal,Mexico,16.7354,-92.6387,,false,,Marta (College Director),,san-cristobal-mexico-1.webp,,,2026-08-28T02:35:36.869Z
-86,Northern Congo,Democratic Republic of the Congo,-2.3761,23.9433,2025,true,uni (2025),Pastor Brother (Master of the Universe); Bob Smith (College guy),blurb,,https://www.youtube.com/watch?v=_TtxERZpfto&feature=youtu.be,Watch a Northern Congo Story,2026-08-28T13:24:45.680Z
+86,Northern Congo,Democratic Republic of the Congo,-2.3761,23.9433,2025,true,uni (2025),,blurb,,https://www.youtube.com/watch?v=_TtxERZpfto&feature=youtu.be,Watch a Northern Congo Story,2026-08-28T21:06:47.405Z
 87,Alba,Romania,46.0159,23.5468,,false,,Cristian Matei (College Coordinator),,alba-romania-5.webp; alba-romania-6.webp,,,2026-08-28T14:33:39.000Z
 88,Timișoara,Romania,45.7538,21.2257,,false,,Ioana (Volunteer),,timisoara-romania-2.webp,,,2026-08-28T20:53:09.154Z
 89,Cluj-Napoca,Romania,46.7694,23.5900,,false,,Andrea (Volunteer Uni team),,cluj-napoca-romania-2.webp; cluj-napoca-romania-1.webp,,,2026-08-28T20:50:49.689Z
