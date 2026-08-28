@@ -31,6 +31,14 @@ export async function onRequestGet({ request, env }) {
     await page.setViewport(VIEWPORT);
     await page.goto(mapUrl.toString(), { waitUntil: 'networkidle0' });
     await page.waitForFunction('window.__mapReady === true', { timeout: READY_TIMEOUT_MS });
+    // Report-only cleanup — hides the decorative title bar and every map
+    // control (zoom, the directory/search magnifying-glass icon, Leaflet's
+    // attribution text) so the screenshot is just the map itself. Injected
+    // here rather than in the public site's own CSS/JS so regular visitors
+    // are never affected by report-specific chrome changes.
+    await page.addStyleTag({
+      content: '#site-title, .leaflet-control-container, #legend { display: none !important; }',
+    });
     const png = await page.screenshot({ type: 'png' });
     return new Response(png, {
       headers: {

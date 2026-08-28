@@ -25,6 +25,11 @@
 // name itself is still the section heading, it just won't repeat on
 // pages the browser's own pagination wraps a division onto.
 
+// Matches the public map's own <h1> text exactly (index.html's
+// #site-title) — repeated here as the map's caption and again before
+// each division name, per request.
+const REPORT_TITLE = 'Young Life University International Ministries';
+
 const regenerateBtn = document.getElementById('regenerate-btn');
 const printBtn = document.getElementById('print-btn');
 const output = document.getElementById('report-output');
@@ -106,9 +111,12 @@ async function buildMinistryAreaHtml(row, countryIsoByName) {
   const flag = flagEmoji(iso2);
   const name = row.city === row.country ? row.city : `${row.city}, ${row.country}`;
 
+  // No placeholder box when a ministry area has no photo — the blurb/staff/
+  // universities column just takes the full width instead (see the
+  // .ministry-area.no-photo grid override in index.html).
   const mainPhoto = row.photos[0]
     ? `<img class="ministry-area-photo" src="../../${CONFIG.IMAGES_DIR}${encodeURIComponent(row.photos[0])}" alt="">`
-    : '<div class="ministry-area-photo-empty">No photo</div>';
+    : '';
 
   const staffUrls = await Promise.all(row.staff.map((s) => findStaffPhotoUrl(s.name)));
   const staffHtml = row.staff.map((s, i) => {
@@ -131,7 +139,7 @@ async function buildMinistryAreaHtml(row, countryIsoByName) {
     : '';
 
   return `
-    <div class="ministry-area">
+    <div class="ministry-area${row.photos[0] ? '' : ' no-photo'}">
       <h3 class="ministry-area-title">${flag ? `${flag} ` : ''}${escapeHtml(name)}</h3>
       ${mainPhoto}
       <div>
@@ -142,20 +150,36 @@ async function buildMinistryAreaHtml(row, countryIsoByName) {
     </div>`;
 }
 
-async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShotUrl) {
-  const countries = new Set(rows.map((r) => r.country.trim()).filter(Boolean));
-  const staffCount = rows.reduce((sum, r) => sum + r.staff.length, 0);
-  const universityCount = rows.reduce((sum, r) => sum + r.universities.length, 0);
+function computeMetrics(rowsSubset) {
+  const countries = new Set(rowsSubset.map((r) => r.country.trim()).filter(Boolean));
+  return [
+    { label: 'Countries', num: countries.size },
+    { label: 'Ministry Areas', num: rowsSubset.length },
+    { label: 'Staff', num: rowsSubset.reduce((sum, r) => sum + r.staff.length, 0) },
+    { label: 'Universities', num: rowsSubset.reduce((sum, r) => sum + r.universities.length, 0) },
+  ];
+}
 
+// Boxed, Google-Analytics-style metric cards — label on top, the number
+// large underneath. `accent` (a division's pin/country colors) is only
+// passed for the per-division repeats; the page-1 totals stay neutral
+// since they aren't tied to any one division.
+function metricBoxesHtml(metrics, accent) {
+  const boxStyle = accent ? ` style="border-color:${accent.pin};background:${accent.country};"` : '';
+  const numStyle = accent ? ` style="color:${accent.pin};"` : '';
+  return `<div class="report-metrics">${metrics.map(({ label, num }) => `
+    <div class="report-metric"${boxStyle}>
+      <div class="report-metric-label">${escapeHtml(label)}</div>
+      <div class="report-metric-num"${numStyle}>${num}</div>
+    </div>`).join('')}</div>`;
+}
+
+async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShotUrl) {
   const metricsPage = `
     <section class="report-page-one">
+      <h2 class="report-map-title">${escapeHtml(REPORT_TITLE)}</h2>
       <img class="report-map-shot" src="${mapShotUrl}" alt="Map of ministry locations">
-      <div class="report-metrics">
-        <div class="report-metric"><div class="report-metric-num">${countries.size}</div><div class="report-metric-label">Countries</div></div>
-        <div class="report-metric"><div class="report-metric-num">${rows.length}</div><div class="report-metric-label">Ministry Areas</div></div>
-        <div class="report-metric"><div class="report-metric-num">${staffCount}</div><div class="report-metric-label">Staff</div></div>
-        <div class="report-metric"><div class="report-metric-num">${universityCount}</div><div class="report-metric-label">Universities</div></div>
-      </div>
+      ${metricBoxesHtml(computeMetrics(rows))}
     </section>`;
 
   // division key -> [rows]. Divisions render in js/config.js's DIVISIONS
@@ -182,7 +206,8 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
     const areasHtml = (await Promise.all(divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName)))).join('');
     divisionSectionsHtml.push(`
       <section class="division-section">
-        <h2 class="division-title">${escapeHtml(def.label)}</h2>
+        <h2 class="division-title" style="color:${def.pin};border-bottom-color:${def.pin};">${escapeHtml(REPORT_TITLE)} — ${escapeHtml(def.label)}</h2>
+        ${metricBoxesHtml(computeMetrics(divisionRows), def)}
         ${areasHtml}
       </section>`);
   }

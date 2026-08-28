@@ -4,16 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ministry Report — Young Life University International</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
   /* ---------- Screen-only chrome (button, status) — never printed ---------- */
   body {
-    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-family: 'EB Garamond', Georgia, serif;
     max-width: 700px;
     margin: 48px auto;
     padding: 0 20px 80px;
     color: #1a1a1a;
     background: #fafafa;
   }
+  h1, h2, h3 { font-family: 'Cinzel', 'Times New Roman', serif; }
   h1 { font-size: 22px; margin-bottom: 4px; }
   .subtitle { color: #666; font-size: 14px; margin-bottom: 28px; }
   .btn {
@@ -78,16 +82,28 @@
 
   /* ---------- Report content (built into #report-output by reports.js's
      buildReportHtml()) ---------- */
+  .report-map-title {
+    font-size: 20px;
+    text-align: center;
+    margin: 0 0 14px;
+  }
   .report-metrics {
     display: flex;
-    gap: 28px;
+    gap: 16px;
     justify-content: center;
     margin-top: 24px;
   }
-  .report-metric { text-align: center; }
-  .report-metric-num { font-size: 34px; font-weight: 700; line-height: 1.1; }
-  .report-metric-label { font-size: 13px; color: #555; margin-top: 4px; }
-  .report-map-shot { max-width: 100%; border: 1px solid #ccc; }
+  .report-metric {
+    text-align: center;
+    min-width: 120px;
+    padding: 10px 18px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #f2f2f2;
+  }
+  .report-metric-label { font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 0.03em; }
+  .report-metric-num { font-size: 30px; font-weight: 700; line-height: 1.2; margin-top: 4px; }
+  .report-map-shot { max-width: 100%; border: 1px solid #ccc; display: block; }
 
   /* Every division (including the first, right after the metrics page)
      starts on its own fresh printed page — native break-before, reliable
@@ -120,18 +136,7 @@
     border-radius: 3px;
     background: #eee;
   }
-  .ministry-area-photo-empty {
-    width: 220px;
-    height: 165px;
-    border: 1px dashed #ccc;
-    border-radius: 3px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #999;
-    font-size: 12px;
-    text-align: center;
-  }
+  .ministry-area.no-photo { grid-template-columns: 1fr; }
   .ministry-area-blurb { font-size: 13px; line-height: 1.45; margin: 0 0 10px; }
   .ministry-staff { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
   .ministry-staff-item { width: 74px; text-align: center; }
