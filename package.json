@@ -3,7 +3,7 @@
   "private": true,
   "description": "The site itself still has no build step — wrangler runs the admin CMS Worker locally (see wrangler.toml, admin/SETUP.md), and production deploys serve the rest of the repo as static assets unchanged. @cloudflare/puppeteer is a real runtime dependency though (worker/routes/report-screenshot.js), not just dev tooling.",
   "dependencies": {
-    "@cloudflare/puppeteer": "^0.0.14"
+    "@cloudflare/puppeteer": "^1.4.0"
   },
   "devDependencies": {
     "wrangler": "^4.123.0"
