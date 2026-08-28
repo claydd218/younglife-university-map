@@ -62,7 +62,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 62,Santiago,Chile,-33.4376995,-70.6510671,,false,,Daniela Celis (Staff),,,,,
 63,Cuenca,Ecuador,-2.8974072,-79.0041726,,false,,Pedro Diaz (Staff),,,,,
 64,Shell,Ecuador,-1.4999375,-78.0615532,,false,,David Caceras (Staff),,,,,
-65,Nassau,The Bahamas,25.0782266,-77.3383438,,false,,Yvana McDonald (Staff),,,,,
+65,Nassau,The Bahamas,25.0782266,-77.3383438,,false,,,,,,,2026-08-28T16:21:41.613Z
 67,Krakow,Poland,50.0469432,19.9971534,,false,,Sonya Nikolayeva (Staff),,krakow-poland-1.webp; krakow-poland-2.webp; krakow-poland-3.webp,,,2026-08-28T02:46:33.631Z
 68,Santiago,Dominican Republic,19.4508,-70.6947,,false,,,,santiago-dominican-republic-1.webp; santiago-dominican-republic-2.webp,,,2026-08-28T02:45:24.166Z
 69,Santa Domingo,Dominican Republic,18.4714,-69.8918,,false,,,,santa-domingo-dominican-republic-1.webp; santa-domingo-dominican-republic-2.webp,,,2026-08-28T02:44:56.162Z
