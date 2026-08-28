@@ -84,7 +84,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 87,Alba,Romania,46.0159,23.5468,,false,,Cristian Matei (College Coordinator),,alba-romania-5.webp; alba-romania-6.webp,,,2026-08-28T14:33:39.000Z
 88,Timișoara,Romania,45.7538,21.2257,,false,,,,timisoara-romania-1.webp,,,2026-08-28T14:34:23.994Z
 89,Cluj-Napoca,Romania,46.7694,23.5900,,false,,,,cluj-napoca-romania-1.webp,,,2026-08-28T14:34:57.688Z
-90,Herefordshire,United Kingdom,52.0833,-2.7500,,false,University of Hertfordshire,Beth Ann Hunter (University Coordinator),,herefordshire-united-kingdom-1.webp,,,2026-08-28T14:49:36.604Z
+90,Herefordshire,United Kingdom,52.0833,-2.7500,,false,University of Hertfordshire,Beth Ann Hunter (University Coordinator); Esther Ekeocha,,herefordshire-united-kingdom-2.webp; herefordshire-united-kingdom-3.webp; herefordshire-united-kingdom-1.webp,,,2026-08-28T20:21:51.765Z
 91,Tirana,Albania,41.3281,19.8184,,false,,David Qelemeni (Colege Coordinator),,tirana-albania-3.webp; tirana-albania-1.webp; tirana-albania-4.webp; tirana-albania-2.webp,,,2026-08-28T15:15:48.417Z
 92,Chisinau,Moldova,47.0245,28.8323,,false,,Elizabeth (College Coordinator),,,,,2026-08-28T15:33:50.554Z
 93,Belfast,United Kingdom,54.5964,-5.9302,,false,Ulster University,Kathyrn Hardingham (College Coordinator),,belfast-united-kingdom-3.webp,,,2026-08-28T15:46:07.258Z
