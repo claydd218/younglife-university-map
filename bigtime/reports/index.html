@@ -11,15 +11,24 @@
   /* ---------- Screen-only chrome (button, status) — never printed ---------- */
   body {
     font-family: 'EB Garamond', Georgia, serif;
-    max-width: 700px;
+    max-width: 900px;
     margin: 48px auto;
     padding: 0 20px 80px;
     color: #1a1a1a;
     background: #fafafa;
   }
   h1, h2, h3 { font-family: 'Cinzel', 'Times New Roman', serif; }
-  h1 { font-size: 22px; margin-bottom: 4px; }
-  .subtitle { color: #666; font-size: 14px; margin-bottom: 28px; }
+
+  /* Regenerate/Print float over the report instead of taking up space in
+     the flow — this page has no other chrome above the report now. */
+  .floating-controls {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 15;
+    display: flex;
+    gap: 10px;
+  }
   .btn {
     font: inherit;
     font-size: 15px;
@@ -29,9 +38,10 @@
     background: #1a1a1a;
     color: #fff;
     cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   }
   .btn:disabled { opacity: 0.5; cursor: default; }
-  .btn.secondary { background: #fff; color: #1a1a1a; margin-left: 10px; }
+  .btn.secondary { background: #fff; color: #1a1a1a; }
   .btn[hidden] { display: none; }
   .status { margin-top: 14px; font-size: 14px; color: #666; }
   .status.error { color: #c0392b; }
@@ -85,6 +95,12 @@
   .report-map-title {
     font-size: 24px;
     text-align: center;
+    margin: 0 0 4px;
+  }
+  .report-generated-date {
+    font-size: 13px;
+    text-align: center;
+    color: #666;
     margin: 0 0 14px;
   }
   .report-metrics {
@@ -192,18 +208,27 @@
 
   @media print {
     body { max-width: none; margin: 0; padding: 0; background: #fff; }
-    h1, .subtitle, .btn, .status, #loading-overlay { display: none !important; }
+    .floating-controls, .status, #loading-overlay { display: none !important; }
     #report-output { margin: 0; }
+  }
+
+  /* Extra on-screen breathing room that would only waste page space when
+     printed — kept in its own screen-only block so it never leaks into
+     the @media print rules above (which already reset most of this). */
+  @media screen {
+    .ministry-area { margin-bottom: 42px; }
+    .division-section { margin-top: 44px; }
+    .division-section:first-of-type { margin-top: 0; }
+    .report-metrics { margin-bottom: 40px; }
   }
 </style>
 </head>
 <body>
 
-<h1>Ministry Report</h1>
-<p class="subtitle">Not linked anywhere yet — generates a printable PDF of every division's ministries. See <a href="../index.html">Admin</a>.</p>
-
-<button type="button" class="btn secondary" id="regenerate-btn" hidden>Regenerate</button>
-<button type="button" class="btn" id="print-btn" hidden>Print / Save as PDF</button>
+<div class="floating-controls">
+  <button type="button" class="btn secondary" id="regenerate-btn" hidden>Regenerate</button>
+  <button type="button" class="btn" id="print-btn" hidden>Print / Save as PDF</button>
+</div>
 
 <div id="report-output"></div>
 

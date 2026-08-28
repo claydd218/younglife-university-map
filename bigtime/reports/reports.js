@@ -175,9 +175,11 @@ function metricBoxesHtml(metrics, accent) {
 }
 
 async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShotUrl) {
+  const generatedLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const metricsPage = `
     <section class="report-page-one">
       <h2 class="report-map-title">${escapeHtml(REPORT_TITLE)}</h2>
+      <div class="report-generated-date">${escapeHtml(generatedLabel)}</div>
       <img class="report-map-shot" src="${mapShotUrl}" alt="Map of ministry locations">
       ${metricBoxesHtml(computeMetrics(rows))}
     </section>`;
@@ -240,6 +242,12 @@ async function generateReport() {
     setStatus('Building report…');
     output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShotUrl);
     output.classList.add('ready');
+
+    // Chrome/Safari's print-to-PDF dialog suggests document.title as the
+    // save filename — appending today's date here means "Save as PDF"
+    // defaults to a dated filename without the user having to rename it.
+    const fileDateStr = new Date().toISOString().slice(0, 10);
+    document.title = `Ministry Report ${fileDateStr}`;
 
     // Waiting for the overlay to dismiss is also a real visual check, not
     // just a delay — see the buildReportHtml photos: dynamically-inserted
