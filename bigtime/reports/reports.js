@@ -208,7 +208,7 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
     const areasHtml = (await Promise.all(divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName, def)))).join('');
     divisionSectionsHtml.push(`
       <section class="division-section">
-        <h2 class="division-title" style="color:${def.pin};border-bottom-color:${def.pin};"><span class="division-title-report-name">${escapeHtml(REPORT_TITLE)}</span><span class="division-title-division-name">${escapeHtml(def.label)}</span></h2>
+        <h2 class="division-title" style="color:${def.pin};border-bottom-color:${def.pin};"><span class="division-title-report-name">${escapeHtml(REPORT_TITLE)} — ${escapeHtml(generatedLabel)}</span><span class="division-title-division-name">${escapeHtml(def.label)}</span></h2>
         ${metricBoxesHtml(computeMetrics(divisionRows), def)}
         ${areasHtml}
       </section>`);

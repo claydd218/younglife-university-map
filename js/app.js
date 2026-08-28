@@ -1546,6 +1546,11 @@ async function init() {
     }
     console.info(`Plotted ${placed} of ${ministryRows.length} ministry rows.`);
     hideStatus();
+    // Exposed so worker/routes/report-screenshot.js's Puppeteer capture can
+    // reframe the view (setView) before screenshotting — the map itself
+    // has no other reason to be on window, `map` is otherwise just a
+    // module-top-level const.
+    window.__reportMap = map;
     // Signal for worker/routes/report-screenshot.js's Puppeteer capture to
     // wait on (page.waitForFunction) — everything above this point is
     // synchronous DOM work, so once it's run the map is visually complete.

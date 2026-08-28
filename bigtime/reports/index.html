@@ -98,8 +98,10 @@
     margin: 0 0 4px;
   }
   .report-generated-date {
-    font-size: 13px;
+    font-size: 18px;
     text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
     color: #666;
     margin: 0 0 14px;
   }
@@ -210,6 +212,13 @@
     body { max-width: none; margin: 0; padding: 0; background: #fff; }
     .floating-controls, .status, #loading-overlay { display: none !important; }
     #report-output { margin: 0; }
+    /* Between the added generated-date line and the taller map capture
+       (see worker/routes/report-screenshot.js — 1600x1040, up from 900,
+       to keep Patagonia in frame), page one was overflowing onto a second
+       printed page. Constraining by height (not the on-screen max-width)
+       shrinks the image just enough to fit everything on one landscape
+       page again. */
+    .report-map-shot { max-width: 100%; max-height: 420px; width: auto; margin: 0 auto; }
   }
 
   /* Extra on-screen breathing room that would only waste page space when
