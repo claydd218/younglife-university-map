@@ -106,7 +106,7 @@ async function findStaffPhotoUrl(name) {
   return null;
 }
 
-async function buildMinistryAreaHtml(row, countryIsoByName) {
+async function buildMinistryAreaHtml(row, countryIsoByName, def) {
   const iso2 = countryIsoByName.get(row.country.trim());
   const flag = flagEmoji(iso2);
   const name = row.city === row.country ? row.city : `${row.city}, ${row.country}`;
@@ -122,7 +122,7 @@ async function buildMinistryAreaHtml(row, countryIsoByName) {
   const staffHtml = row.staff.map((s, i) => {
     const photo = staffUrls[i]
       ? `<img class="ministry-staff-photo" src="${staffUrls[i]}" alt="">`
-      : `<div class="ministry-staff-photo-fallback">${escapeHtml(initialsFor(s.name))}</div>`;
+      : `<div class="ministry-staff-photo-fallback" style="background:${def.country};">${escapeHtml(initialsFor(s.name))}</div>`;
     return `
       <div class="ministry-staff-item">
         ${photo}
@@ -160,24 +160,12 @@ function computeMetrics(rowsSubset) {
   ];
 }
 
-// Mixes a hex color toward white so the division "country" color — already
-// a light pastel on the map itself — reads as a pale tint here instead,
-// leaving enough contrast for the (dark, div.pin-colored) numbers to stay
-// legible on top of it.
-function paleColor(hex, amount = 0.7) {
-  const n = parseInt(hex.slice(1), 16);
-  const r = Math.round(((n >> 16) & 255) + (255 - ((n >> 16) & 255)) * amount);
-  const g = Math.round(((n >> 8) & 255) + (255 - ((n >> 8) & 255)) * amount);
-  const b = Math.round((n & 255) + (255 - (n & 255)) * amount);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
 // Boxed, Google-Analytics-style metric cards — label on top, the number
 // large underneath. `accent` (a division's pin/country colors) is only
 // passed for the per-division repeats; the page-1 totals stay neutral
 // since they aren't tied to any one division.
 function metricBoxesHtml(metrics, accent) {
-  const boxStyle = accent ? ` style="border-color:${accent.pin};background:${paleColor(accent.country)};"` : '';
+  const boxStyle = accent ? ` style="border-color:${accent.pin};"` : '';
   const textStyle = accent ? ` style="color:${accent.pin};"` : '';
   return `<div class="report-metrics">${metrics.map(({ label, num }) => `
     <div class="report-metric"${boxStyle}>
@@ -215,7 +203,7 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
     const divisionRows = byDivision.get(key);
     if (!divisionRows || !divisionRows.length) continue;
     divisionRows.sort((a, b) => a.country.localeCompare(b.country) || a.city.localeCompare(b.city));
-    const areasHtml = (await Promise.all(divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName)))).join('');
+    const areasHtml = (await Promise.all(divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName, def)))).join('');
     divisionSectionsHtml.push(`
       <section class="division-section">
         <h2 class="division-title" style="color:${def.pin};border-bottom-color:${def.pin};"><span class="division-title-report-name">${escapeHtml(REPORT_TITLE)}</span><span class="division-title-division-name">${escapeHtml(def.label)}</span></h2>
