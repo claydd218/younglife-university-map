@@ -81,3 +81,4 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 83,Karaganda,Kazakhstan,49.1767,74.1811,,false,,,,,,,
 84,Bishkek,Kyrgyzstan,42.8761,74.6037,,false,,,,,,,
 85,San Cristobal,Mexico,16.7354,-92.6387,,false,,Marta (College Director),,san-cristobal-mexico-1.webp,,,2026-08-28T02:35:36.869Z
+86,Northern Congo,Democratic Republic of the Congo,-2.3761,23.9433,2025,true,uni (2025),Pastor Brother (Master of the Universe),blurb,,,,2026-08-28T13:16:28.724Z
