@@ -158,14 +158,17 @@
     display: grid;
     grid-template-columns: 220px 1fr;
     gap: 16px;
-    margin-bottom: 22px;
+    margin-bottom: 6px;
     break-inside: avoid;
   }
   .ministry-area-title {
     grid-column: 1 / -1;
     font-size: 15px;
     font-weight: 700;
-    margin: 0 0 6px;
+    /* Most of the gap between ministry areas lives here (above the title)
+       rather than below it, so the title reads as belonging to its own
+       photo/blurb underneath instead of trailing the previous one. */
+    margin: 14px 0 4px;
   }
   .ministry-area-photo {
     width: 220px;
@@ -230,7 +233,7 @@
      printed — kept in its own screen-only block so it never leaks into
      the @media print rules above (which already reset most of this). */
   @media screen {
-    .ministry-area { margin-bottom: 42px; }
+    .ministry-area-title { margin-top: 30px; }
     .division-section { margin-top: 44px; }
     .division-section:first-of-type { margin-top: 0; }
     .report-metrics { margin-bottom: 40px; }
