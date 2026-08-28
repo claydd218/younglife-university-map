@@ -228,7 +228,11 @@ async function reencodeImage(file, kind) {
     }
   }
 
-  const MAX_DIM = 1600;
+  // The public lightbox (css/style.css's .lightbox-viewport) caps photos
+  // at 900px CSS height — on a 2x/retina display that's ~1800px of real
+  // detail wanted on the short edge. 2400 on the long edge covers that
+  // for most aspect ratios without going much past what's actually used.
+  const MAX_DIM = 2400;
   const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
   const w = Math.round(bitmap.width * scale);
   const h = Math.round(bitmap.height * scale);
@@ -237,7 +241,10 @@ async function reencodeImage(file, kind) {
   canvas.height = h;
   canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
 
-  const TARGET_BYTES = 800 * 1024;
+  // Scaled up roughly with MAX_DIM's ~2.25x more pixels (1600 -> 2400),
+  // so the extra resolution isn't immediately squeezed back out by the
+  // same compression budget it had before.
+  const TARGET_BYTES = 1.5 * 1024 * 1024;
   let encodeMime = mime;
   let quality = 0.82;
   let blob = await new Promise((resolve) => canvas.toBlob(resolve, encodeMime, quality));
