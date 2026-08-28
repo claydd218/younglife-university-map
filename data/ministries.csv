@@ -91,4 +91,3 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 94,Galway Coast,United Kingdom,54.7024,-3.2766,,true,,,,,,,2026-08-28T15:48:03.085Z
 95,Maynooth,Ireland,53.3830,-6.5923,,false,,Laolu Esho (College Coordinator),,maynooth-ireland-1.webp,,,2026-08-28T20:35:38.958Z
 96,Auckland,New Zealand,-36.8521,174.7632,,false,,Lyall (College Coordinator),,auckland-new-zealand-1.webp,,,2026-08-28T22:03:16.356Z
-97,London,United Kingdom,51.5074,-0.1278,,false,,Bonte (College Coordinator),,,,,2026-08-28T22:12:57.493Z
