@@ -25,3 +25,11 @@ binding = "ASSETS"
 # built/deployed successfully without this setting, so verified by
 # deploying to the preview URL and testing there instead.
 run_worker_first = true
+
+# Used by worker/routes/report-screenshot.js to capture the live public map
+# for the /bigtime/reports PDF. Requires Browser Rendering to be available
+# on this Cloudflare account — not something verifiable from a local
+# checkout; if the screenshot route 500s after deploy, check the Cloudflare
+# dashboard for whether Browser Rendering needs enabling first.
+[browser]
+binding = "BROWSER"

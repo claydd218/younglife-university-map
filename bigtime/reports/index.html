@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ministry Report — Young Life University International</title>
+<style>
+  /* ---------- Screen-only chrome (button, status) — never printed ---------- */
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 700px;
+    margin: 48px auto;
+    padding: 0 20px 80px;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 28px; }
+  .btn {
+    font: inherit;
+    font-size: 15px;
+    padding: 11px 20px;
+    border-radius: 6px;
+    border: 1px solid #1a1a1a;
+    background: #1a1a1a;
+    color: #fff;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .status { margin-top: 14px; font-size: 14px; color: #666; }
+  .status.error { color: #c0392b; }
+
+  /* Hidden until reports.js has finished building it. */
+  #report-output {
+    display: none;
+    margin-top: 32px;
+  }
+  #report-output.ready { display: block; }
+
+  /* ---------- Report content (built into #report-output by reports.js's
+     buildReportHtml()) ---------- */
+  .report-metrics {
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    margin-top: 24px;
+  }
+  .report-metric { text-align: center; }
+  .report-metric-num { font-size: 34px; font-weight: 700; line-height: 1.1; }
+  .report-metric-label { font-size: 13px; color: #555; margin-top: 4px; }
+  .report-map-shot { max-width: 100%; border: 1px solid #ccc; }
+
+  /* Every division (including the first, right after the metrics page)
+     starts on its own fresh printed page — native break-before, reliable
+     in every browser, unlike the Paged.js-based running-header approach
+     tried first (see reports.js's header comment for why that was
+     dropped). The tradeoff: a division that overflows onto a second page
+     just continues under no header at all, rather than a repeated
+     "Division (Continued)" label — plain CSS has no way to do that. */
+  .division-section { break-before: page; }
+  .division-title { font-size: 22px; margin: 0 0 14px; border-bottom: 2px solid #1a1a1a; padding-bottom: 6px; }
+
+  .ministry-area {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 16px;
+    margin-bottom: 22px;
+    break-inside: avoid;
+  }
+  .ministry-area-title {
+    grid-column: 1 / -1;
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+  .ministry-area-photo {
+    width: 220px;
+    height: 165px;
+    object-fit: cover;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #eee;
+  }
+  .ministry-area-photo-empty {
+    width: 220px;
+    height: 165px;
+    border: 1px dashed #ccc;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 12px;
+    text-align: center;
+  }
+  .ministry-area-blurb { font-size: 13px; line-height: 1.45; margin: 0 0 10px; }
+  .ministry-staff { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+  .ministry-staff-item { width: 74px; text-align: center; }
+  .ministry-staff-photo {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #1a1a1a;
+    margin: 0 auto 4px;
+    display: block;
+  }
+  .ministry-staff-photo-fallback {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid #1a1a1a;
+    margin: 0 auto 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    background: #eee;
+    color: #555;
+  }
+  .ministry-staff-name { font-size: 10.5px; font-weight: 600; line-height: 1.2; }
+  .ministry-staff-role { font-size: 9.5px; color: #666; line-height: 1.2; }
+  .ministry-universities { font-size: 12px; color: #333; }
+  .ministry-universities-label { font-weight: 700; }
+
+  /* Plain, native browser print page geometry — reliably supported
+     without any library involved. */
+  @page {
+    size: landscape;
+    margin: 14mm 16mm;
+  }
+
+  @media print {
+    body { max-width: none; margin: 0; padding: 0; background: #fff; }
+    h1, .subtitle, .btn, .status { display: none !important; }
+    #report-output { margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Ministry Report</h1>
+<p class="subtitle">Not linked anywhere yet — generates a printable PDF of every division's ministries. See <a href="../index.html">Admin</a>.</p>
+
+<button type="button" class="btn" id="generate-btn">Generate Report</button>
+<div class="status" id="status"></div>
+
+<div id="report-output"></div>
+
+<script src="../../js/utils.js"></script>
+<script src="../../js/config.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script type="module" src="reports.js"></script>
+</body>
+</html>

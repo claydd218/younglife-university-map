@@ -1,7 +1,10 @@
 {
   "name": "younglife-university-map",
   "private": true,
-  "description": "Dev tooling only — the site itself has no build step. wrangler runs the admin CMS Worker locally (see wrangler.toml, admin/SETUP.md); production deploys still serve the rest of the repo as static assets unchanged.",
+  "description": "The site itself still has no build step — wrangler runs the admin CMS Worker locally (see wrangler.toml, admin/SETUP.md), and production deploys serve the rest of the repo as static assets unchanged. @cloudflare/puppeteer is a real runtime dependency though (worker/routes/report-screenshot.js), not just dev tooling.",
+  "dependencies": {
+    "@cloudflare/puppeteer": "^0.0.14"
+  },
   "devDependencies": {
     "wrangler": "^4.123.0"
   },

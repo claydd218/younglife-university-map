@@ -1546,6 +1546,10 @@ async function init() {
     }
     console.info(`Plotted ${placed} of ${ministryRows.length} ministry rows.`);
     hideStatus();
+    // Signal for worker/routes/report-screenshot.js's Puppeteer capture to
+    // wait on (page.waitForFunction) — everything above this point is
+    // synchronous DOM work, so once it's run the map is visually complete.
+    window.__mapReady = true;
   } catch (err) {
     console.error(err);
     showStatus('Could not load ministry data. Check the data source in js/config.js.', true);

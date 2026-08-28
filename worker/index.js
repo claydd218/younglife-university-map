@@ -20,6 +20,7 @@ import { onRequestGet as ministriesGet, onRequestPost as ministriesPost } from '
 import { onRequestPut as ministryPut, onRequestDelete as ministryDelete } from './routes/ministry-detail.js';
 import { onRequestPost as uploadPost } from './routes/upload.js';
 import { onRequestDelete as photoDelete } from './routes/photo.js';
+import { onRequestGet as reportScreenshotGet } from './routes/report-screenshot.js';
 import { login, logout } from './routes/login.js';
 import { hasValidSession, createSessionCookie } from './lib/session.js';
 
@@ -74,6 +75,10 @@ export default {
 
         if (pathname === '/bigtime/api/upload' && method === 'POST') {
           return await uploadPost({ request, env, ctx });
+        }
+
+        if (pathname === '/bigtime/api/report-screenshot' && method === 'GET') {
+          return await reportScreenshotGet({ request, env, ctx });
         }
 
         const photoMatch = pathname.match(/^\/bigtime\/api\/photos\/([^/]+)$/);
