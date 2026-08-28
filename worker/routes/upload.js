@@ -7,8 +7,10 @@ import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.j
 import { bumpDeployVersion } from '../lib/deployVersion.js';
 
 const IMAGES_DIR = 'images';
-const MAX_BYTES = 2 * 1024 * 1024; // 2MB — defense in depth; the client is
-// expected to have already compressed the image (canvas re-encode pipeline).
+const MAX_BYTES = 6 * 1024 * 1024; // 6MB — defense in depth; the client is
+// expected to have already compressed the image (canvas re-encode pipeline)
+// down to well under this, so this is really a backstop for when that
+// compression is bypassed or fails, not a ceiling normal uploads approach.
 // Staff photos stay .jpg — CONFIG.IMAGE_EXTENSIONS on the public site
 // guesses staff photo extensions by trying each in turn, so an existing
 // staff photo's extension has to keep matching what this always writes (see
