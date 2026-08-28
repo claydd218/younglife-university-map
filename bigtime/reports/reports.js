@@ -5,6 +5,14 @@
 // DIVISIONS) the same way bigtime/admin.js does, loaded via plain <script>
 // tags in index.html before this module runs.
 //
+// Generation starts automatically on load (no button to click first) —
+// a loading overlay covers the page until it's done, then dismisses to
+// reveal the report plus Regenerate/Print buttons. Printing is a
+// separate, deliberate action (never automatic): the user reviews the
+// on-screen report first, which doubles as a visual check that
+// everything (especially images — see the load-wait below) actually
+// came through before they commit to printing/saving a PDF.
+//
 // Pagination is plain CSS (break-before/break-inside in index.html's print
 // styles) plus the browser's own native print-to-PDF, not a library —
 // Paged.js was tried first for real page-by-page control (specifically to
@@ -17,13 +25,19 @@
 // name itself is still the section heading, it just won't repeat on
 // pages the browser's own pagination wraps a division onto.
 
-const statusEl = document.getElementById('status');
-const btn = document.getElementById('generate-btn');
+const regenerateBtn = document.getElementById('regenerate-btn');
+const printBtn = document.getElementById('print-btn');
 const output = document.getElementById('report-output');
+const overlay = document.getElementById('loading-overlay');
+const loadingSpinner = document.getElementById('loading-spinner');
+const loadingText = document.getElementById('loading-text');
+const retryBtn = document.getElementById('retry-btn');
 
 function setStatus(text, isError = false) {
-  statusEl.textContent = text;
-  statusEl.classList.toggle('error', isError);
+  loadingText.textContent = text;
+  loadingText.classList.toggle('error', isError);
+  loadingSpinner.hidden = isError;
+  retryBtn.hidden = !isError;
 }
 
 function escapeHtml(str) {
@@ -177,11 +191,13 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
 }
 
 async function generateReport() {
-  btn.disabled = true;
+  overlay.hidden = false;
+  regenerateBtn.hidden = true;
+  printBtn.hidden = true;
   output.classList.remove('ready');
   output.innerHTML = '';
+  setStatus('Loading ministry data…');
   try {
-    setStatus('Loading ministry data…');
     const [rows, divisionByCountry, countryIsoByName] = await Promise.all([
       loadMinistryRows(),
       loadDivisionByCountry(),
@@ -200,14 +216,33 @@ async function generateReport() {
     output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShotUrl);
     output.classList.add('ready');
 
-    setStatus('Ready — opening print dialog. Choose "Save as PDF" as the destination.');
-    window.print();
+    // Waiting for the overlay to dismiss is also a real visual check, not
+    // just a delay — see the buildReportHtml photos: dynamically-inserted
+    // <img>s that haven't finished loading yet render as nothing at all
+    // (alt="" suppresses even the broken-image icon), so without this the
+    // report would visibly *look* done (overlay gone) while still missing
+    // most of its images, the same way it silently did in the printed PDF
+    // before this wait existed.
+    setStatus('Waiting for images to load…');
+    const images = output.querySelectorAll('img');
+    await Promise.all(Array.from(images).map((img) => (
+      img.complete ? Promise.resolve() : new Promise((resolve) => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      })
+    )));
+
+    overlay.hidden = true;
+    regenerateBtn.hidden = false;
+    printBtn.hidden = false;
   } catch (err) {
     console.error(err);
     setStatus(err.message || String(err), true);
-  } finally {
-    btn.disabled = false;
   }
 }
 
-btn.addEventListener('click', generateReport);
+regenerateBtn.addEventListener('click', generateReport);
+retryBtn.addEventListener('click', generateReport);
+printBtn.addEventListener('click', () => window.print());
+
+generateReport();
