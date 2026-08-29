@@ -214,17 +214,7 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
       </section>`);
   }
 
-  // A single element — Chrome's print engine repeats any position:fixed
-  // element on every printed page on its own, so this doesn't need to be
-  // duplicated per page or per division. The tradeoff (accepted per user
-  // decision): it can't vary its text by division/page, since it's
-  // literally the same DOM node reappearing each time, not a fresh
-  // instance — genuine per-page content (e.g. "Division (Continued)")
-  // would need page-aware pagination, which is exactly what Paged.js was
-  // dropped for being unreliable at (see this file's header comment).
-  const footerHtml = `<div class="report-footer">${escapeHtml(REPORT_TITLE)} — ${escapeHtml(generatedLabel)}</div>`;
-
-  return metricsPage + divisionSectionsHtml.join('') + footerHtml;
+  return metricsPage + divisionSectionsHtml.join('');
 }
 
 async function generateReport() {
