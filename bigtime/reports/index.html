@@ -208,6 +208,7 @@
   .ministry-staff-role { font-size: 9.5px; color: #666; line-height: 1.2; }
   .ministry-universities { font-size: 12px; color: #333; }
   .ministry-universities-label { font-weight: 700; }
+  .report-footer { display: none; }
 
   /* Plain, native browser print page geometry — reliably supported
      without any library involved. */
@@ -228,6 +229,20 @@
        page — 460px still leaves a safety margin under a full page's
        available height (measured against both Letter and A4 landscape). */
     .report-map-shot { max-width: 100%; max-height: 460px; width: auto; margin: 0 auto; }
+    /* One element, repeated by Chrome's print engine on every page on its
+       own (position:fixed does this reliably in print, unlike Paged.js's
+       running-element approach) — see reports.js's buildReportHtml for
+       why it can't vary its text by division/page. */
+    .report-footer {
+      display: block;
+      position: fixed;
+      bottom: 6mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 10px;
+      color: #888;
+    }
   }
 
   /* Extra on-screen breathing room that would only waste page space when
