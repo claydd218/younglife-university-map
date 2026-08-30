@@ -1696,21 +1696,21 @@ async function init() {
     };
 
     // Report/map-screenshot-only isolation: colors only divisionKey's own
-    // relevant countries with its division color and shows only its own
-    // marker clusters, regardless of the normal
+    // marker-bearing countries with its division color and shows only its
+    // own marker clusters, regardless of the normal
     // state.countriesWithVisiblePins-driven styling (which colors a
     // country whenever ANY of its markers are currently un-clustered/
     // visible — at a division-wide zoom that was lighting up neighboring
     // divisions' countries too, since their pins were incidentally visible
-    // in the same crop). "Relevant" matches __divisionBounds above: every
-    // assigned country for FULL_COVERAGE_DIVISIONS (Africa), only
-    // marker-bearing ones otherwise — so a division's map never colors a
-    // country it isn't also including in the frame for. Idempotent and
+    // in the same crop). Unlike __divisionBounds above, coloring has no
+    // FULL_COVERAGE_DIVISIONS exception — Africa's map still frames the
+    // whole continent, but only paints the countries that actually have
+    // ministries; a country being in the frame doesn't mean it should
+    // look like it has ministries when it doesn't. Idempotent and
     // self-correcting across repeated calls for different divisions in the
     // same page session — every layer/group is explicitly set on each
     // call, nothing toggled relative to prior state.
     window.__isolateDivision = function (divisionKey) {
-      const fullCoverage = FULL_COVERAGE_DIVISIONS.has(divisionKey);
       const markerCountries = divisionMarkerCountries(divisionKey);
       for (const [key, group] of Object.entries(state.clusterGroups)) {
         if (key === divisionKey) {
@@ -1722,8 +1722,7 @@ async function init() {
       for (const geoJsonLayer of [state.geoLayer, ...state.geoLayerGhosts]) {
         geoJsonLayer.eachLayer((layer) => {
           const name = normalizeCountryName(layer.feature.properties.name);
-          const inDivision = state.countryDivisionByName.get(name) === divisionKey;
-          const shouldColor = inDivision && (fullCoverage || markerCountries.has(name));
+          const shouldColor = markerCountries.has(name);
           if (shouldColor) {
             layer.setStyle({
               fillColor: DIVISIONS[divisionKey].country,
