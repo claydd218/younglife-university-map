@@ -1,8 +1,9 @@
 // Routes GET /bigtime/api/map-screenshot — captures the live public map as
-// a bundle of PNGs: the whole world (same framing as report-screenshot.js's
-// page one) plus one zoomed-in map per division (js/config.js's DIVISIONS),
-// each cropped to fully show that division's countries. Built for
-// /bigtime/maps.
+// a bundle of PNGs: the whole world plus one zoomed-in map per division
+// (js/config.js's DIVISIONS), each cropped to fully show that division's
+// countries. Used by both /bigtime/maps and /bigtime/reports (the world
+// shot is the overview page's map; each division shot sits between that
+// division's title and metrics).
 //
 // Everything is captured from a single browser/page session — Cloudflare
 // Browser Rendering rate-limits new-browser creation, and the previous

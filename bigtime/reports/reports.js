@@ -174,13 +174,13 @@ function metricBoxesHtml(metrics, accent) {
     </div>`).join('')}</div>`;
 }
 
-async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShotUrl) {
+async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots) {
   const generatedLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const metricsPage = `
     <section class="report-page-one">
       <h2 class="report-map-title">${escapeHtml(REPORT_TITLE)}</h2>
       <div class="report-generated-date">${escapeHtml(generatedLabel)}</div>
-      <img class="report-map-shot" src="${mapShotUrl}" alt="Map of ministry locations">
+      <img class="report-map-shot" src="${mapShots.world}" alt="Map of ministry locations">
       ${metricBoxesHtml(computeMetrics(rows))}
     </section>`;
 
@@ -206,11 +206,16 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
     if (!divisionRows || !divisionRows.length) continue;
     divisionRows.sort((a, b) => a.country.localeCompare(b.country) || a.city.localeCompare(b.city));
     const areasHtml = (await Promise.all(divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName, def)))).join('');
+    const divisionMapShot = mapShots.divisions[key];
+    const divisionMapHtml = divisionMapShot
+      ? `<img class="division-map-shot" src="${divisionMapShot}" alt="${escapeHtml(def.label)} map">`
+      : '';
     divisionSectionsHtml.push(`
       <section class="division-section">
         <h2 class="division-title" style="color:${def.pin};border-bottom-color:${def.pin};"><span class="division-title-report-name">${escapeHtml(REPORT_TITLE)} — ${escapeHtml(generatedLabel)}</span><span class="division-title-division-name">${escapeHtml(def.label)}</span></h2>
+        ${divisionMapHtml}
         ${metricBoxesHtml(computeMetrics(divisionRows), def)}
-        ${areasHtml}
+        <div class="division-areas">${areasHtml}</div>
       </section>`);
   }
 
@@ -231,16 +236,16 @@ async function generateReport() {
       loadCountryIsoByName(),
     ]);
 
-    setStatus('Capturing map (this can take a few seconds)…');
-    const shotRes = await fetch('/bigtime/api/report-screenshot');
+    setStatus('Capturing maps (this can take a little while)…');
+    const shotRes = await fetch('/bigtime/api/map-screenshot');
     if (!shotRes.ok) {
       const body = await shotRes.json().catch(() => ({}));
       throw new Error(body.message || `Map screenshot failed (${shotRes.status})`);
     }
-    const mapShotUrl = URL.createObjectURL(await shotRes.blob());
+    const mapShots = await shotRes.json();
 
     setStatus('Building report…');
-    output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShotUrl);
+    output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots);
     output.classList.add('ready');
 
     // Chrome/Safari's print-to-PDF dialog suggests document.title as the
