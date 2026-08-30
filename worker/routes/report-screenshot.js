@@ -3,10 +3,11 @@
 // Browser Rendering (a real headless Chrome instance, via env.BROWSER —
 // see wrangler.toml) rather than a client-side DOM-to-canvas library, since
 // this map is SVG + custom-font/CSS heavy in ways those tend to render
-// imperfectly.
+// imperfectly. Shares its browser-launch/wait/chrome-hiding boilerplate
+// with map-screenshot.js via lib/mapScreenshot.js.
 
-import puppeteer from '@cloudflare/puppeteer';
 import { errorResponse } from '../lib/http.js';
+import { openMapPage, settleAfterReframe } from '../lib/mapScreenshot.js';
 
 // Taller than the public site's own aspect ratio — the extra height is
 // what keeps Patagonia comfortably in frame (with room to spare below it)
@@ -25,43 +26,24 @@ const VIEWPORT = { width: 1600, height: 1120 };
 // via map.getBounds().
 const REPORT_ZOOM = 2.75;
 const REPORT_CENTER = [35, 0];
-// The map fetches its own CSV/GeoJSON data and builds ~250 country shapes
-// plus every ministry marker after the page loads — waitForFunction below
-// is the real gate, this is just a hard backstop against hanging forever
-// if that signal never fires for some reason.
-const READY_TIMEOUT_MS = 20000;
 
 export async function onRequestGet({ request, env }) {
   if (!env.BROWSER) {
     return errorResponse(500, 'Browser Rendering isn\'t configured for this Worker (env.BROWSER missing) — check wrangler.toml\'s [browser] binding and that it\'s enabled on the Cloudflare dashboard for this account.');
   }
 
-  const mapUrl = new URL('/', request.url);
-
   let browser;
   try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
-    await page.setViewport(VIEWPORT);
-    await page.goto(mapUrl.toString(), { waitUntil: 'networkidle0' });
-    await page.waitForFunction('window.__mapReady === true', { timeout: READY_TIMEOUT_MS });
+    const opened = await openMapPage(env, request, VIEWPORT);
+    browser = opened.browser;
+    const { page } = opened;
     // Report-only framing — window.__reportMap is exposed by js/app.js
     // specifically for this. animate:false makes it instant instead of
-    // waiting out Leaflet's pan/zoom transition; the two rAFs afterward
-    // give the vector country layer and marker clusters a moment to
-    // actually redraw at the new zoom before the screenshot is taken.
+    // waiting out Leaflet's pan/zoom transition.
     await page.evaluate(
       `window.__reportMap.setView([${REPORT_CENTER[0]}, ${REPORT_CENTER[1]}], ${REPORT_ZOOM}, { animate: false })`
     );
-    await page.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-    // Report-only cleanup — hides the decorative title bar and every map
-    // control (zoom, the directory/search magnifying-glass icon, Leaflet's
-    // attribution text) so the screenshot is just the map itself. Injected
-    // here rather than in the public site's own CSS/JS so regular visitors
-    // are never affected by report-specific chrome changes.
-    await page.addStyleTag({
-      content: '#site-title, .leaflet-control-container, #legend { display: none !important; }',
-    });
+    await settleAfterReframe(page);
     const png = await page.screenshot({ type: 'png' });
     return new Response(png, {
       headers: {

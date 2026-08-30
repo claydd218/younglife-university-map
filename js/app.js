@@ -1546,11 +1546,67 @@ async function init() {
     }
     console.info(`Plotted ${placed} of ${ministryRows.length} ministry rows.`);
     hideStatus();
-    // Exposed so worker/routes/report-screenshot.js's Puppeteer capture can
-    // reframe the view (setView) before screenshotting — the map itself
-    // has no other reason to be on window, `map` is otherwise just a
-    // module-top-level const.
+    // Exposed so worker/routes/report-screenshot.js and map-screenshot.js's
+    // Puppeteer captures can reframe the view (setView/fitBounds) before
+    // screenshotting — the map itself has no other reason to be on window,
+    // `map` is otherwise just a module-top-level const.
     window.__reportMap = map;
+    // Union of computeMainLandBounds (already antimeridian/archipelago-
+    // safe per country — see its own comment) across every country in one
+    // division. Used by map-screenshot.js to fit each division's zoomed-in
+    // map; returns a plain [[south,west],[north,east]] array (not an
+    // L.LatLngBounds) since that's what survives the Puppeteer
+    // page.evaluate() serialization boundary.
+    //
+    // A division can itself legitimately span the antimeridian — Asia
+    // Pacific runs from Pakistan to Fiji/Tonga/French Polynesia, and the
+    // short way around crosses 180°. Plain LatLngBounds.extend() doesn't
+    // know that, so this applies the same "anchor on the biggest box, shift
+    // every other box by whichever multiple of 360 lands it closest to that
+    // anchor" trick computeMainLandBounds uses for one country's split
+    // multipolygon pieces, just one level up (across countries instead of
+    // across polygon pieces).
+    window.__divisionBounds = function (divisionKey) {
+      const boxes = [];
+      state.geoLayer.eachLayer((layer) => {
+        const name = normalizeCountryName(layer.feature.properties.name);
+        if (state.countryDivisionByName.get(name) !== divisionKey) return;
+        const b = computeMainLandBounds(layer.feature);
+        const west = b.getWest(), east = b.getEast(), south = b.getSouth(), north = b.getNorth();
+        boxes.push({ west, east, south, north, area: (east - west) * (north - south) });
+      });
+      if (!boxes.length) return null;
+
+      let anchor = boxes[0];
+      for (const b of boxes) if (b.area > anchor.area) anchor = b;
+      const anchorCenterLng = (anchor.west + anchor.east) / 2;
+      const anchorCenterLat = (anchor.south + anchor.north) / 2;
+      // Remote micro-territories (Fiji, Tonga, French Polynesia, etc. in
+      // Asia Pacific) would otherwise stretch a division's "zoomed in" map
+      // out to nearly a hemisphere for a handful of tiny dots — excluded
+      // here the same way computeMainLandBounds excludes a country's own
+      // far-flung islands, just at continental scale (a bigger threshold:
+      // country-to-country distances are naturally much larger than
+      // island-to-mainland ones within a single country).
+      const CLOSE_ENOUGH_DEGREES = 25;
+
+      let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      for (const b of boxes) {
+        const centerLng = (b.west + b.east) / 2;
+        const centerLat = (b.south + b.north) / 2;
+        const shift = Math.round((anchorCenterLng - centerLng) / 360) * 360;
+        const shiftedWest = b.west + shift, shiftedEast = b.east + shift;
+        const dist = Math.hypot((centerLng + shift) - anchorCenterLng, centerLat - anchorCenterLat);
+        const closeEnough = dist <= CLOSE_ENOUGH_DEGREES;
+        const bigEnough = b.area >= anchor.area * 0.1;
+        if (b !== anchor && !closeEnough && !bigEnough) continue;
+        if (shiftedWest < minLng) minLng = shiftedWest;
+        if (shiftedEast > maxLng) maxLng = shiftedEast;
+        if (b.south < minLat) minLat = b.south;
+        if (b.north > maxLat) maxLat = b.north;
+      }
+      return [[minLat, minLng], [maxLat, maxLng]];
+    };
     // Signal for worker/routes/report-screenshot.js's Puppeteer capture to
     // wait on (page.waitForFunction) — everything above this point is
     // synchronous DOM work, so once it's run the map is visually complete.
