@@ -1,9 +1,20 @@
-// Routes GET /bigtime/api/map-screenshot[?division=<key>] — captures the
-// live public map as a PNG, either the whole world (no division param, same
-// framing as report-screenshot.js's page one) or zoomed to fully show one
-// division's countries (division param, one of js/config.js's DIVISIONS
-// keys). Built for /bigtime/maps. Shares its browser-launch/wait/
-// chrome-hiding boilerplate with report-screenshot.js via lib/mapScreenshot.js.
+// Routes GET /bigtime/api/map-screenshot — captures the live public map as
+// a bundle of PNGs: the whole world (same framing as report-screenshot.js's
+// page one) plus one zoomed-in map per division (js/config.js's DIVISIONS),
+// each cropped to fully show that division's countries. Built for
+// /bigtime/maps.
+//
+// Everything is captured from a single browser/page session — Cloudflare
+// Browser Rendering rate-limits new-browser creation, and the previous
+// version (one browser launch per division, six total per page load) hit
+// that limit ("Unable to create new browser: 429"). One navigation/wait,
+// then reframe-and-reshoot per view, avoids six repeats of the page load
+// and stays well under that limit regardless of how many divisions exist.
+//
+// Response is JSON: { world: "data:image/png;base64,...", divisions: {
+// <key>: "data:image/png;base64,...", ... } } — base64 data URLs rather
+// than a raw multi-image response so the client can just set them as
+// <img src> directly.
 
 import { errorResponse } from '../lib/http.js';
 import { openMapPage, settleAfterReframe } from '../lib/mapScreenshot.js';
@@ -28,24 +39,47 @@ const DIVISION_PADDING = [40, 40];
 // was used to measure it.
 const ASPECT_REFERENCE_ZOOM = 10;
 
+// The Workers runtime has no Buffer.toString('base64') without leaning on
+// nodejs_compat internals — btoa() is the portable primitive, but it only
+// accepts a binary string, so this builds that string in chunks (a single
+// String.fromCharCode(...bytes) call on a multi-hundred-KB PNG risks
+// blowing the call stack).
+function toBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function toDataUrl(page) {
+  const png = await page.screenshot({ type: 'png' });
+  return `data:image/png;base64,${toBase64(png)}`;
+}
+
 export async function onRequestGet({ request, env }) {
   if (!env.BROWSER) {
     return errorResponse(500, 'Browser Rendering isn\'t configured for this Worker (env.BROWSER missing) — check wrangler.toml\'s [browser] binding and that it\'s enabled on the Cloudflare dashboard for this account.');
   }
 
-  const division = new URL(request.url).searchParams.get('division');
-
   let browser;
   try {
-    if (division) {
-      // A throwaway small viewport just to get the page loaded — resized
-      // below once the division's actual bounds/aspect ratio are known.
-      const opened = await openMapPage(env, request, { width: 1024, height: 768 });
-      browser = opened.browser;
-      const { page } = opened;
+    const opened = await openMapPage(env, request, WORLD_VIEWPORT);
+    browser = opened.browser;
+    const { page } = opened;
 
-      const bounds = await page.evaluate(`window.__divisionBounds(${JSON.stringify(division)})`);
-      if (!bounds) return errorResponse(400, `Unknown or empty division: ${division}`);
+    await page.evaluate(
+      `window.__reportMap.setView([${WORLD_CENTER[0]}, ${WORLD_CENTER[1]}], ${WORLD_ZOOM}, { animate: false })`
+    );
+    await settleAfterReframe(page);
+    const world = await toDataUrl(page);
+
+    const divisionKeys = await page.evaluate('Object.keys(DIVISIONS)');
+    const divisions = {};
+    for (const key of divisionKeys) {
+      const bounds = await page.evaluate(`window.__divisionBounds(${JSON.stringify(key)})`);
+      if (!bounds) continue; // no countries currently mapped to this division
 
       const aspect = await page.evaluate(`(() => {
         const map = window.__reportMap;
@@ -67,21 +101,12 @@ export async function onRequestGet({ request, env }) {
         `window.__reportMap.fitBounds(${JSON.stringify(bounds)}, { padding: ${JSON.stringify(DIVISION_PADDING)}, animate: false })`
       );
       await settleAfterReframe(page);
-
-      const png = await page.screenshot({ type: 'png' });
-      return new Response(png, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' } });
+      divisions[key] = await toDataUrl(page);
     }
 
-    const opened = await openMapPage(env, request, WORLD_VIEWPORT);
-    browser = opened.browser;
-    const { page } = opened;
-    await page.evaluate(
-      `window.__reportMap.setView([${WORLD_CENTER[0]}, ${WORLD_CENTER[1]}], ${WORLD_ZOOM}, { animate: false })`
-    );
-    await settleAfterReframe(page);
-
-    const png = await page.screenshot({ type: 'png' });
-    return new Response(png, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' } });
+    return new Response(JSON.stringify({ world, divisions }), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
   } catch (err) {
     return errorResponse(500, `Map screenshot failed: ${err.message || err}`);
   } finally {

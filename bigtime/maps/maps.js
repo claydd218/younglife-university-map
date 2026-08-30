@@ -4,11 +4,17 @@
 // division, each cropped to fully show that division's colored countries.
 // The actual framing/cropping happens server-side in
 // worker/routes/map-screenshot.js (via js/app.js's window.__divisionBounds
-// helper); this file just fetches those PNGs and lays them out.
+// helper); this file just fetches the resulting bundle and lays it out.
+//
+// One fetch, not one per view — map-screenshot.js captures everything from
+// a single browser/page session. An earlier version fetched each view
+// separately (one browser launch per division, six total), which hit
+// Cloudflare Browser Rendering's new-browser-creation rate limit
+// ("Unable to create new browser: 429").
 //
 // Generation starts automatically on load, same pattern as
 // bigtime/reports — a loading overlay covers the page until every image
-// has been captured and loaded, then dismisses.
+// has loaded, then dismisses.
 
 const output = document.getElementById('maps-output');
 const overlay = document.getElementById('loading-overlay');
@@ -28,16 +34,13 @@ function escapeHtml(str) {
   return (str || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-async function fetchMapShot(division) {
-  const url = division
-    ? `/bigtime/api/map-screenshot?division=${encodeURIComponent(division)}`
-    : '/bigtime/api/map-screenshot';
-  const res = await fetch(url);
+async function fetchMapShots() {
+  const res = await fetch('/bigtime/api/map-screenshot');
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message || `Map screenshot failed (${res.status})`);
   }
-  return URL.createObjectURL(await res.blob());
+  return res.json();
 }
 
 async function generateMaps() {
@@ -46,29 +49,21 @@ async function generateMaps() {
   output.classList.remove('ready');
   output.innerHTML = '';
   try {
-    // Sequential, not parallel — each capture is its own headless-Chrome
-    // launch server-side (Cloudflare Browser Rendering); running all 6 at
-    // once would multiply that cost/concurrency for no real benefit on a
-    // hidden, low-traffic page like this one.
-    setStatus('Capturing world map…');
-    const worldShotUrl = await fetchMapShot(null);
-
-    const divisionShots = [];
-    for (const [key, def] of Object.entries(DIVISIONS)) {
-      setStatus(`Capturing ${def.label}…`);
-      divisionShots.push({ def, url: await fetchMapShot(key) });
-    }
+    setStatus('Capturing maps (this can take a little while)…');
+    const { world, divisions } = await fetchMapShots();
 
     setStatus('Building page…');
     const blocksHtml = [
       `<section class="map-block">
         <h2 class="map-title">World</h2>
-        <img class="map-shot" src="${worldShotUrl}" alt="World map">
+        <img class="map-shot" src="${world}" alt="World map">
       </section>`,
-      ...divisionShots.map(({ def, url }) => `
+      ...Object.entries(DIVISIONS)
+        .filter(([key]) => divisions[key])
+        .map(([key, def]) => `
       <section class="map-block">
         <h2 class="map-title" style="color:${def.pin};">${escapeHtml(def.label)}</h2>
-        <img class="map-shot" src="${url}" alt="${escapeHtml(def.label)} map">
+        <img class="map-shot" src="${divisions[key]}" alt="${escapeHtml(def.label)} map">
       </section>`),
     ];
     output.innerHTML = blocksHtml.join('');
