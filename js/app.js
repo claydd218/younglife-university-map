@@ -1551,61 +1551,137 @@ async function init() {
     // screenshotting — the map itself has no other reason to be on window,
     // `map` is otherwise just a module-top-level const.
     window.__reportMap = map;
-    // Union of computeMainLandBounds (already antimeridian/archipelago-
-    // safe per country — see its own comment) across every country in one
-    // division. Used by map-screenshot.js to fit each division's zoomed-in
-    // map; returns a plain [[south,west],[north,east]] array (not an
-    // L.LatLngBounds) since that's what survives the Puppeteer
-    // page.evaluate() serialization boundary.
-    //
-    // A division can itself legitimately span the antimeridian — Asia
-    // Pacific runs from Pakistan to Fiji/Tonga/French Polynesia, and the
-    // short way around crosses 180°. Plain LatLngBounds.extend() doesn't
-    // know that, so this applies the same "anchor on the biggest box, shift
-    // every other box by whichever multiple of 360 lands it closest to that
-    // anchor" trick computeMainLandBounds uses for one country's split
-    // multipolygon pieces, just one level up (across countries instead of
-    // across polygon pieces).
+    // Same anchor-and-shift-outliers trick as computeMainLandBounds, but
+    // flattened across every polygon piece of every country in one
+    // division at once — not done per-country-then-unioned, because a
+    // country's own computeMainLandBounds can legitimately keep a piece
+    // that's "big enough" relative to that one country (e.g. Svalbard is
+    // >10% of mainland Norway's bbox, so it survives Norway's own
+    // country-level bounds) while still being an outlier relative to the
+    // division as a whole (all of Europe). Flattening first means the
+    // anchor is always the single largest landmass in the whole division,
+    // so something like Svalbard gets judged against Europe's mainland,
+    // not just against Norway alone. Used by map-screenshot.js to fit each
+    // division's zoomed-in map; returns a plain [[south,west],[north,east]]
+    // array (not an L.LatLngBounds) since that's what survives the
+    // Puppeteer page.evaluate() serialization boundary.
     window.__divisionBounds = function (divisionKey) {
-      const boxes = [];
+      const pieces = [];
       state.geoLayer.eachLayer((layer) => {
         const name = normalizeCountryName(layer.feature.properties.name);
         if (state.countryDivisionByName.get(name) !== divisionKey) return;
-        const b = computeMainLandBounds(layer.feature);
-        const west = b.getWest(), east = b.getEast(), south = b.getSouth(), north = b.getNorth();
-        boxes.push({ west, east, south, north, area: (east - west) * (north - south) });
+        const geom = layer.feature.geometry;
+        const polygons = geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
+        for (const poly of polygons) {
+          const ring = poly[0]; // outer ring; holes don't matter for a bbox
+          let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity;
+          for (const [lng, lat] of ring) {
+            if (lng < west) west = lng;
+            if (lng > east) east = lng;
+            if (lat < south) south = lat;
+            if (lat > north) north = lat;
+          }
+          pieces.push({ west, east, south, north, area: (east - west) * (north - south) });
+        }
       });
-      if (!boxes.length) return null;
+      if (!pieces.length) return null;
 
-      let anchor = boxes[0];
-      for (const b of boxes) if (b.area > anchor.area) anchor = b;
+      let anchor = pieces[0];
+      for (const p of pieces) if (p.area > anchor.area) anchor = p;
       const anchorCenterLng = (anchor.west + anchor.east) / 2;
-      const anchorCenterLat = (anchor.south + anchor.north) / 2;
-      // Remote micro-territories (Fiji, Tonga, French Polynesia, etc. in
-      // Asia Pacific) would otherwise stretch a division's "zoomed in" map
-      // out to nearly a hemisphere for a handful of tiny dots — excluded
-      // here the same way computeMainLandBounds excludes a country's own
-      // far-flung islands, just at continental scale (a bigger threshold:
-      // country-to-country distances are naturally much larger than
-      // island-to-mainland ones within a single country).
-      const CLOSE_ENOUGH_DEGREES = 25;
+
+      // A division can itself legitimately span the antimeridian (Asia
+      // Pacific runs from Pakistan to Fiji/Tonga, and the short way around
+      // crosses 180°) — every piece and every marker below gets shifted by
+      // whichever multiple of 360 lands it closest to the anchor, same
+      // trick computeMainLandBounds uses for one country's split
+      // multipolygon pieces.
+      //
+      // A piece earns a spot in frame if it's the anchor, or if a real
+      // ministry marker from this division sits near it — data-driven
+      // rather than a generic size/distance cutoff, because no fixed
+      // threshold cleanly separates "a country's own far corner, worth
+      // showing" from "a colored-but-empty remote fragment, not worth
+      // stretching the frame for": Svalbard (an outlying piece of Norway,
+      // zero ministries out there) and Iceland (zero ministries at all)
+      // sit at almost the same size/distance-from-anchor as several
+      // countries this map genuinely needs to show in full (Germany,
+      // Chile, Kazakhstan, etc.). A country's own marker sits inside its
+      // own polygon, so this trivially keeps every country that actually
+      // has ministries, in full — it only excludes pieces nothing is
+      // actually near.
+      const markerPoints = [];
+      for (const [countryName, entries] of state.markersByCountry) {
+        if (state.countryDivisionByName.get(countryName) !== divisionKey) continue;
+        for (const { marker } of entries) {
+          const ll = marker.getLatLng();
+          const shift = Math.round((anchorCenterLng - ll.lng) / 360) * 360;
+          markerPoints.push({ lng: ll.lng + shift, lat: ll.lat });
+        }
+      }
+      const MARKER_PROXIMITY_DEGREES = 15;
 
       let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-      for (const b of boxes) {
-        const centerLng = (b.west + b.east) / 2;
-        const centerLat = (b.south + b.north) / 2;
+      for (const p of pieces) {
+        const centerLng = (p.west + p.east) / 2;
+        const centerLat = (p.south + p.north) / 2;
         const shift = Math.round((anchorCenterLng - centerLng) / 360) * 360;
-        const shiftedWest = b.west + shift, shiftedEast = b.east + shift;
-        const dist = Math.hypot((centerLng + shift) - anchorCenterLng, centerLat - anchorCenterLat);
-        const closeEnough = dist <= CLOSE_ENOUGH_DEGREES;
-        const bigEnough = b.area >= anchor.area * 0.1;
-        if (b !== anchor && !closeEnough && !bigEnough) continue;
+        const shiftedWest = p.west + shift, shiftedEast = p.east + shift;
+        const shiftedCenterLng = centerLng + shift;
+        const nearMarker = p === anchor || markerPoints.some(
+          (m) => Math.hypot(m.lng - shiftedCenterLng, m.lat - centerLat) <= MARKER_PROXIMITY_DEGREES
+        );
+        if (!nearMarker) continue;
         if (shiftedWest < minLng) minLng = shiftedWest;
         if (shiftedEast > maxLng) maxLng = shiftedEast;
-        if (b.south < minLat) minLat = b.south;
-        if (b.north > maxLat) maxLat = b.north;
+        if (p.south < minLat) minLat = p.south;
+        if (p.north > maxLat) maxLat = p.north;
       }
+      // A division with zero ministry markers anywhere (shouldn't happen
+      // today, but nothing guarantees it never will) would otherwise
+      // return an empty/invalid box — fall back to the anchor alone.
+      if (minLng === Infinity) return [[anchor.south, anchor.west], [anchor.north, anchor.east]];
       return [[minLat, minLng], [maxLat, maxLng]];
+    };
+
+    // Report/map-screenshot-only isolation: colors only divisionKey's own
+    // countries with its division color and shows only its own marker
+    // clusters, regardless of the normal state.countriesWithVisiblePins-
+    // driven styling (which colors a country whenever ANY of its markers
+    // are currently un-clustered/visible — at a division-wide zoom that
+    // was lighting up neighboring divisions' countries too, since their
+    // pins were incidentally visible in the same crop). Idempotent and
+    // self-correcting across repeated calls for different divisions in the
+    // same page session — every layer/group is explicitly set on each
+    // call, nothing toggled relative to prior state.
+    window.__isolateDivision = function (divisionKey) {
+      for (const [key, group] of Object.entries(state.clusterGroups)) {
+        if (key === divisionKey) {
+          if (!map.hasLayer(group)) map.addLayer(group);
+        } else if (map.hasLayer(group)) {
+          map.removeLayer(group);
+        }
+      }
+      for (const geoJsonLayer of [state.geoLayer, ...state.geoLayerGhosts]) {
+        geoJsonLayer.eachLayer((layer) => {
+          const name = normalizeCountryName(layer.feature.properties.name);
+          if (state.countryDivisionByName.get(name) === divisionKey) {
+            layer.setStyle({
+              fillColor: DIVISIONS[divisionKey].country,
+              fillOpacity: 0.85,
+              color: HIGHLIGHT_BORDER,
+              weight: 0.8,
+            });
+          } else {
+            layer.setStyle({
+              fillColor: DEFAULT_LAND_FILL,
+              fillOpacity: 0.9,
+              color: DEFAULT_LAND_BORDER,
+              weight: 0.5,
+            });
+          }
+        });
+      }
     };
     // Signal for worker/routes/report-screenshot.js's Puppeteer capture to
     // wait on (page.waitForFunction) — everything above this point is

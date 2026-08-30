@@ -81,6 +81,11 @@ export async function onRequestGet({ request, env }) {
       const bounds = await page.evaluate(`window.__divisionBounds(${JSON.stringify(key)})`);
       if (!bounds) continue; // no countries currently mapped to this division
 
+      // Only this division's own countries/pins should be colored —
+      // otherwise whatever else happened to be un-clustered/visible in
+      // this crop (a neighboring division's countries) lit up too.
+      await page.evaluate(`window.__isolateDivision(${JSON.stringify(key)})`);
+
       const aspect = await page.evaluate(`(() => {
         const map = window.__reportMap;
         const b = ${JSON.stringify(bounds)};
