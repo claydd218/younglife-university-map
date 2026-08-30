@@ -1621,11 +1621,25 @@ async function init() {
         let anchor = pieces[0];
         for (const p of pieces) if (p.area > anchor.area) anchor = p;
         const anchorCenterLng = (anchor.west + anchor.east) / 2;
+        const anchorCenterLat = (anchor.south + anchor.north) / 2;
+        // Full coverage still excludes a country's own tiny, far-flung
+        // possessions (South Africa's Prince Edward Islands, ~12° south of
+        // the mainland) — otherwise one subantarctic speck drags the whole
+        // continent's frame down to include a huge stretch of empty ocean
+        // for a dot too small to even see. A real landmass (Madagascar,
+        // 65° from the mainland anchor but a substantial island) still
+        // gets through on size alone.
+        const CLOSE_ENOUGH_DEGREES = 25;
         let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
         for (const p of pieces) {
           const centerLng = (p.west + p.east) / 2;
+          const centerLat = (p.south + p.north) / 2;
           const shift = Math.round((anchorCenterLng - centerLng) / 360) * 360;
           const shiftedWest = p.west + shift, shiftedEast = p.east + shift;
+          const dist = Math.hypot((centerLng + shift) - anchorCenterLng, centerLat - anchorCenterLat);
+          const closeEnough = dist <= CLOSE_ENOUGH_DEGREES;
+          const bigEnough = p.area >= anchor.area * 0.1;
+          if (p !== anchor && !closeEnough && !bigEnough) continue;
           if (shiftedWest < minLng) minLng = shiftedWest;
           if (shiftedEast > maxLng) maxLng = shiftedEast;
           if (p.south < minLat) minLat = p.south;
