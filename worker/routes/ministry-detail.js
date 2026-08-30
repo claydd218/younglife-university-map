@@ -7,8 +7,9 @@ import { ValidationError } from '../lib/text.js';
 import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
 import { MINISTRIES_PATH, HEADER, rowFromBody } from '../lib/ministries.js';
 import { bumpDeployVersion } from '../lib/deployVersion.js';
+import { regenerateMapArchive } from '../lib/mapArchive.js';
 
-export async function onRequestPut({ request, env, params }) {
+export async function onRequestPut({ request, env, ctx, params }) {
   let body;
   try {
     body = await request.json();
@@ -58,10 +59,20 @@ export async function onRequestPut({ request, env, params }) {
   }
 
   const deployVersion = await bumpDeployVersion(env, committerFromRequest(request));
+  // Editing a ministry area can move a pin/change its country — see
+  // onRequestPost in ministries.js for why this is detached and waits for
+  // the deploy first.
+  if (ctx) {
+    ctx.waitUntil(
+      regenerateMapArchive(env, request, deployVersion, committerFromRequest(request)).catch((err) => {
+        console.error('Map archive regeneration failed:', err);
+      })
+    );
+  }
   return jsonResponse({ ok: true, id: updatedRow.id, sha: result.sha, deployVersion });
 }
 
-export async function onRequestDelete({ request, env, params }) {
+export async function onRequestDelete({ request, env, ctx, params }) {
   let body = {};
   try {
     body = await request.json();
@@ -93,5 +104,15 @@ export async function onRequestDelete({ request, env, params }) {
   }
 
   const deployVersion = await bumpDeployVersion(env, committerFromRequest(request));
+  // Removing a ministry area can remove a pin/country's only marker — see
+  // onRequestPost in ministries.js for why this is detached and waits for
+  // the deploy first.
+  if (ctx) {
+    ctx.waitUntil(
+      regenerateMapArchive(env, request, deployVersion, committerFromRequest(request)).catch((err) => {
+        console.error('Map archive regeneration failed:', err);
+      })
+    );
+  }
   return jsonResponse({ ok: true, sha: result.sha, deployVersion });
 }

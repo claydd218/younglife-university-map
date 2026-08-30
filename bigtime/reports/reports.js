@@ -236,13 +236,17 @@ async function generateReport() {
       loadCountryIsoByName(),
     ]);
 
-    setStatus('Capturing maps (this can take a little while)…');
-    const shotRes = await fetch('/bigtime/api/map-screenshot');
-    if (!shotRes.ok) {
-      const body = await shotRes.json().catch(() => ({}));
-      throw new Error(body.message || `Map screenshot failed (${shotRes.status})`);
-    }
-    const mapShots = await shotRes.json();
+    // Cached PNGs, not a live capture — worker/lib/mapArchive.js keeps
+    // maps/*.png current automatically whenever a ministry area is added,
+    // edited, or removed, so the report never has to wait on a fresh
+    // Puppeteer capture just to load. The filename never changes even when
+    // the file's content does, so a cache-busting query param is the only
+    // way to avoid the browser serving a stale copy across page loads.
+    const cacheBust = Date.now();
+    const mapShots = {
+      world: `../../maps/world.png?v=${cacheBust}`,
+      divisions: Object.fromEntries(Object.keys(DIVISIONS).map((key) => [key, `../../maps/${key}.png?v=${cacheBust}`])),
+    };
 
     setStatus('Building report…');
     output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots);

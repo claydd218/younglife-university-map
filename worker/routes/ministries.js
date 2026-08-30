@@ -11,6 +11,7 @@ import { ValidationError } from '../lib/text.js';
 import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
 import { MINISTRIES_PATH, HEADER, loadDivisions, rowToApi, rowFromBody, maxId } from '../lib/ministries.js';
 import { bumpDeployVersion } from '../lib/deployVersion.js';
+import { regenerateMapArchive } from '../lib/mapArchive.js';
 
 export async function onRequestGet({ env }) {
   const file = await getFile(env, MINISTRIES_PATH);
@@ -33,7 +34,7 @@ export async function onRequestGet({ env }) {
   });
 }
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, ctx }) {
   let body;
   try {
     body = await request.json();
@@ -76,5 +77,16 @@ export async function onRequestPost({ request, env }) {
   }
 
   const deployVersion = await bumpDeployVersion(env, committerFromRequest(request));
+  // Adding a ministry area can introduce a new pin/country — regenerate the
+  // cached maps/*.png files so /bigtime/reports and /bigtime/maps stay
+  // current. Detached (never awaited by this response): waits for this
+  // change to actually go live first, then captures and commits.
+  if (ctx) {
+    ctx.waitUntil(
+      regenerateMapArchive(env, request, deployVersion, committerFromRequest(request)).catch((err) => {
+        console.error('Map archive regeneration failed:', err);
+      })
+    );
+  }
   return jsonResponse({ ok: true, id: newRow.id, sha: result.sha, deployVersion });
 }
