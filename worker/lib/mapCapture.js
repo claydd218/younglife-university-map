@@ -70,7 +70,16 @@ export function toBase64(bytes) {
   return btoa(binary);
 }
 
+// Experimental — showing every individual pin instead of cluster badges,
+// to see how crowded the maps look. Capture-only (js/app.js's
+// __disableClusteringForCapture never touches the live interactive site);
+// flip back to false to go back to clustered captures.
+const SHOW_ALL_PINS_NO_CLUSTER = true;
+
 async function captureWithPage(page) {
+  if (SHOW_ALL_PINS_NO_CLUSTER) {
+    await page.evaluate('window.__disableClusteringForCapture()');
+  }
   await page.evaluate(
     `window.__reportMap.setView([${WORLD_CENTER[0]}, ${WORLD_CENTER[1]}], ${WORLD_ZOOM}, { animate: false })`
   );

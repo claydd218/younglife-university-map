@@ -1552,6 +1552,28 @@ async function init() {
     // `map` is otherwise just a module-top-level const.
     window.__reportMap = map;
 
+    // Capture-only, experimental: swaps every division's clustered marker
+    // group for a plain (unclustered) L.layerGroup holding the exact same
+    // marker instances, so every individual pin renders instead of a
+    // cluster badge with a count. Only ever called from
+    // worker/lib/mapCapture.js's Puppeteer session — never wired into the
+    // normal page load, so regular site visitors always see the real
+    // clustered map. Replaces state.clusterGroups[key] in place, so
+    // __isolateDivision's existing add/removeLayer logic (which just
+    // iterates that same object) keeps working unchanged on the plain
+    // groups.
+    window.__disableClusteringForCapture = function () {
+      for (const key of Object.keys(state.clusterGroups)) {
+        const clusterGroup = state.clusterGroups[key];
+        const onMap = map.hasLayer(clusterGroup);
+        const markers = clusterGroup.getLayers();
+        if (onMap) map.removeLayer(clusterGroup);
+        const plainGroup = L.layerGroup(markers);
+        state.clusterGroups[key] = plainGroup;
+        if (onMap) plainGroup.addTo(map);
+      }
+    };
+
     // Africa's ministries are sparse relative to its landmass (most of its
     // division-assigned countries have zero ministry rows), but the org
     // wants its map/report to always read as the whole continent anyway —
