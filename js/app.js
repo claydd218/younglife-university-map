@@ -1684,6 +1684,17 @@ async function init() {
       const MARKER_PROXIMITY_DEGREES = 15;
 
       let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      // Proximity alone (nearMarker) pulls in whichever direction the
+      // nearest neighboring countries happen to sit, which isn't always
+      // where the map should actually extend — Middle East & Central
+      // Asia's markers (Russia, Kazakhstan, Uzbekistan, Kyrgyzstan) are
+      // roughly as close to Turkey (worth keeping) as to Iran/Iraq/
+      // Afghanistan (not, once they pull the frame's south edge that far
+      // down). coreMinLat tracks how far south the anchor/own-marker
+      // pieces alone would reach, and clamps the final south edge to that
+      // — proximity can still extend north/east/west, just not drag the
+      // bottom of the frame down toward a cluster of markerless countries.
+      let coreMinLat = Infinity;
       for (const p of pieces) {
         const centerLng = (p.west + p.east) / 2;
         const centerLat = (p.south + p.north) / 2;
@@ -1701,7 +1712,11 @@ async function init() {
         if (shiftedEast > maxLng) maxLng = shiftedEast;
         if (p.south < minLat) minLat = p.south;
         if (p.north > maxLat) maxLat = p.north;
+        if (p === anchor || containsOwnMarker) {
+          if (p.south < coreMinLat) coreMinLat = p.south;
+        }
       }
+      if (coreMinLat !== Infinity) minLat = Math.max(minLat, coreMinLat);
       // A division with zero ministry markers anywhere (shouldn't happen
       // today, but nothing guarantees it never will) would otherwise
       // return an empty/invalid box — fall back to the anchor alone.
