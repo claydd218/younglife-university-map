@@ -74,9 +74,18 @@ async function generatePdf(env, request) {
       const footerText = key === 'overview'
         ? `Young Life University International Ministries — ${generatedLabel}`
         : `Young Life University International Ministries — ${divisionLabels[key]} — ${generatedLabel}`;
+      // Explicit format/landscape/margin, not preferCSSPageSize — the
+      // page's own @page rule sets `size: landscape` (a bare keyword, no
+      // explicit dimensions), and letting Chrome's PDF engine resolve
+      // that itself produced a nonsense page size ("Invalid typed array
+      // length: 165408426" — ~158MB for a few PNG-embedded pages is not
+      // real content, it's a degenerate size calculation). Format+margin
+      // here reproduce the same geometry explicitly instead.
       const pdfBytes = await page.pdf({
+        format: 'Letter',
+        landscape: true,
+        margin: { top: '14mm', right: '16mm', bottom: '14mm', left: '16mm' },
         printBackground: true,
-        preferCSSPageSize: true,
         displayHeaderFooter: true,
         headerTemplate: '<span></span>',
         footerTemplate: footerTemplateFor(footerText),

@@ -215,10 +215,15 @@
   .ministry-universities { font-size: 12px; color: #333; }
   .ministry-universities-label { font-weight: 700; }
 
-  /* Plain, native browser print page geometry — worker/routes/report-pdf.js
-     passes preferCSSPageSize:true to Puppeteer's page.pdf() specifically
-     so it honors this rule instead of a hardcoded format, reusing the
-     exact page geometry already tuned for bigtime/reports/. */
+  /* Plain, native browser print page geometry — for a manual Ctrl+P of
+     this on-screen preview only. The real PDF (worker/routes/report-pdf.js)
+     doesn't depend on this rule at all: it passes explicit
+     format:'Letter', landscape:true, and matching margins straight to
+     Puppeteer's page.pdf() instead of preferCSSPageSize, since Chrome's
+     PDF engine choked on this rule's bare `size: landscape` keyword
+     (no explicit dimensions) and produced a garbage page size. Kept in
+     sync by hand — if this changes, update report-pdf.js's page.pdf()
+     options to match. */
   @page {
     size: landscape;
     margin: 14mm 16mm;
