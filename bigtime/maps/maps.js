@@ -85,6 +85,16 @@ async function loadCachedMaps() {
   }
 }
 
+// Slightly longer than worker/lib/mapCapture.js's own 280s internal
+// timeout — that one should always fire first and return a real error
+// response; this is just the backstop for cases where the request itself
+// never completes at all (a platform-level hang, not a capture bug), so a
+// stuck Browser Rendering session can't leave this page waiting forever
+// with no way out but a manual reload. A real observed successful capture
+// took 3+ minutes, hence the generous margin above that rather than above
+// what "should" be a fast operation.
+const REGENERATE_TIMEOUT_MS = 300000;
+
 async function regenerateLive() {
   overlay.hidden = false;
   regenerateBtn.hidden = true;
@@ -92,7 +102,19 @@ async function regenerateLive() {
   output.innerHTML = '';
   try {
     setStatus('Capturing maps (this can take a little while)…');
-    const res = await fetch('/bigtime/api/map-screenshot');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REGENERATE_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch('/bigtime/api/map-screenshot', { signal: controller.signal });
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error(`Timed out after ${REGENERATE_TIMEOUT_MS / 1000}s waiting for the capture — try again in a bit.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.message || `Map screenshot failed (${res.status})`);

@@ -13,6 +13,33 @@ const WORLD_VIEWPORT = { width: 1600, height: 1120 };
 const WORLD_ZOOM = 2.75;
 const WORLD_CENTER = [35, 0];
 
+// Only openMapPage's own initial page.waitForFunction('__mapReady') has a
+// timeout of its own — every page.evaluate()/screenshot() call after that
+// (five divisions' worth: bounds, isolate, aspect, fitBounds, screenshot,
+// each a separate round trip to the remote Browser Rendering session) has
+// none, so a single stuck session (a dropped CDP connection, not a real JS
+// loop — the JS itself is simple, bounded work) would otherwise hang the
+// whole request, and the Worker's response along with it, indefinitely.
+// This is the backstop for the entire capture, not just one step. Set high
+// — a real observed successful run took 3+ minutes (the remote-browser
+// round trips add up), so this needs real headroom above normal, not just
+// above what "should" be fast.
+const CAPTURE_TIMEOUT_MS = 280000;
+// browser.close() itself talking to a session that's already wedged could
+// hang too — this keeps a stuck cleanup from also hanging the request that
+// triggered it. The underlying Browser Rendering session still gets torn
+// down server-side by Cloudflare on its own even if this particular close()
+// call never resolves.
+const CLOSE_TIMEOUT_MS = 5000;
+
+function withTimeout(promise, ms, message) {
+  let timeoutId;
+  const timeout = new Promise((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
 // Divisions vary hugely in shape, not just size — Europe is tall and
 // narrow (Iceland to Turkey), Middle East & Central Asia is wide and flat
 // (Turkey to Russia's Pacific coast). Rather than force every division
@@ -43,56 +70,66 @@ export function toBase64(bytes) {
   return btoa(binary);
 }
 
+async function captureWithPage(page) {
+  await page.evaluate(
+    `window.__reportMap.setView([${WORLD_CENTER[0]}, ${WORLD_CENTER[1]}], ${WORLD_ZOOM}, { animate: false })`
+  );
+  await settleAfterReframe(page);
+  const world = await page.screenshot({ type: 'png' });
+
+  const divisionKeys = await page.evaluate('Object.keys(DIVISIONS)');
+  const divisions = {};
+  for (const key of divisionKeys) {
+    const bounds = await page.evaluate(`window.__divisionBounds(${JSON.stringify(key)})`);
+    if (!bounds) continue; // no countries currently mapped to this division
+
+    // Only this division's own countries/pins should be colored —
+    // otherwise whatever else happened to be un-clustered/visible in
+    // this crop (a neighboring division's countries) lit up too.
+    await page.evaluate(`window.__isolateDivision(${JSON.stringify(key)})`);
+
+    const aspect = await page.evaluate(`(() => {
+      const map = window.__reportMap;
+      const b = ${JSON.stringify(bounds)};
+      const p1 = map.project(L.latLng(b[0][0], b[0][1]), ${ASPECT_REFERENCE_ZOOM});
+      const p2 = map.project(L.latLng(b[1][0], b[1][1]), ${ASPECT_REFERENCE_ZOOM});
+      return Math.abs(p2.x - p1.x) / Math.abs(p2.y - p1.y);
+    })()`);
+
+    const viewport = aspect >= 1
+      ? { width: DIVISION_MAX_DIM, height: Math.max(DIVISION_MIN_DIM, Math.round(DIVISION_MAX_DIM / aspect)) }
+      : { width: Math.max(DIVISION_MIN_DIM, Math.round(DIVISION_MAX_DIM * aspect)), height: DIVISION_MAX_DIM };
+    await page.setViewport(viewport);
+    // Leaflet auto-invalidates on the window resize Puppeteer's
+    // setViewport triggers (trackResize is on by default), but an
+    // explicit call removes any doubt about ordering before fitBounds.
+    await page.evaluate('window.__reportMap.invalidateSize(false)');
+    await page.evaluate(
+      `window.__reportMap.fitBounds(${JSON.stringify(bounds)}, { padding: ${JSON.stringify(DIVISION_PADDING)}, animate: false })`
+    );
+    await settleAfterReframe(page);
+    divisions[key] = await page.screenshot({ type: 'png' });
+  }
+
+  return { world, divisions };
+}
+
 // Returns { world: Uint8Array, divisions: { <key>: Uint8Array, ... } }.
 export async function captureAllMaps(env, request) {
   let browser;
   try {
     const opened = await openMapPage(env, request, WORLD_VIEWPORT);
     browser = opened.browser;
-    const { page } = opened;
-
-    await page.evaluate(
-      `window.__reportMap.setView([${WORLD_CENTER[0]}, ${WORLD_CENTER[1]}], ${WORLD_ZOOM}, { animate: false })`
+    return await withTimeout(
+      captureWithPage(opened.page),
+      CAPTURE_TIMEOUT_MS,
+      `Map capture timed out after ${CAPTURE_TIMEOUT_MS}ms — likely a stuck Browser Rendering session, not a code loop`
     );
-    await settleAfterReframe(page);
-    const world = await page.screenshot({ type: 'png' });
-
-    const divisionKeys = await page.evaluate('Object.keys(DIVISIONS)');
-    const divisions = {};
-    for (const key of divisionKeys) {
-      const bounds = await page.evaluate(`window.__divisionBounds(${JSON.stringify(key)})`);
-      if (!bounds) continue; // no countries currently mapped to this division
-
-      // Only this division's own countries/pins should be colored —
-      // otherwise whatever else happened to be un-clustered/visible in
-      // this crop (a neighboring division's countries) lit up too.
-      await page.evaluate(`window.__isolateDivision(${JSON.stringify(key)})`);
-
-      const aspect = await page.evaluate(`(() => {
-        const map = window.__reportMap;
-        const b = ${JSON.stringify(bounds)};
-        const p1 = map.project(L.latLng(b[0][0], b[0][1]), ${ASPECT_REFERENCE_ZOOM});
-        const p2 = map.project(L.latLng(b[1][0], b[1][1]), ${ASPECT_REFERENCE_ZOOM});
-        return Math.abs(p2.x - p1.x) / Math.abs(p2.y - p1.y);
-      })()`);
-
-      const viewport = aspect >= 1
-        ? { width: DIVISION_MAX_DIM, height: Math.max(DIVISION_MIN_DIM, Math.round(DIVISION_MAX_DIM / aspect)) }
-        : { width: Math.max(DIVISION_MIN_DIM, Math.round(DIVISION_MAX_DIM * aspect)), height: DIVISION_MAX_DIM };
-      await page.setViewport(viewport);
-      // Leaflet auto-invalidates on the window resize Puppeteer's
-      // setViewport triggers (trackResize is on by default), but an
-      // explicit call removes any doubt about ordering before fitBounds.
-      await page.evaluate('window.__reportMap.invalidateSize(false)');
-      await page.evaluate(
-        `window.__reportMap.fitBounds(${JSON.stringify(bounds)}, { padding: ${JSON.stringify(DIVISION_PADDING)}, animate: false })`
-      );
-      await settleAfterReframe(page);
-      divisions[key] = await page.screenshot({ type: 'png' });
-    }
-
-    return { world, divisions };
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      await withTimeout(browser.close(), CLOSE_TIMEOUT_MS, 'browser.close() timed out').catch((err) => {
+        console.error('Failed to close the map-capture browser session cleanly:', err);
+      });
+    }
   }
 }
