@@ -232,41 +232,57 @@ window.__allSectionKeys = function () {
 // not a bug: a synthetic 9-photo test already produced a ~40MB PDF
 // locally). This redraws every image onto a canvas sized to
 // PIXEL_DENSITY× its actual rendered box and swaps img.src for that
-// downscaled JPEG data URL — called once, with every section still
-// visible so clientWidth/Height reflect real layout, before
-// report-pdf.js starts hiding sections and calling page.pdf(). Only
-// ever runs inside that Puppeteer session — the live interactive site
-// and the on-screen report preview both keep full-resolution images.
+// downscaled JPEG data URL.
+//
+// Only ever runs inside worker/routes/report-pdf.js's Puppeteer session —
+// the live interactive site and the on-screen report preview both keep
+// full-resolution images. Two things keep this from spiking the
+// renderer's own memory instead of pdf-lib's: report-pdf.js calls this
+// once per section (right after window.__showOnlySection, not once
+// upfront with the whole report visible) — decoding one division's dozen
+// photos at a time instead of every photo across all 5 divisions at
+// once — and this itself processes sequentially (one full decode+redraw
+// fully finished before the next starts), not in parallel. The first
+// version of this fix did both wrong: it ran once for the whole report,
+// and used Promise.all to decode every image concurrently, which crashed
+// the Chrome session outright ("Protocol error: Target closed") instead
+// of hitting pdf-lib's allocation limit — worse, not better.
 window.__shrinkImagesForPdf = async function () {
   const PIXEL_DENSITY = 2; // crisp at print size without embedding the full original
+  // querySelectorAll (not filtering by visibility) is fine here — a
+  // hidden ancestor means clientWidth/Height are 0 below, so a
+  // currently-invisible image is skipped without needing a separate
+  // check for it.
   const images = Array.from(document.querySelectorAll('img'));
-  await Promise.all(images.map((img) => new Promise((resolve) => {
-    const shrink = () => {
-      const cssWidth = img.clientWidth;
-      const cssHeight = img.clientHeight;
-      if (!cssWidth || !cssHeight || !img.naturalWidth || !img.naturalHeight) { resolve(); return; }
-      const targetW = Math.max(1, Math.round(cssWidth * PIXEL_DENSITY));
-      const targetH = Math.max(1, Math.round(cssHeight * PIXEL_DENSITY));
-      // Never upscale — only worth redrawing if the source is actually
-      // bigger than what print needs.
-      if (img.naturalWidth <= targetW && img.naturalHeight <= targetH) { resolve(); return; }
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = targetW;
-        canvas.height = targetH;
-        canvas.getContext('2d').drawImage(img, 0, 0, targetW, targetH);
-        img.src = canvas.toDataURL('image/jpeg', 0.82);
-      } catch (err) {
-        console.error('Could not shrink image for PDF, leaving it full-size:', img.src, err);
+  for (const img of images) {
+    await new Promise((resolve) => {
+      const shrink = () => {
+        const cssWidth = img.clientWidth;
+        const cssHeight = img.clientHeight;
+        if (!cssWidth || !cssHeight || !img.naturalWidth || !img.naturalHeight) { resolve(); return; }
+        const targetW = Math.max(1, Math.round(cssWidth * PIXEL_DENSITY));
+        const targetH = Math.max(1, Math.round(cssHeight * PIXEL_DENSITY));
+        // Never upscale — only worth redrawing if the source is actually
+        // bigger than what print needs.
+        if (img.naturalWidth <= targetW && img.naturalHeight <= targetH) { resolve(); return; }
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          canvas.getContext('2d').drawImage(img, 0, 0, targetW, targetH);
+          img.src = canvas.toDataURL('image/jpeg', 0.82);
+        } catch (err) {
+          console.error('Could not shrink image for PDF, leaving it full-size:', img.src, err);
+        }
+        resolve();
+      };
+      if (img.complete && img.naturalWidth) shrink();
+      else {
+        img.addEventListener('load', shrink, { once: true });
+        img.addEventListener('error', resolve, { once: true });
       }
-      resolve();
-    };
-    if (img.complete && img.naturalWidth) shrink();
-    else {
-      img.addEventListener('load', shrink, { once: true });
-      img.addEventListener('error', resolve, { once: true });
-    }
-  })));
+    });
+  }
 };
 
 async function generateReport() {

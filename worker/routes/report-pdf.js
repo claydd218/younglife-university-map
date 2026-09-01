@@ -64,20 +64,11 @@ async function generatePdf(env, request) {
     await page.goto(reportUrl.toString(), { waitUntil: 'networkidle0' });
     await page.waitForFunction('window.__reportReady === true', { timeout: REPORT_READY_TIMEOUT_MS });
 
-    // Print media first, then measure/shrink — reports2.js's
-    // __shrinkImagesForPdf reads each image's *rendered* box
-    // (clientWidth/Height) to decide how much to downscale it by, and
-    // that box is smaller under print CSS (e.g. .report-map-shot's
-    // max-height:460px) than it is on screen. Doing this before
-    // page.pdf() is even relevant — same effect either order — but
-    // before the shrink step specifically it isn't: measuring on-screen
-    // sizes here would downscale less than print actually needs.
+    // Print media first — reports2.js's __shrinkImagesForPdf reads each
+    // image's *rendered* box (clientWidth/Height) to decide how much to
+    // downscale it by, and that box is smaller under print CSS (e.g.
+    // .report-map-shot's max-height:460px) than it is on screen.
     await page.emulateMediaType('print');
-    // See reports2.js's own comment on this function for why it exists —
-    // this is what keeps the merged PDF from trying to embed dozens of
-    // near-full-resolution photos and blowing past what a Worker can
-    // hold in memory.
-    await page.evaluate('window.__shrinkImagesForPdf()');
 
     const generatedLabel = await page.evaluate('window.__reportGeneratedLabel');
     const divisionLabels = await page.evaluate('Object.fromEntries(Object.entries(DIVISIONS).map(([k, d]) => [k, d.label]))');
@@ -86,6 +77,14 @@ async function generatePdf(env, request) {
     const pdfBuffers = [];
     for (const key of sectionKeys) {
       await page.evaluate(`window.__showOnlySection(${JSON.stringify(key)})`);
+      // Shrunk per-section (only this section's images are visible right
+      // now), not once for the whole report — decoding a division's
+      // dozen-ish photos at a time instead of every photo across all 5
+      // divisions at once is what keeps this from spiking the renderer's
+      // own memory and crashing the session outright. See reports2.js's
+      // comment on this function for the full story (an earlier version
+      // of this fix got this backwards).
+      await page.evaluate('window.__shrinkImagesForPdf()');
       const footerText = key === 'overview'
         ? `Young Life University International Ministries — ${generatedLabel}`
         : `Young Life University International Ministries — ${divisionLabels[key]} — ${generatedLabel}`;
