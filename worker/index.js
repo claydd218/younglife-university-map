@@ -22,6 +22,7 @@ import { onRequestPost as uploadPost } from './routes/upload.js';
 import { onRequestDelete as photoDelete } from './routes/photo.js';
 import { onRequestGet as mapScreenshotGet } from './routes/map-screenshot.js';
 import { onRequestGet as reportPdfGet } from './routes/report-pdf.js';
+import { onRequestGet as imagesManifestGet } from './routes/images-manifest.js';
 import { login, logout } from './routes/login.js';
 import { hasValidSession, createSessionCookie } from './lib/session.js';
 
@@ -84,6 +85,10 @@ export default {
 
         if (pathname === '/bigtime/api/report-pdf' && method === 'GET') {
           return await reportPdfGet({ request, env, ctx });
+        }
+
+        if (pathname === '/bigtime/api/images-manifest' && method === 'GET') {
+          return await imagesManifestGet({ request, env, ctx });
         }
 
         const photoMatch = pathname.match(/^\/bigtime\/api\/photos\/([^/]+)$/);

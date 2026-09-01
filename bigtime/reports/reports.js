@@ -89,24 +89,31 @@ async function loadMinistryRows() {
   return data.rows;
 }
 
+async function loadImageManifest() {
+  const res = await fetch('/bigtime/api/images-manifest');
+  if (!res.ok) throw new Error(`Could not load image manifest (${res.status})`);
+  const data = await res.json();
+  return new Set(data.files);
+}
+
 // Staff photos aren't referenced by filename in the CSV (unlike ministry
-// photos, which store their exact filename) — same extension-guessing
-// HEAD-request pattern as bigtime/admin.js's findExistingImageUrl.
-async function findStaffPhotoUrl(name) {
+// photos, which store their exact filename) — the actual extension has to
+// be checked against what's actually in images/ (imageFiles, loaded once
+// per report by loadImageManifest). This used to be a HEAD request per
+// candidate extension per staff member, fired via Promise.all across every
+// staff member in the report — with 100+ staff that was hundreds of
+// requests in one burst, which is what was behind the multi-thousand-
+// request spikes seen in Workers analytics every time a report generated.
+function findStaffPhotoUrl(name, imageFiles) {
   const slug = slugify(name);
   for (const ext of CONFIG.IMAGE_EXTENSIONS) {
-    const url = `../../${CONFIG.IMAGES_DIR}${slug}.${ext}`;
-    try {
-      const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
-      if (res.ok) return url;
-    } catch {
-      // try the next extension
-    }
+    const filename = `${slug}.${ext}`;
+    if (imageFiles.has(filename)) return `../../${CONFIG.IMAGES_DIR}${filename}`;
   }
   return null;
 }
 
-async function buildMinistryAreaHtml(row, countryIsoByName, def) {
+function buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles) {
   const iso2 = countryIsoByName.get(row.country.trim());
   const flag = flagEmoji(iso2);
   const name = row.city === row.country ? row.city : `${row.city}, ${row.country}`;
@@ -118,7 +125,7 @@ async function buildMinistryAreaHtml(row, countryIsoByName, def) {
     ? `<img class="ministry-area-photo" src="../../${CONFIG.IMAGES_DIR}${encodeURIComponent(row.photos[0])}" alt="">`
     : '';
 
-  const staffUrls = await Promise.all(row.staff.map((s) => findStaffPhotoUrl(s.name)));
+  const staffUrls = row.staff.map((s) => findStaffPhotoUrl(s.name, imageFiles));
   const staffHtml = row.staff.map((s, i) => {
     const photo = staffUrls[i]
       ? `<img class="ministry-staff-photo" src="${staffUrls[i]}" alt="">`
@@ -174,7 +181,7 @@ function metricBoxesHtml(metrics, accent) {
     </div>`).join('')}</div>`;
 }
 
-async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots) {
+async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots, imageFiles) {
   const generatedLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const metricsPage = `
     <section class="report-page-one">
@@ -205,7 +212,7 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
     const divisionRows = byDivision.get(key);
     if (!divisionRows || !divisionRows.length) continue;
     divisionRows.sort((a, b) => a.country.localeCompare(b.country) || a.city.localeCompare(b.city));
-    const areasHtml = (await Promise.all(divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName, def)))).join('');
+    const areasHtml = divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles)).join('');
     const divisionMapShot = mapShots.divisions[key];
     const divisionMapHtml = divisionMapShot
       ? `<img class="division-map-shot" src="${divisionMapShot}" alt="${escapeHtml(def.label)} map">`
@@ -230,10 +237,11 @@ async function generateReport() {
   output.innerHTML = '';
   setStatus('Loading ministry data…');
   try {
-    const [rows, divisionByCountry, countryIsoByName] = await Promise.all([
+    const [rows, divisionByCountry, countryIsoByName, imageFiles] = await Promise.all([
       loadMinistryRows(),
       loadDivisionByCountry(),
       loadCountryIsoByName(),
+      loadImageManifest(),
     ]);
 
     // Cached PNGs, not a live capture — worker/lib/mapArchive.js keeps
@@ -249,7 +257,7 @@ async function generateReport() {
     };
 
     setStatus('Building report…');
-    output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots);
+    output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots, imageFiles);
     output.classList.add('ready');
 
     // Chrome/Safari's print-to-PDF dialog suggests document.title as the
