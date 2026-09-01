@@ -18,12 +18,17 @@ import { openMapPage, settleAfterReframe } from './mapScreenshot.js';
 // the needed margin isn't symmetric either: keeping Patagonia in the
 // south needs much more room below the equator than Scandinavia needs
 // above it, and keeping the US coast needs much less room west than
-// keeping Japan/Russia's east needs east. Verified via
+// keeping Japan/Russia's east needs east — and, on the east side, New
+// Zealand (Chatham Islands reach ~183.3°E in continuing-eastward terms)
+// needs just as much room as Russia's Far East does. Verified via
 // map.getBounds(): north 73.0°, south -62.3° (Patagonia still included,
-// same margin as before), west -128.6°, east 155.7°.
-const WORLD_VIEWPORT = { width: 1360, height: 905 };
+// same margin as before), west -138.2°, east 183.9° (both NZ's mainland
+// and its Chatham Islands included — confirmed by checking each against
+// this east bound directly, since Leaflet's own layer.getBounds() for NZ
+// straddles the antimeridian and reports a naive/unreliable bbox).
+const WORLD_VIEWPORT = { width: 1541, height: 905 };
 const WORLD_ZOOM = 2.75;
-const WORLD_CENTER = [14.28, 13.5];
+const WORLD_CENTER = [14.28, 23];
 
 // Only openMapPage's own initial page.waitForFunction('__mapReady') has a
 // timeout of its own — every page.evaluate()/screenshot() call after that
