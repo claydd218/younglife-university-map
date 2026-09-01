@@ -4,6 +4,7 @@
 // gate rather than through the normal route table.
 
 import { createSessionCookie, clearSessionCookie, checkPassword } from '../lib/session.js';
+import { isLoginLockedOut, recordLoginFailure, resetLoginFailures } from '../lib/loginRateLimit.js';
 
 // Verifies the Turnstile widget's token server-side against Cloudflare's
 // siteverify endpoint. Fails closed like the rest of this file's secret
@@ -32,6 +33,14 @@ async function verifyTurnstile(token, env, request) {
 }
 
 export async function login(request, env) {
+  // Checked before doing any other work — including reading the form body
+  // — so a tripped lockout costs a tripped attacker nothing but a redirect,
+  // not a Turnstile siteverify round trip. See loginRateLimit.js for why
+  // this is a global counter, not per-IP.
+  if (await isLoginLockedOut(env)) {
+    return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
+  }
+
   const form = await request.formData();
   const password = form.get('password');
   const turnstileToken = form.get('cf-turnstile-response');
@@ -40,15 +49,18 @@ export async function login(request, env) {
   // password) so a failed captcha never reveals whether it was the human
   // check or the password that actually failed.
   if (!(await verifyTurnstile(turnstileToken, env, request))) {
+    await recordLoginFailure(env);
     return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
 
   if (!checkPassword(password, env.ADMIN_SHARED_PASSWORD)) {
+    await recordLoginFailure(env);
     return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
 
   try {
     const cookie = await createSessionCookie(env);
+    await resetLoginFailures(env);
     return new Response(null, {
       status: 302,
       headers: { Location: '/bigtime/', 'Set-Cookie': cookie },
