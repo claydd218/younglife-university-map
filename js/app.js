@@ -1798,16 +1798,23 @@ async function init() {
     window.__mapReady = true;
     // A link opened in an in-app browser (Messages, etc. — not a regular
     // Safari/Chrome tab) can settle into its final on-screen size without
-    // ever firing a resize/orientationchange/visualViewport event at all,
-    // leaving Leaflet's cached container size wrong from the very first
-    // paint (the map looks shifted up with dead space below it) with
-    // nothing to trigger refreshMapSize's usual recovery — rotating the
-    // phone (or refreshing) only fixes it because *that* does fire a real
-    // resize signal. Running the same retry burst unconditionally once
-    // after every load — not just in response to an actual event — covers
-    // that case too; invalidateSize() is a cheap no-op when the size
-    // already was correct, so this doesn't cost anything on a normal load.
-    refreshMapSizeSoon();
+    // ever firing a resize/orientationchange/visualViewport event at all —
+    // and if the container's real size wasn't known yet at the moment
+    // L.map() first measured it (constructed above with a plain center/
+    // zoom, not a fitBounds), Leaflet's initial pixel origin can end up
+    // computed from that wrong/transitional size. invalidateSize() alone
+    // asks Leaflet to re-measure and pan just enough to keep the *same*
+    // center point in view, which isn't a reliable recovery from a
+    // genuinely broken starting point (still-visible symptom even after
+    // the container itself was the right size: correctly sized, but
+    // framed too far north, cutting off the top). Explicitly re-asserting
+    // the real configured view is a stronger recovery than trusting
+    // invalidateSize's own delta-based recentering to fix that on its
+    // own. Only done here, once, right after initial load — the ongoing
+    // resize/orientationchange listeners below still just invalidateSize()
+    // without recentering, since by then the user may have deliberately
+    // panned/zoomed elsewhere and shouldn't get snapped back.
+    resettleInitialViewSoon();
   } catch (err) {
     console.error(err);
     showStatus('Could not load ministry data. Check the data source in js/config.js.', true);
@@ -1900,6 +1907,23 @@ function refreshMapSizeSoon() {
   setTimeout(refreshMapSize, 350);
   setTimeout(refreshMapSize, 600);
 }
+
+// Only for the very first load — see the call site in init(). Re-asserts
+// the actual configured view instead of trusting invalidateSize() alone
+// to recenter correctly from a possibly-degenerate initial container
+// size (an in-app browser settling late can leave the map correctly
+// *sized* but framed too far north, cutting off the top).
+function resettleInitialView() {
+  map.invalidateSize();
+  map.setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM, { animate: false });
+}
+function resettleInitialViewSoon() {
+  resettleInitialView();
+  setTimeout(resettleInitialView, 120);
+  setTimeout(resettleInitialView, 350);
+  setTimeout(resettleInitialView, 600);
+}
+
 window.addEventListener('resize', refreshMapSize);
 window.addEventListener('orientationchange', refreshMapSizeSoon);
 if (window.visualViewport) {
