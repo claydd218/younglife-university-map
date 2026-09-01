@@ -1796,25 +1796,9 @@ async function init() {
     // wait on (page.waitForFunction) — everything above this point is
     // synchronous DOM work, so once it's run the map is visually complete.
     window.__mapReady = true;
-    // A link opened in an in-app browser (Messages, etc. — not a regular
-    // Safari/Chrome tab) can settle into its final on-screen size without
-    // ever firing a resize/orientationchange/visualViewport event at all —
-    // and if the container's real size wasn't known yet at the moment
-    // L.map() first measured it (constructed above with a plain center/
-    // zoom, not a fitBounds), Leaflet's initial pixel origin can end up
-    // computed from that wrong/transitional size. invalidateSize() alone
-    // asks Leaflet to re-measure and pan just enough to keep the *same*
-    // center point in view, which isn't a reliable recovery from a
-    // genuinely broken starting point (still-visible symptom even after
-    // the container itself was the right size: correctly sized, but
-    // framed too far north, cutting off the top). Explicitly re-asserting
-    // the real configured view is a stronger recovery than trusting
-    // invalidateSize's own delta-based recentering to fix that on its
-    // own. Only done here, once, right after initial load — the ongoing
-    // resize/orientationchange listeners below still just invalidateSize()
-    // without recentering, since by then the user may have deliberately
-    // panned/zoomed elsewhere and shouldn't get snapped back.
-    resettleInitialViewSoon();
+    // See watchInitialViewSettling() below for the in-app-browser sizing
+    // fix this kicks off.
+    watchInitialViewSettling();
   } catch (err) {
     console.error(err);
     showStatus('Could not load ministry data. Check the data source in js/config.js.', true);
@@ -1908,20 +1892,42 @@ function refreshMapSizeSoon() {
   setTimeout(refreshMapSize, 600);
 }
 
-// Only for the very first load — see the call site in init(). Re-asserts
-// the actual configured view instead of trusting invalidateSize() alone
-// to recenter correctly from a possibly-degenerate initial container
-// size (an in-app browser settling late can leave the map correctly
-// *sized* but framed too far north, cutting off the top).
-function resettleInitialView() {
-  map.invalidateSize();
-  map.setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM, { animate: false });
-}
-function resettleInitialViewSoon() {
-  resettleInitialView();
-  setTimeout(resettleInitialView, 120);
-  setTimeout(resettleInitialView, 350);
-  setTimeout(resettleInitialView, 600);
+// Only for the very first load — see the call site in init(). A link
+// opened in an in-app browser (Messages, etc.) can settle into its final
+// on-screen size well after this script has already run, with no
+// resize/orientationchange/visualViewport event firing to catch it — but
+// the map's own container does still get an actual DOM resize once that
+// settling happens, and ResizeObserver reports that directly instead of
+// guessing when via a fixed timer. A blind timer either fires too early
+// to have caught the real change yet, or fires anyway even when nothing
+// needed fixing — forcing an unconditional setView() on an already-fine
+// view was itself a visible "pop"/reshuffle (every country polygon,
+// every cluster, redrawn) partway through load, worse than the bug it
+// was meant to catch.
+//
+// invalidateSize({pan:false}) updates Leaflet's cached container size
+// without its own default "pan by half the delta to keep the same
+// center" heuristic — that heuristic assumes a roughly symmetric resize
+// (a desktop window resize), and visibly mis-corrects for an in-app
+// browser's chrome settling asymmetrically (from one edge only), which
+// is what was producing "correctly sized but framed too far north" even
+// after the container's real size became known. The setView() right
+// after is the actual fix — it always lands on the one genuinely correct
+// answer instead of a heuristic guess.
+//
+// Only wired up for a few seconds after initial load. ResizeObserver
+// fires once immediately on observe() (reporting the current size) plus
+// again for any real subsequent change within that window; a real resize
+// later, once the user may have deliberately navigated elsewhere, keeps
+// behaving like refreshMapSize/refreshMapSizeSoon above instead —
+// invalidateSize() only, no snapping back to the default view.
+function watchInitialViewSettling() {
+  const observer = new ResizeObserver(() => {
+    map.invalidateSize({ pan: false });
+    map.setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM, { animate: false });
+  });
+  observer.observe(document.getElementById('map'));
+  setTimeout(() => observer.disconnect(), 3000);
 }
 
 window.addEventListener('resize', refreshMapSize);
