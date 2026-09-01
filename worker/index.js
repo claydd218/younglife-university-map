@@ -33,6 +33,61 @@ function jsonError(status, message) {
   });
 }
 
+// Every third-party host anything on the site actually talks to, named
+// explicitly rather than left open — Leaflet/Leaflet.markercluster/
+// Papaparse are vendored (vendor/) precisely so script-src doesn't need
+// to trust unpkg.com at all. What's left: Cloudflare Turnstile (the
+// login page's CAPTCHA widget — script, its iframe, and its own API
+// calls), Google Fonts (stylesheet + the font files it references), and
+// the two free geocoders bigtime/admin.js's ministry-location lookup
+// calls directly from the browser (Nominatim for "look up this city",
+// Photon for live city-name suggestions while typing — see admin.js's
+// comments on lookupLatLng/fetchCitySuggestions for why two different
+// services).
+//
+// script-src has no 'unsafe-inline': the one inline <script> that used to
+// exist (bigtime/login.html) is now an external file so it needs no
+// allowance at all, and the two inline onerror="" attributes in
+// js/app.js's image-fallback chain (photoTag/ministry photo <img> tags)
+// are allowed by exact SHA-256 hash via 'unsafe-hashes' instead of
+// blanket 'unsafe-inline' — an injected onerror with any other content
+// still gets blocked.
+//
+// style-src does need 'unsafe-inline': dozens of inline style="..."
+// attributes are generated at runtime (per-division pin colors, mostly)
+// across admin.js/app.js/reports*.js, and CSP has no hash/nonce mechanism
+// for style *attributes* (only for <style> blocks) — there's no
+// equivalent of 'unsafe-hashes' to narrow this one the way script-src's
+// gap was narrowed above.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://challenges.cloudflare.com 'unsafe-hashes' 'sha256-l+nb61U7KKpl4Wcot60MfghvQrADUbeax5hOQehBiVI=' 'sha256-AcfKIR6miDewAaBxREOcW4R7Mgq+qUNQqh/TiZ62OU4='",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io https://challenges.cloudflare.com",
+  "frame-src https://challenges.cloudflare.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+// Applied to every response the Worker returns, admin and public alike —
+// there's nothing path-specific here that would justify two different
+// policies, and CSP only restricts what's *allowed* to load, so the
+// (unused, on public pages) admin-only allowances above cost nothing.
+function withSecurityHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.set('Content-Security-Policy', CSP);
+  // Belt-and-suspenders with frame-ancestors above — X-Frame-Options is
+  // the older header, kept for browsers that predate frame-ancestors.
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 // Paths reachable without a session — everything else under /bigtime/ is
 // gated below. Cloudflare's asset serving 307-redirects requests for a
 // literal *.html file to the extensionless path (found in production:
@@ -40,7 +95,11 @@ function jsonError(status, message) {
 // the canonical redirect target gets treated as protected and bounces
 // straight back to the .html form — an infinite redirect loop, which is
 // exactly what happened before this was two entries instead of one.
-const PUBLIC_ADMIN_PATHS = new Set(['/bigtime/login.html', '/bigtime/login', '/bigtime/api/login', '/bigtime/api/logout']);
+// login.js has to be public too — it's the login page's own script (moved
+// out of an inline <script> block so the CSP's script-src can stay
+// 'self'-only with no inline allowance), and the one audience that
+// actually needs it is exactly the audience that isn't logged in yet.
+const PUBLIC_ADMIN_PATHS = new Set(['/bigtime/login.html', '/bigtime/login', '/bigtime/login.js', '/bigtime/api/login', '/bigtime/api/logout']);
 
 export default {
   async fetch(request, env, ctx) {
@@ -53,10 +112,10 @@ export default {
       const needsSession = isAdminPath && !PUBLIC_ADMIN_PATHS.has(pathname);
       const sessionValid = needsSession && (await hasValidSession(request, env));
       if (needsSession && !sessionValid) {
-        if (pathname.startsWith('/bigtime/api/')) return jsonError(401, 'Not logged in');
+        if (pathname.startsWith('/bigtime/api/')) return withSecurityHeaders(jsonError(401, 'Not logged in'));
         // The extensionless path, not /bigtime/login.html directly — skips
         // the extra 307 hop from Cloudflare's own *.html canonicalization.
-        return Response.redirect(new URL('/bigtime/login', request.url), 302);
+        return withSecurityHeaders(Response.redirect(new URL('/bigtime/login', request.url), 302));
       }
 
       const routeRequest = async () => {
@@ -121,12 +180,12 @@ export default {
       if (sessionValid) {
         const renewed = new Response(response.body, response);
         renewed.headers.append('Set-Cookie', await createSessionCookie(env));
-        return renewed;
+        return withSecurityHeaders(renewed);
       }
-      return response;
+      return withSecurityHeaders(response);
     } catch (err) {
       console.error('Unhandled error in admin API:', err);
-      return jsonError(500, err.message || 'Internal error');
+      return withSecurityHeaders(jsonError(500, err.message || 'Internal error'));
     }
   },
 };
