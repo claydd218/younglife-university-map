@@ -286,8 +286,17 @@ window.__shrinkImagesForPdf = async function () {
         }
         resolve();
       };
-      if (img.complete && img.naturalWidth) shrink();
-      else {
+      if (img.complete) {
+        // A broken image (e.g. a stale/missing filename) is also
+        // "complete" — with naturalWidth 0 — and will never fire another
+        // load/error event, since nothing is retrying its src. Treating
+        // that the same as "still loading" below hung this function
+        // forever on the very first broken photo it hit, which is what
+        // actually caused every "Protocol error: Target closed" crash:
+        // the report never finishes, so the outer page.evaluate() call
+        // never returns until Cloudflare kills the session.
+        if (img.naturalWidth) shrink(); else resolve();
+      } else {
         img.addEventListener('load', shrink, { once: true });
         img.addEventListener('error', resolve, { once: true });
       }
