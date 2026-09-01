@@ -64,6 +64,21 @@ async function generatePdf(env, request) {
     await page.goto(reportUrl.toString(), { waitUntil: 'networkidle0' });
     await page.waitForFunction('window.__reportReady === true', { timeout: REPORT_READY_TIMEOUT_MS });
 
+    // Print media first, then measure/shrink — reports2.js's
+    // __shrinkImagesForPdf reads each image's *rendered* box
+    // (clientWidth/Height) to decide how much to downscale it by, and
+    // that box is smaller under print CSS (e.g. .report-map-shot's
+    // max-height:460px) than it is on screen. Doing this before
+    // page.pdf() is even relevant — same effect either order — but
+    // before the shrink step specifically it isn't: measuring on-screen
+    // sizes here would downscale less than print actually needs.
+    await page.emulateMediaType('print');
+    // See reports2.js's own comment on this function for why it exists —
+    // this is what keeps the merged PDF from trying to embed dozens of
+    // near-full-resolution photos and blowing past what a Worker can
+    // hold in memory.
+    await page.evaluate('window.__shrinkImagesForPdf()');
+
     const generatedLabel = await page.evaluate('window.__reportGeneratedLabel');
     const divisionLabels = await page.evaluate('Object.fromEntries(Object.entries(DIVISIONS).map(([k, d]) => [k, d.label]))');
     const sectionKeys = await page.evaluate('window.__allSectionKeys()');

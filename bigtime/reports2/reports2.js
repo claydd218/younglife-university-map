@@ -222,6 +222,53 @@ window.__allSectionKeys = function () {
   return Array.from(document.querySelectorAll('[data-section]')).map((el) => el.dataset.section);
 };
 
+// Chrome's page.pdf() embeds each <img> at roughly its source file's
+// resolution, not its small on-page CSS size — a single ~1MB ministry
+// photo shown as a 220px-wide thumbnail (or a 52px staff circle) still
+// gets embedded near-full-size. Across dozens of ministry areas across 5
+// divisions that's enough to blow well past what a Cloudflare Worker can
+// hold in memory ("Invalid typed array length" while pdf-lib assembles
+// the final file — the number was the real attempted allocation size,
+// not a bug: a synthetic 9-photo test already produced a ~40MB PDF
+// locally). This redraws every image onto a canvas sized to
+// PIXEL_DENSITY× its actual rendered box and swaps img.src for that
+// downscaled JPEG data URL — called once, with every section still
+// visible so clientWidth/Height reflect real layout, before
+// report-pdf.js starts hiding sections and calling page.pdf(). Only
+// ever runs inside that Puppeteer session — the live interactive site
+// and the on-screen report preview both keep full-resolution images.
+window.__shrinkImagesForPdf = async function () {
+  const PIXEL_DENSITY = 2; // crisp at print size without embedding the full original
+  const images = Array.from(document.querySelectorAll('img'));
+  await Promise.all(images.map((img) => new Promise((resolve) => {
+    const shrink = () => {
+      const cssWidth = img.clientWidth;
+      const cssHeight = img.clientHeight;
+      if (!cssWidth || !cssHeight || !img.naturalWidth || !img.naturalHeight) { resolve(); return; }
+      const targetW = Math.max(1, Math.round(cssWidth * PIXEL_DENSITY));
+      const targetH = Math.max(1, Math.round(cssHeight * PIXEL_DENSITY));
+      // Never upscale — only worth redrawing if the source is actually
+      // bigger than what print needs.
+      if (img.naturalWidth <= targetW && img.naturalHeight <= targetH) { resolve(); return; }
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        canvas.getContext('2d').drawImage(img, 0, 0, targetW, targetH);
+        img.src = canvas.toDataURL('image/jpeg', 0.82);
+      } catch (err) {
+        console.error('Could not shrink image for PDF, leaving it full-size:', img.src, err);
+      }
+      resolve();
+    };
+    if (img.complete && img.naturalWidth) shrink();
+    else {
+      img.addEventListener('load', shrink, { once: true });
+      img.addEventListener('error', resolve, { once: true });
+    }
+  })));
+};
+
 async function generateReport() {
   overlay.hidden = false;
   regenerateBtn.hidden = true;
