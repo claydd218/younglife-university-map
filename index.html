@@ -134,5 +134,44 @@
   <script src="js/utils.js"></script>
   <script src="js/config.js"></script>
   <script src="js/app.js"></script>
+
+  <!-- TEMPORARY — diagnosing the in-app-browser "map shifted up" report.
+       Remove once that's fixed. -->
+  <div id="debug-overlay" style="position:fixed; z-index:99999; top:0; left:0; right:0; background:rgba(0,0,0,0.88); color:#0f0; font:10px/1.4 monospace; padding:6px 8px; white-space:pre-wrap; pointer-events:none;"></div>
+  <script>
+  (function () {
+    var el = document.getElementById('debug-overlay');
+    function fmt() {
+      var vv = window.visualViewport;
+      var mapEl = document.getElementById('map');
+      var frameEl = document.querySelector('.frame-border');
+      var mapRect = mapEl ? mapEl.getBoundingClientRect() : null;
+      var frameRect = frameEl ? frameEl.getBoundingClientRect() : null;
+      var mapStyle = mapEl ? getComputedStyle(mapEl) : null;
+      var bodyStyle = getComputedStyle(document.body);
+      var lines = [
+        't+' + Math.round(performance.now()) + 'ms  ' + navigator.userAgent,
+        'window inner W/H: ' + window.innerWidth + ' / ' + window.innerHeight,
+        'visualViewport: ' + (vv ? ('w=' + vv.width + ' h=' + vv.height + ' offsetTop=' + vv.offsetTop + ' offsetLeft=' + vv.offsetLeft + ' scale=' + vv.scale) : 'unavailable'),
+        'documentElement client W/H: ' + document.documentElement.clientWidth + ' / ' + document.documentElement.clientHeight,
+        'body computed height/width: ' + bodyStyle.height + ' / ' + bodyStyle.width,
+        'mapEl computed top/left/right/bottom: ' + (mapStyle ? (mapStyle.top + ' / ' + mapStyle.left + ' / ' + mapStyle.right + ' / ' + mapStyle.bottom) : 'n/a'),
+        'mapEl rect: ' + (mapRect ? ('top=' + mapRect.top.toFixed(1) + ' left=' + mapRect.left.toFixed(1) + ' w=' + mapRect.width.toFixed(1) + ' h=' + mapRect.height.toFixed(1) + ' bottom=' + mapRect.bottom.toFixed(1)) : 'n/a'),
+        'frameEl rect: ' + (frameRect ? ('top=' + frameRect.top.toFixed(1) + ' left=' + frameRect.left.toFixed(1) + ' w=' + frameRect.width.toFixed(1) + ' h=' + frameRect.height.toFixed(1) + ' bottom=' + frameRect.bottom.toFixed(1)) : 'n/a'),
+      ];
+      if (window.__reportMap) {
+        var m = window.__reportMap;
+        var size = m.getSize();
+        var center = m.getCenter();
+        lines.push('Leaflet size: ' + size.x + ' x ' + size.y + '  center: ' + center.lat.toFixed(3) + ',' + center.lng.toFixed(3) + '  zoom=' + m.getZoom());
+      }
+      el.textContent = lines.join('\n');
+    }
+    fmt();
+    setInterval(fmt, 300);
+    window.addEventListener('resize', fmt);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', fmt);
+  })();
+  </script>
 </body>
 </html>
