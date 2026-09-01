@@ -25,7 +25,20 @@
 
 html, body {
   height: 100%;
-  height: 100dvh;
+  /* svh (small viewport height — the size assuming browser chrome, like an
+     address bar, IS showing), not dvh (dynamic viewport height, which
+     actively tracks chrome as it shows/hides). .frame-border (position:
+     fixed) and #map (position: absolute) both track this same box, and
+     dvh reacting to an in-app browser's (Messages, etc.) chrome settling
+     into its final size *after* this first paint was moving the whole
+     page — frame included, not just the map's own content — during that
+     brief window. svh means the page is born at its final, stable size
+     and never has to reactively shrink to match a chrome change later; if
+     that chrome does end up collapsing (freeing up more space than svh
+     assumed), the cost is just some unused margin at the bottom, not
+     another visible reflow.
+  */
+  height: 100svh;
   width: 100%;
   margin: 0;
   overflow: hidden;
