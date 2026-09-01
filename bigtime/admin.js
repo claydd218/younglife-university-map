@@ -1745,25 +1745,36 @@ function measureImage(url) {
   });
 }
 
-// Staff only — ministry/city photos are multi-valued now (see the
-// Ministries tab's own photo manager) and don't fit this tab's
-// one-status-per-entry model, so they're managed and health-checked there
-// instead (each photo's dimensions show inline as it's added).
+// One entry per ministry area, not per photo — a ministry can have several
+// photos (the Ministries tab's own photo manager is where those are
+// actually added/removed/reordered, still true), but this tab's job is
+// just to surface whether each area has a healthy one, so "0 photos" or
+// "a referenced file that no longer resolves" (the exact class of bug
+// that once hung report-pdf.js — see worker/routes/photo.js) both need to
+// show up as Missing here, in the same good/low/missing filter as staff.
 async function buildImagesData() {
-  // division -> country -> { staff: [...] } — same shape admin/imagecheck.html
-  // used to build from the ministries rows, minus the cities bucket.
+  // division -> country -> { staff: [...], cities: [...] } — same shape
+  // admin/imagecheck.html used to build from the ministries rows.
   const structure = new Map();
   for (const row of state.rows) {
     const divisionKey = state.divisionByCountry.get(row.country);
     if (!divisionKey) continue;
     if (!structure.has(divisionKey)) structure.set(divisionKey, new Map());
     const countryMap = structure.get(divisionKey);
-    if (!countryMap.has(row.country)) countryMap.set(row.country, { staff: [] });
+    if (!countryMap.has(row.country)) countryMap.set(row.country, { staff: [], cities: [] });
     const bucket = countryMap.get(row.country);
 
     for (const s of row.staff) {
       bucket.staff.push({ kind: 'staff', label: s.name, role: s.role, city: row.city, name: s.name, slug: slugify(s.name) });
     }
+    bucket.cities.push({
+      kind: 'city',
+      label: row.city,
+      city: row.city,
+      country: row.country,
+      slug: slugify(`${row.city}-${row.country}`),
+      photos: row.photos,
+    });
   }
 
   const checks = [];
@@ -1780,6 +1791,33 @@ async function buildImagesData() {
           entry.status = classify(entry.kind, entry.dims);
         })());
       }
+      for (const entry of bucket.cities) {
+        checks.push((async () => {
+          if (!entry.photos.length) {
+            entry.dims = null;
+            entry.status = 'missing';
+            return;
+          }
+          const measurements = await Promise.all(
+            entry.photos.map((filename) => measureImage(`../${CONFIG.IMAGES_DIR}${encodeURIComponent(filename)}`))
+          );
+          // A referenced file that fails to load (deleted/renamed on disk
+          // but still listed in the photos column) makes the whole area
+          // Missing, same as having no photo at all — not just "one of
+          // several is fine", since it's exactly the stale-reference case
+          // this check exists to catch.
+          if (measurements.some((m) => !m)) {
+            entry.dims = null;
+            entry.status = 'missing';
+            return;
+          }
+          // The smallest photo stands in for the group, for both the
+          // status and the dims shown/previewed — whichever one would
+          // actually get flagged is the one worth looking at.
+          entry.dims = measurements.reduce((worst, m) => (m.width * m.height < worst.width * worst.height ? m : worst));
+          entry.status = classify(entry.kind, entry.dims);
+        })());
+      }
     }
   }
   await Promise.all(checks);
@@ -1788,7 +1826,8 @@ async function buildImagesData() {
 
 function renderGuidance() {
   $('images-guidance').innerHTML = `<strong>${escapeHtml(PHOTO_MINIMUMS.staff.label)}:</strong> ${escapeHtml(PHOTO_MINIMUMS.staff.detail)} `
-    + `&nbsp;·&nbsp; Ministry photos are managed from each ministry's own Edit dialog, not here.`;
+    + `&nbsp;·&nbsp; <strong>${escapeHtml(PHOTO_MINIMUMS.city.label)}:</strong> ${escapeHtml(PHOTO_MINIMUMS.city.detail)} `
+    + `&nbsp;·&nbsp; Ministry photos are added/removed from each ministry's own Edit dialog, not here.`;
 }
 
 function renderFilterBar() {
@@ -1829,15 +1868,23 @@ function applyImagesFilter() {
 }
 
 function imageEntryRow(entry) {
-  const roleText = entry.kind === 'staff' ? (entry.role ? `${entry.role}, ${entry.city}` : entry.city) : '';
+  const roleText = entry.kind === 'staff'
+    ? (entry.role ? `${entry.role}, ${entry.city}` : entry.city)
+    : entry.country;
   const dimsText = entry.dims ? `${entry.dims.width}×${entry.dims.height}` : '';
   const li = document.createElement('li');
   li.className = 'entry';
   li.dataset.status = entry.status;
   li.dataset.slug = entry.slug;
-  const actionsHtml = entry.status === 'missing'
-    ? `<button type="button" class="btn secondary btn-small" data-add>Add Photo</button>`
-    : `<button type="button" class="btn danger btn-small" data-remove="${escapeHtml(entry.slug)}">Remove</button>`;
+  // City entries are informational only here — actually adding/removing/
+  // reordering a ministry's (possibly several) photos already has its own
+  // proper UI in the Ministries tab's own photo manager; duplicating a
+  // single-photo add/remove control here would just fight with it.
+  const actionsHtml = entry.kind !== 'staff' ? '' : (
+    entry.status === 'missing'
+      ? `<button type="button" class="btn secondary btn-small" data-add>Add Photo</button>`
+      : `<button type="button" class="btn danger btn-small" data-remove="${escapeHtml(entry.slug)}">Remove</button>`
+  );
   li.innerHTML = `
     <div class="entry-row">
       <div class="entry-left">
@@ -1868,9 +1915,13 @@ function imageEntryRow(entry) {
       }
       preview.hidden = false;
     });
-    li.querySelector('[data-remove]').addEventListener('click', () => removePhoto(entry, li));
-  } else {
-    li.querySelector('[data-add]').addEventListener('click', () => openAddPhotoWidget(entry, li));
+  }
+  if (entry.kind === 'staff') {
+    if (entry.status !== 'missing') {
+      li.querySelector('[data-remove]').addEventListener('click', () => removePhoto(entry, li));
+    } else {
+      li.querySelector('[data-add]').addEventListener('click', () => openAddPhotoWidget(entry, li));
+    }
   }
 
   return li;
@@ -1945,13 +1996,16 @@ async function renderImagesTab() {
 
     for (const country of countryNames) {
       const bucket = countryMap.get(country);
+      const citiesSorted = bucket.cities.slice().sort((a, b) => a.city.localeCompare(b.city));
       const staffSorted = bucket.staff.slice().sort((a, b) => lastNameOf(a.name).localeCompare(lastNameOf(b.name)));
       const countryEl = document.createElement('div');
       countryEl.className = 'country-group';
       countryEl.innerHTML = `<h3 class="country">${escapeHtml(country)}</h3>`;
       const ul = document.createElement('ul');
       ul.className = 'entry-list';
-      for (const entry of staffSorted) {
+      // City (area) photo first, its staff underneath — the area photo
+      // represents the ministry itself, staff are individuals within it.
+      for (const entry of [...citiesSorted, ...staffSorted]) {
         total++;
         if (entry.status === 'missing') missing++;
         if (entry.status === 'low') low++;
