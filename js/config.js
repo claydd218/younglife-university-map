@@ -42,7 +42,7 @@ const OCEAN_LABELS = [
   { name: 'North Atlantic\nOcean', lat: 28, lng: -40 },
   { name: 'South Atlantic\nOcean', lat: -25, lng: -15 },
   { name: 'Pacific\nOcean', lat: 0, lng: -150 },
-  { name: 'Pacific\nOcean', lat: -20, lng: -95 },
+  { name: 'Pacific\nOcean', lat: -20, lng: -115 },
   { name: 'Indian\nOcean', lat: -20, lng: 75 },
   { name: 'Arctic\nOcean', lat: 78, lng: -4 },
 ];
