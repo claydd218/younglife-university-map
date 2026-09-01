@@ -1879,8 +1879,25 @@ map.on('popupopen', (e) => {
 // particular can fire its resize signal before the browser has actually
 // finished reflowing to the new dimensions, so this re-checks a few times
 // on a couple of different signals rather than trusting a single event.
+//
+// invalidateSize() on its own asks Leaflet to also *pan* by half the old/
+// new size delta to try to keep the same center visible — a reasonable
+// guess for a small change (an address bar collapsing a few dozen
+// pixels), but confirmed broken for a large, asymmetric one: rotating an
+// iPhone (portrait ~370x900 to landscape ~830x430) left the map centered
+// on 68°N, -37° (open ocean near Greenland) instead of the real [35, 0]
+// — not a small drift, a completely different part of the world. Capturing
+// the actual current center/zoom first, disabling invalidateSize's own
+// pan guess (pan: false), and explicitly re-applying exactly what was
+// already showing is a correct fix instead of a heuristic: the map ends
+// up back where it genuinely was, not wherever Leaflet's delta math
+// guessed, whether that's the default view on first load or wherever the
+// user had already navigated to.
 function refreshMapSize() {
-  map.invalidateSize();
+  const center = map.getCenter();
+  const zoom = map.getZoom();
+  map.invalidateSize({ pan: false });
+  map.setView(center, zoom, { animate: false });
 }
 function refreshMapSizeSoon() {
   refreshMapSize();
