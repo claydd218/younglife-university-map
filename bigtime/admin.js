@@ -1814,6 +1814,18 @@ function applyImagesFilter() {
     const status = li.dataset.status;
     li.classList.toggle('hide-status', !imagesFilter[status]);
   });
+  // A country (or whole division) whose every entry just got filtered out
+  // above would otherwise still show its heading with nothing under it —
+  // cascade the same hide up to each group once its own entries/countries
+  // are known.
+  document.querySelectorAll('#images-report .country-group').forEach((countryEl) => {
+    const hasVisible = !!countryEl.querySelector('.entry:not(.hide-status)');
+    countryEl.classList.toggle('hide-status', !hasVisible);
+  });
+  document.querySelectorAll('#images-report .division-group').forEach((divisionEl) => {
+    const hasVisible = !!divisionEl.querySelector('.country-group:not(.hide-status)');
+    divisionEl.classList.toggle('hide-status', !hasVisible);
+  });
 }
 
 function imageEntryRow(entry) {
@@ -1927,6 +1939,7 @@ async function renderImagesTab() {
     if (!countryMap) continue;
     const countryNames = Array.from(countryMap.keys()).sort((a, b) => a.localeCompare(b));
     const divisionEl = document.createElement('div');
+    divisionEl.className = 'division-group';
     const divisionColor = DIVISIONS[divisionKey].pin;
     divisionEl.innerHTML = `<h2 class="division" style="color: ${divisionColor}; border-bottom-color: ${divisionColor};">${escapeHtml(DIVISIONS[divisionKey].label)}</h2>`;
 
@@ -1934,6 +1947,7 @@ async function renderImagesTab() {
       const bucket = countryMap.get(country);
       const staffSorted = bucket.staff.slice().sort((a, b) => lastNameOf(a.name).localeCompare(lastNameOf(b.name)));
       const countryEl = document.createElement('div');
+      countryEl.className = 'country-group';
       countryEl.innerHTML = `<h3 class="country">${escapeHtml(country)}</h3>`;
       const ul = document.createElement('ul');
       ul.className = 'entry-list';

@@ -467,6 +467,11 @@
   #images-report .entry[data-status="missing"].hide-status,
   #images-report .entry[data-status="low"].hide-status,
   #images-report .entry[data-status="good"].hide-status { display: none; }
+  /* A country/division heading with every entry beneath it filtered out
+     would otherwise still show, with nothing under it — see
+     applyImagesFilter()'s cascade in admin.js. */
+  #images-report .country-group.hide-status,
+  #images-report .division-group.hide-status { display: none; }
 
   .status-text { color: #888; font-style: italic; }
 </style>
