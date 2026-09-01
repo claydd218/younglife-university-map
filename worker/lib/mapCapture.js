@@ -9,9 +9,21 @@
 
 import { openMapPage, settleAfterReframe } from './mapScreenshot.js';
 
-const WORLD_VIEWPORT = { width: 1600, height: 1120 };
+// Tuned to two hard requirements: all of Scandinavia stays visible to the
+// north (mainland Norway's own north reaches ~71.1°N) and all of the
+// continental US stays visible to the west (the Washington coast is
+// ~-124.7°W) — both with a few degrees of padding — while cropping out
+// the mostly-empty Arctic/Pacific space the previous wider frame left on
+// both edges. Center is asymmetric (not [lat, 0]) specifically because
+// the needed margin isn't symmetric either: keeping Patagonia in the
+// south needs much more room below the equator than Scandinavia needs
+// above it, and keeping the US coast needs much less room west than
+// keeping Japan/Russia's east needs east. Verified via
+// map.getBounds(): north 73.0°, south -62.3° (Patagonia still included,
+// same margin as before), west -128.6°, east 155.7°.
+const WORLD_VIEWPORT = { width: 1360, height: 905 };
 const WORLD_ZOOM = 2.75;
-const WORLD_CENTER = [35, 0];
+const WORLD_CENTER = [14.28, 13.5];
 
 // Only openMapPage's own initial page.waitForFunction('__mapReady') has a
 // timeout of its own — every page.evaluate()/screenshot() call after that
