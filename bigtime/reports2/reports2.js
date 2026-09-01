@@ -206,9 +206,11 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
       : '';
     divisionSectionsHtml.push(`
       <section class="division-section" data-section="${key}">
-        <h2 class="division-title" style="color:${def.pin};"><span class="division-title-report-name">${escapeHtml(REPORT_TITLE)} — ${escapeHtml(generatedLabel)}</span><span class="division-title-division-name">${escapeHtml(def.label)}</span></h2>
-        ${divisionMapHtml}
-        ${metricBoxesHtml(computeMetrics(divisionRows), def)}
+        <div class="division-header">
+          <h2 class="division-title" style="color:${def.pin};"><span class="division-title-report-name">${escapeHtml(REPORT_TITLE)} — ${escapeHtml(generatedLabel)}</span><span class="division-title-division-name">${escapeHtml(def.label)}</span></h2>
+          ${divisionMapHtml}
+          ${metricBoxesHtml(computeMetrics(divisionRows), def)}
+        </div>
         <div class="division-areas">${areasHtml}</div>
       </section>`);
   }
@@ -217,19 +219,39 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
 }
 
 // worker/routes/report-pdf.js's Puppeteer session calls this once per
-// data-section before each page.pdf() call — hides every other section so
-// that call captures only this one. Idempotent/order-independent, same
-// pattern as bigtime/maps' window.__isolateDivision.
-window.__showOnlySection = function (sectionKey) {
+// (section, part) pair before each page.pdf() call — hides every other
+// section so that call captures only this one. A division section has two
+// parts, each becoming its own page.pdf() call so each can get its own
+// footer: 'header' (title + map + metrics — always exactly one page) and
+// 'areas' (the ministry listing, which can span several). That split is
+// what lets the map page go out with no footer at all (see
+// __allSectionParts below) while the listing pages keep one — a single
+// page.pdf() call can't vary its footer page-to-page, so this is the only
+// way to make one page in a section look different from another.
+// 'overview' has no header/areas split (part is ignored for it — the
+// whole section is just the world map + metrics, shown as a whole).
+window.__showOnlySectionPart = function (sectionKey, part) {
   document.querySelectorAll('[data-section]').forEach((el) => {
     el.style.display = el.dataset.section === sectionKey ? '' : 'none';
   });
+  if (sectionKey === 'overview') return;
+  const section = document.querySelector(`[data-section="${sectionKey}"]`);
+  section.querySelector('.division-header').style.display = part === 'header' ? '' : 'none';
+  section.querySelector('.division-areas').style.display = part === 'areas' ? '' : 'none';
 };
 
-// -> ["overview", "europe", "asia", ...] in document order (report-pdf.js
+// -> [{key:'overview', part:null}, {key:'europe', part:'header'},
+//     {key:'europe', part:'areas'}, ...] in document order (report-pdf.js
 // generates the merged PDF in this same order).
-window.__allSectionKeys = function () {
-  return Array.from(document.querySelectorAll('[data-section]')).map((el) => el.dataset.section);
+window.__allSectionParts = function () {
+  const keys = Array.from(document.querySelectorAll('[data-section]')).map((el) => el.dataset.section);
+  const result = [];
+  for (const key of keys) {
+    if (key === 'overview') { result.push({ key, part: null }); continue; }
+    result.push({ key, part: 'header' });
+    result.push({ key, part: 'areas' });
+  }
+  return result;
 };
 
 // Chrome's page.pdf() embeds each <img> at roughly its source file's

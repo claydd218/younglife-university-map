@@ -39,11 +39,19 @@ function withTimeout(promise, ms, message) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 }
 
-function footerTemplateFor(text) {
+// No footer at all — used for every map page (the world map / a
+// division's title+map+metrics page), since that page already shows the
+// report or division title on-page; repeating it in a footer is
+// redundant. A literal empty string still leaves Chrome to fall back to
+// its own default footer, so this has to be explicitly empty markup, the
+// same way headerTemplate below always is.
+const NO_FOOTER = '<span></span>';
+
+function footerTemplateFor(text, color) {
   // Chrome renders header/footer templates in their own isolated document
   // (no access to the report's own stylesheet), so this is a fully
   // self-contained inline-styled snippet rather than a class name.
-  return `<div style="width:100%; font-size:9px; text-align:center; color:#888; font-family: Georgia, 'EB Garamond', serif;">${text}</div>`;
+  return `<div style="width:100%; font-size:9px; text-align:center; color:${color}; font-family: Georgia, 'EB Garamond', serif;">${text}</div>`;
 }
 
 async function generatePdf(env, request) {
@@ -71,23 +79,31 @@ async function generatePdf(env, request) {
     await page.emulateMediaType('print');
 
     const generatedLabel = await page.evaluate('window.__reportGeneratedLabel');
-    const divisionLabels = await page.evaluate('Object.fromEntries(Object.entries(DIVISIONS).map(([k, d]) => [k, d.label]))');
-    const sectionKeys = await page.evaluate('window.__allSectionKeys()');
+    const divisionInfo = await page.evaluate('Object.fromEntries(Object.entries(DIVISIONS).map(([k, d]) => [k, { label: d.label, pin: d.pin }]))');
+    const sectionParts = await page.evaluate('window.__allSectionParts()');
 
     const pdfBuffers = [];
-    for (const key of sectionKeys) {
-      await page.evaluate(`window.__showOnlySection(${JSON.stringify(key)})`);
-      // Shrunk per-section (only this section's images are visible right
-      // now), not once for the whole report — decoding a division's
-      // dozen-ish photos at a time instead of every photo across all 5
-      // divisions at once is what keeps this from spiking the renderer's
-      // own memory and crashing the session outright. See reports2.js's
-      // comment on this function for the full story (an earlier version
-      // of this fix got this backwards).
+    for (const { key, part } of sectionParts) {
+      await page.evaluate(`window.__showOnlySectionPart(${JSON.stringify(key)}, ${JSON.stringify(part)})`);
+      // Shrunk per section/part (only what's visible right now), not once
+      // for the whole report — decoding a division's dozen-ish photos at a
+      // time instead of every photo across all 5 divisions at once is what
+      // keeps this from spiking the renderer's own memory and crashing the
+      // session outright. See reports2.js's comment on this function for
+      // the full story (an earlier version of this fix got this backwards).
       await page.evaluate('window.__shrinkImagesForPdf()');
-      const footerText = key === 'overview'
-        ? `Young Life University International Ministries — ${generatedLabel}`
-        : `Young Life University International Ministries — ${divisionLabels[key]} — ${generatedLabel}`;
+      // Every map page (the overview's world map, and a division's own
+      // title+map+metrics page) already shows the report/division title
+      // on-page, so a repeated footer there is redundant — only the
+      // ministry-listing pages get one, in that division's own color
+      // (matching the title's own color on the page before it). A single
+      // page.pdf() call can't vary its footer from page to page, which is
+      // exactly why the header/areas split (reports2.js's
+      // __allSectionParts) exists: it's the only way to give the map page
+      // and the listing pages that follow it different footers.
+      const footerTemplate = part === 'areas'
+        ? footerTemplateFor(`Young Life University International Ministries — ${divisionInfo[key].label} — ${generatedLabel}`, divisionInfo[key].pin)
+        : NO_FOOTER;
       // Explicit format/landscape/margin, not preferCSSPageSize — the
       // page's own @page rule sets `size: landscape` (a bare keyword, no
       // explicit dimensions), and letting Chrome's PDF engine resolve
@@ -102,7 +118,7 @@ async function generatePdf(env, request) {
         printBackground: true,
         displayHeaderFooter: true,
         headerTemplate: '<span></span>',
-        footerTemplate: footerTemplateFor(footerText),
+        footerTemplate,
       });
       pdfBuffers.push(pdfBytes);
     }
