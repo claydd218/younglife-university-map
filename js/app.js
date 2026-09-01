@@ -1796,6 +1796,18 @@ async function init() {
     // wait on (page.waitForFunction) — everything above this point is
     // synchronous DOM work, so once it's run the map is visually complete.
     window.__mapReady = true;
+    // A link opened in an in-app browser (Messages, etc. — not a regular
+    // Safari/Chrome tab) can settle into its final on-screen size without
+    // ever firing a resize/orientationchange/visualViewport event at all,
+    // leaving Leaflet's cached container size wrong from the very first
+    // paint (the map looks shifted up with dead space below it) with
+    // nothing to trigger refreshMapSize's usual recovery — rotating the
+    // phone (or refreshing) only fixes it because *that* does fire a real
+    // resize signal. Running the same retry burst unconditionally once
+    // after every load — not just in response to an actual event — covers
+    // that case too; invalidateSize() is a cheap no-op when the size
+    // already was correct, so this doesn't cost anything on a normal load.
+    refreshMapSizeSoon();
   } catch (err) {
     console.error(err);
     showStatus('Could not load ministry data. Check the data source in js/config.js.', true);
