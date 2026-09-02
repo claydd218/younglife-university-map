@@ -347,6 +347,10 @@
   }
   .photo-widget.dragover { background: #eef4fb; border-color: #7aa8d8; }
   .photo-widget img.photo-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 1px solid #ccc; cursor: zoom-in; }
+  /* Staff photos open the crop dialog on click instead of a zoom preview
+     (see createPhotoWidget's thumbCol click handler) — a plain pointer
+     reads as "click to act on this," not "click to see it bigger". */
+  .photo-widget img.photo-thumb.photo-thumb-editable { cursor: pointer; }
   .photo-widget .photo-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #eee; }
 
   .photo-zoom-row { grid-column: 1 / -1; margin-top: 4px; }

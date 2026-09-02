@@ -474,9 +474,16 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   container.innerHTML = '';
   let photoSlug = initialUrl ? (initialSlug || null) : null;
 
-  // Column 1: the photo itself, unchanged.
-  const thumb = initialUrl
-    ? Object.assign(document.createElement('img'), { className: 'photo-thumb', src: initialUrl })
+  // Column 1: the photo itself. Reassigned (not const) the first time a
+  // placeholder becomes a real photo — see uploadSourceFile below, which
+  // swaps the DOM node via replaceWith() and has to repoint this at the
+  // new element too, or every later reference here (including a second
+  // upload's own replaceWith call) would still target the first swap's
+  // now-parentless, detached placeholder — a real bug found while adding
+  // the click-to-recrop handler below, which specifically invites more
+  // than one upload in a single widget session.
+  let thumb = initialUrl
+    ? Object.assign(document.createElement('img'), { className: kind === 'staff' ? 'photo-thumb photo-thumb-editable' : 'photo-thumb', src: initialUrl })
     : Object.assign(document.createElement('div'), { className: 'photo-placeholder' });
   const thumbCol = document.createElement('div');
   thumbCol.className = 'photo-col-thumb';
@@ -526,9 +533,28 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
 
   container.append(thumbCol, infoCol, replaceCol, zoomRow);
 
-  thumbCol.addEventListener('click', (e) => {
+  // Staff photos: clicking an existing one re-opens the same crop dialog
+  // an upload goes through, instead of just showing a bigger version — the
+  // framing choice they made at upload time (or the browser's own
+  // uncontrollable object-fit:cover guess, for anything uploaded before
+  // this dialog existed) isn't a one-time, unrevisitable decision. Every
+  // other kind (a ministry/city photo, or a placeholder with no photo
+  // yet) keeps the plain toggle-a-larger-preview behavior below.
+  thumbCol.addEventListener('click', async (e) => {
     const img = e.target.closest('img.photo-thumb');
     if (!img) return;
+    if (kind === 'staff') {
+      const parts = getSlugParts();
+      if (!parts) {
+        setReplaceStatus(missingFieldsMessage(kind), 'error');
+        return;
+      }
+      const existingBlob = await (await fetch(img.src)).blob();
+      const cropped = await openCropDialog(existingBlob);
+      if (!cropped) return; // cancelled — leave the existing photo alone
+      await uploadSourceFile(cropped, parts);
+      return;
+    }
     if (zoomRow.hidden) {
       zoomImg.src = img.src;
       zoomRow.hidden = false;
@@ -586,6 +612,43 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
 
   refreshInfo(initialUrl);
 
+  // Shared by handleFile (a newly picked/dropped file) and the
+  // click-to-recrop handler above (re-cropping whatever's already
+  // uploaded) — everything past "we have a source image and know where
+  // it goes" is identical either way.
+  async function uploadSourceFile(sourceFile, parts) {
+    setReplaceStatus('Uploading…', 'uploading');
+    try {
+      const jpeg = await reencodeImage(sourceFile, kind);
+      const imageBase64 = await blobToBase64(jpeg);
+      const result = await apiFetch('/upload', {
+        method: 'POST',
+        body: JSON.stringify({ ...parts, imageBase64 }),
+      });
+      trackDeployVersion(result.deployVersion);
+      const objectUrl = URL.createObjectURL(jpeg);
+      thumb.src = objectUrl;
+      if (thumb.tagName !== 'IMG') {
+        const img = Object.assign(document.createElement('img'), {
+          className: kind === 'staff' ? 'photo-thumb photo-thumb-editable' : 'photo-thumb',
+          src: thumb.src,
+        });
+        thumb.replaceWith(img);
+        thumb = img;
+      }
+      setReplaceStatus('');
+      zoomRow.hidden = true;
+      photoSlug = slugFromParts(parts);
+      const measured = await refreshInfo(objectUrl);
+      // Pass the just-measured local blob, not a URL the caller would have
+      // to re-fetch from the repo — GitHub's Contents API has a brief
+      // read-after-write lag, so an immediate re-fetch can still 404.
+      if (onUploaded) onUploaded(result.path, measured);
+    } catch (err) {
+      setReplaceStatus(`Upload failed: ${err.message || err}`, 'error');
+    }
+  }
+
   async function handleFile(file) {
     if (!file) return;
     const parts = getSlugParts();
@@ -599,32 +662,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
       if (!cropped) return; // cancelled — leave the existing photo alone
       sourceFile = cropped;
     }
-    setReplaceStatus('Uploading…', 'uploading');
-    try {
-      const jpeg = await reencodeImage(sourceFile, kind);
-      const imageBase64 = await blobToBase64(jpeg);
-      const result = await apiFetch('/upload', {
-        method: 'POST',
-        body: JSON.stringify({ ...parts, imageBase64 }),
-      });
-      trackDeployVersion(result.deployVersion);
-      const objectUrl = URL.createObjectURL(jpeg);
-      thumb.src = objectUrl;
-      if (thumb.tagName !== 'IMG') {
-        const img = Object.assign(document.createElement('img'), { className: 'photo-thumb', src: thumb.src });
-        thumb.replaceWith(img);
-      }
-      setReplaceStatus('');
-      zoomRow.hidden = true;
-      photoSlug = slugFromParts(parts);
-      const measured = await refreshInfo(objectUrl);
-      // Pass the just-measured local blob, not a URL the caller would have
-      // to re-fetch from the repo — GitHub's Contents API has a brief
-      // read-after-write lag, so an immediate re-fetch can still 404.
-      if (onUploaded) onUploaded(result.path, measured);
-    } catch (err) {
-      setReplaceStatus(`Upload failed: ${err.message || err}`, 'error');
-    }
+    await uploadSourceFile(sourceFile, parts);
   }
 
   input.addEventListener('change', () => handleFile(input.files[0]));
