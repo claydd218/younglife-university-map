@@ -39,3 +39,12 @@ run_worker_first = true
 # dashboard for whether Browser Rendering needs enabling first.
 [browser]
 binding = "BROWSER"
+
+# Used by worker/lib/loginRateLimit.js to back the login lockout counter
+# (see that file for why it's a global counter, not per-IP). Every
+# read/write there already checks for this binding's existence and
+# fails open if it's missing, so an unset/misconfigured namespace here
+# degrades to "no rate limiting" rather than breaking login.
+[[kv_namespaces]]
+binding = "LOGIN_ATTEMPTS"
+id = "3275a550019a47559e2d529d30de9a1d"
