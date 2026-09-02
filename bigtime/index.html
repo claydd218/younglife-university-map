@@ -246,6 +246,37 @@
   }
   dialog#video-preview-dialog[open] { display: flex; flex-direction: column; }
   dialog#video-preview-dialog::backdrop { background: rgba(0,0,0,0.4); }
+
+  dialog#crop-photo-dialog {
+    width: min(400px, 92vw);
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+  dialog#crop-photo-dialog[open] { display: flex; flex-direction: column; }
+  dialog#crop-photo-dialog::backdrop { background: rgba(0,0,0,0.4); }
+  /* Circular, matching how a staff photo actually renders everywhere it's
+     used (public site, reports, this tool's own thumbnails) — the saved
+     file itself is still a plain square, this is just showing the admin
+     the same framing they'll actually get. */
+  .crop-viewport {
+    width: 320px;
+    height: 320px;
+    margin: 4px auto 0;
+    overflow: hidden;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+    cursor: grab;
+    touch-action: none;
+    background: #eee;
+  }
+  .crop-viewport:active { cursor: grabbing; }
+  .crop-viewport canvas { display: block; }
+  .crop-zoom-row { display: flex; align-items: center; gap: 10px; margin: 18px 0 2px; }
+  .crop-zoom-row input[type="range"] { flex: 1; }
+  .crop-zoom-icon { font-size: 17px; color: #888; user-select: none; line-height: 1; }
+  .crop-hint { font-size: 12.5px; color: #888; margin: 6px 0 0; text-align: center; }
   .field-inline-btn { display: flex; gap: 8px; align-items: center; }
   .field-inline-btn input { flex: 1; }
   /* 16:9 is standard for both YouTube and Vimeo — aspect-ratio keeps the
@@ -441,6 +472,7 @@
   .filter-toggle.on.status-no-staff { border-color: #c0392b; color: #c0392b; background: #fdecea; }
   .filter-toggle.on.status-no-universities { border-color: #c0392b; color: #c0392b; background: #fdecea; }
   .filter-toggle.on.status-no-ministry-photo { border-color: #c0392b; color: #c0392b; background: #fdecea; }
+  .filter-toggle.on.status-no-blurb { border-color: #c0392b; color: #c0392b; background: #fdecea; }
 
   h2.division { font-size: 17px; margin: 26px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #1a1a1a; }
   #ministries-report table { margin-bottom: 8px; }
@@ -638,6 +670,27 @@
     </div>
     <div class="dialog-body">
       <div class="video-embed-wrap" id="video-preview-embed"></div>
+    </div>
+  </dialog>
+
+  <dialog id="crop-photo-dialog">
+    <div class="dialog-header">
+      <h2>Crop Photo</h2>
+      <div class="dialog-header-actions">
+        <button type="button" class="btn secondary" id="crop-photo-cancel-btn">Cancel</button>
+        <button type="button" class="btn" id="crop-photo-save-btn">Save</button>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <div class="crop-viewport" id="crop-viewport">
+        <canvas id="crop-canvas"></canvas>
+      </div>
+      <div class="crop-zoom-row">
+        <span class="crop-zoom-icon">&minus;</span>
+        <input type="range" id="crop-zoom-slider" min="1" max="3" step="0.01" value="1">
+        <span class="crop-zoom-icon">&plus;</span>
+      </div>
+      <p class="crop-hint">Drag to reposition, use the slider to zoom.</p>
     </div>
   </dialog>
 

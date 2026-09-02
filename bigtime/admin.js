@@ -206,16 +206,18 @@ function wireTabs() {
 // switching staff output would just add a failed guess in that chain for no
 // benefit until/unless that guessing logic changes too. Mirrors the
 // server's own STAFF_OUTPUT_EXT/CITY_OUTPUT_EXT split (worker/routes/upload.js).
-async function reencodeImage(file, kind) {
-  const mime = kind === 'city' ? 'image/webp' : 'image/jpeg';
-  let bitmap;
+// Shared by reencodeImage and the staff-photo crop dialog — loads any
+// image (including iPhone HEIC — see createImageBitmap's WebKit HEIC
+// decode, which every iOS browser uses regardless of vendor) into
+// something both a canvas and the crop dialog can draw from directly.
+async function loadImageBitmap(file) {
   try {
-    bitmap = await createImageBitmap(file);
+    return await createImageBitmap(file);
   } catch {
     // Fallback path for engines without createImageBitmap support.
     const url = URL.createObjectURL(file);
     try {
-      bitmap = await new Promise((resolve, reject) => {
+      return await new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => resolve(img);
         img.onerror = reject;
@@ -227,6 +229,11 @@ async function reencodeImage(file, kind) {
       URL.revokeObjectURL(url);
     }
   }
+}
+
+async function reencodeImage(file, kind) {
+  const mime = kind === 'city' ? 'image/webp' : 'image/jpeg';
+  const bitmap = await loadImageBitmap(file);
 
   // The public lightbox (css/style.css's .lightbox-viewport) caps photos
   // at 900px CSS height — on a 2x/retina display that's ~1800px of real
@@ -265,6 +272,155 @@ async function reencodeImage(file, kind) {
     blob = await new Promise((resolve) => canvas.toBlob(resolve, encodeMime, quality));
   }
   return blob;
+}
+
+// Staff photos render everywhere as a fixed circular avatar (public site,
+// reports, this tool's own thumbnails) — object-fit:cover picks whatever
+// the browser happens to center on, which for a non-square source (most
+// real photos) often isn't the person's face. This lets the admin choose
+// that framing themselves before it's ever uploaded, instead of after the
+// fact by re-cropping and re-uploading a file externally.
+//
+// Resolves to a cropped, square JPEG Blob, or null if the admin cancelled
+// (the caller should leave the existing photo/upload untouched in that
+// case). Only wired into the staff-photo path (createPhotoWidget's
+// handleFile) — ministry/city photos keep their existing object-fit:cover
+// framing in a 220x165 box, a different problem (multiple photos, 4:3-ish
+// aspect) this dialog wasn't built for.
+//
+// Pan is drag (mouse or single-finger touch, via Pointer Events — one
+// handler for both). Zoom is the slider only, not pinch-gesture or scroll
+// — a second input method would duplicate what the slider already covers
+// for a single-image crop, not add real capability.
+function openCropDialog(file) {
+  return new Promise((resolve, reject) => {
+    const dialog = $('crop-photo-dialog');
+    const viewport = $('crop-viewport');
+    const canvas = $('crop-canvas');
+    const slider = $('crop-zoom-slider');
+    const ctx = canvas.getContext('2d');
+    const VIEW_SIZE = 320; // matches .crop-viewport's CSS width/height
+    const OUTPUT_SIZE = 800; // 2x PHOTO_MINIMUMS.staff, comfortable headroom
+
+    canvas.width = VIEW_SIZE;
+    canvas.height = VIEW_SIZE;
+
+    let bitmap;
+    let scale = 1;
+    let minScale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    function draw() {
+      ctx.clearRect(0, 0, VIEW_SIZE, VIEW_SIZE);
+      ctx.drawImage(bitmap, offsetX, offsetY, bitmap.width * scale, bitmap.height * scale);
+    }
+
+    // Keeps the image covering the whole viewport at every pan position —
+    // offset can range from (viewport - scaledImageSize) up to 0, in each
+    // axis, so a drag can never pull a gap in past the image's own edge.
+    function clampOffsets() {
+      const w = bitmap.width * scale;
+      const h = bitmap.height * scale;
+      offsetX = Math.min(0, Math.max(VIEW_SIZE - w, offsetX));
+      offsetY = Math.min(0, Math.max(VIEW_SIZE - h, offsetY));
+    }
+
+    function onZoomInput() {
+      const zoomFactor = parseFloat(slider.value);
+      const newScale = minScale * zoomFactor;
+      // Zoom toward the viewport's own center rather than the image's
+      // top-left corner, so moving the slider doesn't also yank whatever
+      // was centered out of frame.
+      const cx = VIEW_SIZE / 2;
+      const cy = VIEW_SIZE / 2;
+      const imgX = (cx - offsetX) / scale;
+      const imgY = (cy - offsetY) / scale;
+      scale = newScale;
+      offsetX = cx - imgX * scale;
+      offsetY = cy - imgY * scale;
+      clampOffsets();
+      draw();
+    }
+
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    function onPointerDown(e) {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      viewport.setPointerCapture(e.pointerId);
+    }
+    function onPointerMove(e) {
+      if (!dragging) return;
+      offsetX += e.clientX - lastX;
+      offsetY += e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      clampOffsets();
+      draw();
+    }
+    function onPointerUp(e) {
+      dragging = false;
+      viewport.releasePointerCapture(e.pointerId);
+    }
+
+    function cleanup() {
+      viewport.removeEventListener('pointerdown', onPointerDown);
+      viewport.removeEventListener('pointermove', onPointerMove);
+      viewport.removeEventListener('pointerup', onPointerUp);
+      slider.removeEventListener('input', onZoomInput);
+      cancelBtn.removeEventListener('click', onCancel);
+      saveBtn.removeEventListener('click', onSave);
+    }
+    function onCancel() {
+      cleanup();
+      dialog.close();
+      resolve(null);
+    }
+    function onSave() {
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = OUTPUT_SIZE;
+      outCanvas.height = OUTPUT_SIZE;
+      const outScale = OUTPUT_SIZE / VIEW_SIZE;
+      outCanvas.getContext('2d').drawImage(
+        bitmap,
+        offsetX * outScale, offsetY * outScale,
+        bitmap.width * scale * outScale, bitmap.height * scale * outScale,
+      );
+      outCanvas.toBlob((blob) => {
+        cleanup();
+        dialog.close();
+        resolve(blob);
+      }, 'image/jpeg', 0.9);
+    }
+
+    const cancelBtn = $('crop-photo-cancel-btn');
+    const saveBtn = $('crop-photo-save-btn');
+
+    loadImageBitmap(file).then((loaded) => {
+      bitmap = loaded;
+      // Covers the full square viewport with no letterboxing at the
+      // smallest allowed zoom — anything less would show background
+      // through a gap on one axis.
+      minScale = Math.max(VIEW_SIZE / bitmap.width, VIEW_SIZE / bitmap.height);
+      scale = minScale;
+      offsetX = (VIEW_SIZE - bitmap.width * scale) / 2;
+      offsetY = (VIEW_SIZE - bitmap.height * scale) / 2;
+      slider.value = '1';
+      draw();
+
+      viewport.addEventListener('pointerdown', onPointerDown);
+      viewport.addEventListener('pointermove', onPointerMove);
+      viewport.addEventListener('pointerup', onPointerUp);
+      slider.addEventListener('input', onZoomInput);
+      cancelBtn.addEventListener('click', onCancel);
+      saveBtn.addEventListener('click', onSave);
+
+      dialog.showModal();
+    }).catch(reject);
+  });
 }
 
 function blobToBase64(blob) {
@@ -437,9 +593,15 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
       setReplaceStatus(missingFieldsMessage(kind), 'error');
       return;
     }
+    let sourceFile = file;
+    if (kind === 'staff') {
+      const cropped = await openCropDialog(file);
+      if (!cropped) return; // cancelled — leave the existing photo alone
+      sourceFile = cropped;
+    }
     setReplaceStatus('Uploading…', 'uploading');
     try {
-      const jpeg = await reencodeImage(file, kind);
+      const jpeg = await reencodeImage(sourceFile, kind);
       const imageBase64 = await blobToBase64(jpeg);
       const result = await apiFetch('/upload', {
         method: 'POST',
@@ -743,7 +905,7 @@ function isRecent(row) {
 // Each key narrows the list when on; all active filters combine with AND
 // (e.g. Recent + No Staff shows only ministries that are both). Off by
 // default so the list starts unfiltered.
-let ministriesFilter = { recent: false, developing: false, noStaff: false, noUniversities: false, noMinistryPhoto: false };
+let ministriesFilter = { recent: false, developing: false, noStaff: false, noUniversities: false, noMinistryPhoto: false, noBlurb: false };
 
 function matchesMinistriesFilter(row) {
   if (ministriesFilter.recent && !isRecent(row)) return false;
@@ -751,6 +913,7 @@ function matchesMinistriesFilter(row) {
   if (ministriesFilter.noStaff && row.staff.length !== 0) return false;
   if (ministriesFilter.noUniversities && row.universities.length !== 0) return false;
   if (ministriesFilter.noMinistryPhoto && row.photos.length !== 0) return false;
+  if (ministriesFilter.noBlurb && row.blurb.trim() !== '') return false;
   return true;
 }
 
@@ -761,6 +924,7 @@ function wireMinistriesFilterBar() {
     { key: 'noStaff', status: 'no-staff', label: 'No Staff' },
     { key: 'noUniversities', status: 'no-universities', label: 'No Universities' },
     { key: 'noMinistryPhoto', status: 'no-ministry-photo', label: 'No Ministry Photo' },
+    { key: 'noBlurb', status: 'no-blurb', label: 'No Blurb' },
     { key: 'developing', status: 'developing', label: 'Developing' },
   ];
   bar.innerHTML = defs.map((d) => `<button type="button" class="filter-toggle status-${d.status} ${ministriesFilter[d.key] ? 'on' : ''}" data-key="${d.key}">${d.label}</button>`).join('');
