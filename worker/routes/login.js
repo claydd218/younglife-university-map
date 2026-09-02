@@ -37,8 +37,15 @@ export async function login(request, env) {
   // — so a tripped lockout costs a tripped attacker nothing but a redirect,
   // not a Turnstile siteverify round trip. See loginRateLimit.js for why
   // this is a global counter, not per-IP.
+  //
+  // error=locked (not the generic error=1 below) so bigtime/login.js can
+  // show a distinct message — otherwise the legitimate admin, having
+  // tripped this themselves with a few genuine mistypes, sees "check your
+  // password", retypes the *correct* one, gets rejected again, and has no
+  // way to know they're waiting out a timer rather than still getting the
+  // password wrong.
   if (await isLoginLockedOut(env)) {
-    return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
+    return Response.redirect(new URL('/bigtime/login?error=locked', request.url), 302);
   }
 
   const form = await request.formData();
