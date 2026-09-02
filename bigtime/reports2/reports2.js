@@ -301,7 +301,30 @@ window.__shrinkImagesForPdf = async function () {
           const canvas = document.createElement('canvas');
           canvas.width = targetW;
           canvas.height = targetH;
-          canvas.getContext('2d').drawImage(img, 0, 0, targetW, targetH);
+          // Replicates object-fit:cover (crop to fill, centered) instead
+          // of stretching the whole source into the target box — a
+          // naturalWidth/naturalHeight aspect ratio that doesn't match
+          // the box's own (any portrait ministry photo squeezed into the
+          // 220x165 box, for instance) visibly distorted once the image's
+          // own pixels were pre-stretched to the box's shape: the <img>
+          // tag's object-fit:cover CSS had nothing left to crop by the
+          // time it ever saw this replacement src.
+          const srcAspect = img.naturalWidth / img.naturalHeight;
+          const dstAspect = targetW / targetH;
+          let sx = 0;
+          let sy = 0;
+          let sw = img.naturalWidth;
+          let sh = img.naturalHeight;
+          if (srcAspect > dstAspect) {
+            // Source is relatively wider than the box — crop its sides.
+            sw = img.naturalHeight * dstAspect;
+            sx = (img.naturalWidth - sw) / 2;
+          } else {
+            // Source is relatively taller than the box — crop top/bottom.
+            sh = img.naturalWidth / dstAspect;
+            sy = (img.naturalHeight - sh) / 2;
+          }
+          canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
           img.src = canvas.toDataURL('image/jpeg', 0.82);
         } catch (err) {
           console.error('Could not shrink image for PDF, leaving it full-size:', img.src, err);
