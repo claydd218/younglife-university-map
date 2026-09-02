@@ -380,10 +380,22 @@ function openCropDialog(file) {
       resolve(null);
     }
     function onSave() {
+      // Never claim more detail than the current crop actually has —
+      // capping at a flat OUTPUT_SIZE regardless of zoom meant a heavily
+      // zoomed-in (or just low-res to start with) crop got upscaled to
+      // fill 800x800 anyway, so the saved file's own dimensions always
+      // read as "good" even though the visible content was still blurry.
+      // VIEW_SIZE / scale is how many real source pixels the viewport's
+      // current crop/zoom actually covers per axis — output at that,
+      // capped at OUTPUT_SIZE, so a genuinely low-detail crop saves (and
+      // is measured, and flagged Low by the existing classify() below) at
+      // its real resolution instead of a dishonestly upscaled one.
+      const capturedSourcePixels = VIEW_SIZE / scale;
+      const outputSize = Math.max(1, Math.min(OUTPUT_SIZE, Math.round(capturedSourcePixels)));
       const outCanvas = document.createElement('canvas');
-      outCanvas.width = OUTPUT_SIZE;
-      outCanvas.height = OUTPUT_SIZE;
-      const outScale = OUTPUT_SIZE / VIEW_SIZE;
+      outCanvas.width = outputSize;
+      outCanvas.height = outputSize;
+      const outScale = outputSize / VIEW_SIZE;
       outCanvas.getContext('2d').drawImage(
         bitmap,
         offsetX * outScale, offsetY * outScale,
