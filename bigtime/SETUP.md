@@ -31,3 +31,16 @@ One tradeoff worth knowing: since everyone shares one password, git commit histo
 ## 3. Build settings (only matters because this branch adds `package.json`)
 
 Verify in **Settings** → **Build**: since this repo now has a `wrangler.toml`, Cloudflare's git integration should deploy via `wrangler deploy` automatically — no `npm run build` step should be needed or triggered. `package.json` here is dev tooling only (`wrangler`, for running the admin Worker locally via `npm run dev`); the site itself still has no build step beyond what `wrangler deploy` does on its own.
+
+## 4. Temporary public-site password gate
+
+Requested to keep the whole public site private for a while before the real launch — separate from, and independent of, the admin login above. Same **Variables and Secrets** screen as section 1, two more secrets:
+
+| Name | Value | Type |
+|---|---|---|
+| `SITE_SHARED_PASSWORD` | The password visitors enter | Secret (encrypted) |
+| `SITE_SESSION_SECRET` | A long random string (e.g. `openssl rand -hex 32`) — never shared with anyone, just used to sign the site's session cookie | Secret (encrypted) |
+
+Until both are set, `hasValidSiteSession` fails closed (same fail-safe pattern as the admin secrets), so every visitor gets bounced to `/site-login` with no way to pass it — set both before this deploys, not after.
+
+**To remove it later** (real launch day): delete `worker/lib/siteSession.js`, `worker/routes/site-login.js`, `site-login.html`, and `site-login.js`; in `worker/index.js`, remove the `siteLogin`/`siteLogout`/`hasValidSiteSession`/`createSiteSessionCookie` imports, the `PUBLIC_SITE_PATHS` constant, the `needsSiteSession`/`siteSessionValid` block right after the admin session check, the two `/api/site-login`/`/api/site-logout` lines in `routeRequest`, and fold the cookie-renewal `if` back down to just `sessionValid`. Nothing else in the repo references any of it. The two secrets above can be left in the dashboard afterward (unused) or removed — either is safe.

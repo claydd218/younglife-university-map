@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Young Life University International Ministries</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    max-width: 360px;
+    margin: 18vh auto;
+    padding: 0 20px;
+    color: #3b2a1a;
+    background: #f1e6cd;
+  }
+  h1 { font-size: 19px; margin-bottom: 4px; }
+  p.sub { font-size: 13.5px; color: #6b5a44; margin-top: 0; margin-bottom: 18px; }
+  form {
+    background: #f7efdc;
+    border: 1px solid #3b2a1a;
+    border-radius: 4px;
+    padding: 20px;
+  }
+  input[type="password"] {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    padding: 9px 10px;
+    border: 1px solid #6b5a44;
+    border-radius: 3px;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+    background: #fff;
+  }
+  button {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    padding: 9px 14px;
+    border: 1px solid #3b2a1a;
+    border-radius: 3px;
+    background: #3b2a1a;
+    color: #f7efdc;
+    cursor: pointer;
+  }
+  button:hover { background: #5a4530; }
+  .error {
+    color: #7a1f1f;
+    font-size: 13.5px;
+    margin-bottom: 12px;
+  }
+  .error[hidden] { display: none; }
+</style>
+</head>
+<body>
+  <h1>Young Life University International Ministries</h1>
+  <p class="sub">This site is temporarily password-protected.</p>
+  <form method="POST" action="/api/site-login">
+    <div class="error" id="error" hidden>Wrong password — try again.</div>
+    <input type="password" name="password" placeholder="Password" autofocus required>
+    <button type="submit">Enter</button>
+  </form>
+  <script src="site-login.js"></script>
+</body>
+</html>

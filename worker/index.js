@@ -25,6 +25,8 @@ import { onRequestGet as reportPdfGet } from './routes/report-pdf.js';
 import { onRequestGet as imagesManifestGet } from './routes/images-manifest.js';
 import { login, logout } from './routes/login.js';
 import { hasValidSession, createSessionCookie } from './lib/session.js';
+import { siteLogin, siteLogout } from './routes/site-login.js';
+import { hasValidSiteSession, createSiteSessionCookie } from './lib/siteSession.js';
 
 function jsonError(status, message) {
   return new Response(JSON.stringify({ error: 'error', message }), {
@@ -101,6 +103,18 @@ function withSecurityHeaders(response) {
 // actually needs it is exactly the audience that isn't logged in yet.
 const PUBLIC_ADMIN_PATHS = new Set(['/bigtime/login.html', '/bigtime/login', '/bigtime/login.js', '/bigtime/api/login', '/bigtime/api/logout']);
 
+// TEMPORARY public-site password gate — requested to keep the site private
+// for a while before the real public launch, removed by hand once that
+// happens (delete this block, PUBLIC_SITE_PATHS, the siteLogin/siteLogout
+// import above, worker/lib/siteSession.js, worker/routes/site-login.js,
+// site-login.html, and site-login.js — nothing else depends on any of
+// it). Entirely independent of the admin login above: /bigtime/* keeps
+// using its own gate untouched, and a valid admin session does NOT also
+// satisfy this one (or vice versa) — simplest to reason about, and to
+// remove cleanly later, as two gates that never interact. Same *.html/
+// extensionless double-entry reasoning as PUBLIC_ADMIN_PATHS above.
+const PUBLIC_SITE_PATHS = new Set(['/site-login.html', '/site-login', '/site-login.js', '/api/site-login', '/api/site-logout']);
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -118,9 +132,18 @@ export default {
         return withSecurityHeaders(Response.redirect(new URL('/bigtime/login', request.url), 302));
       }
 
+      // See PUBLIC_SITE_PATHS above — TEMPORARY, remove alongside it.
+      const needsSiteSession = !isAdminPath && !PUBLIC_SITE_PATHS.has(pathname);
+      const siteSessionValid = needsSiteSession && (await hasValidSiteSession(request, env));
+      if (needsSiteSession && !siteSessionValid) {
+        return withSecurityHeaders(Response.redirect(new URL('/site-login', request.url), 302));
+      }
+
       const routeRequest = async () => {
         if (pathname === '/bigtime/api/login' && method === 'POST') return await login(request, env);
         if (pathname === '/bigtime/api/logout' && method === 'POST') return await logout(request);
+        if (pathname === '/api/site-login' && method === 'POST') return await siteLogin(request, env);
+        if (pathname === '/api/site-logout' && method === 'POST') return await siteLogout(request);
 
         if (pathname === '/bigtime/api/ministries') {
           if (method === 'GET') return await ministriesGet({ request, env, ctx });
@@ -172,14 +195,15 @@ export default {
       // cookie with a fresh SESSION_DAYS expiry (see session.js) from
       // *now*, rather than a fixed expiry set once at login — so staying
       // active keeps you logged in indefinitely, and only that many days
-      // of real inactivity signs you out. login() already sets its own
-      // first cookie on the response it returns (that path never reaches
-      // here — it's in PUBLIC_ADMIN_PATHS, so sessionValid is always
-      // false for it), so this only needs to cover requests made with an
-      // existing session.
-      if (sessionValid) {
+      // of real inactivity signs you out. login()/siteLogin() already set
+      // their own first cookie on the response they return (those paths
+      // never reach here — they're in PUBLIC_ADMIN_PATHS/PUBLIC_SITE_PATHS,
+      // so sessionValid/siteSessionValid are always false for them), so
+      // this only needs to cover requests made with an existing session.
+      if (sessionValid || siteSessionValid) {
         const renewed = new Response(response.body, response);
-        renewed.headers.append('Set-Cookie', await createSessionCookie(env));
+        if (sessionValid) renewed.headers.append('Set-Cookie', await createSessionCookie(env));
+        if (siteSessionValid) renewed.headers.append('Set-Cookie', await createSiteSessionCookie(env));
         return withSecurityHeaders(renewed);
       }
       return withSecurityHeaders(response);
