@@ -91,7 +91,6 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 96,Auckland,New Zealand,-36.8272,174.7609,,false,,Lyall Carter (YLU Coordinator),YLU in New Zealand was launched in 2026 by the existing local YL Staff.,auckland-new-zealand-1.webp,,,2026-09-02T08:48:52.015Z
 97,Armidale,Australia,-30.5145,151.6657,2027,true,University of New England (2027),Caity Howie (Area Director),Developing new ministry in Armidale with strategic plan to launch in January 2027.,,,,2026-09-02T07:55:10.775Z
 98,Prague,Czechia,50.0875,14.4213,,false,,,,,,,2026-09-03T03:56:38.355Z
-99,Helsinki,Finland,60.1666,24.9435,,false,,,test ministry - delete,,,,2026-09-03T15:47:30.329Z
 100,Kyiv,Ukraine,50.4500,30.5241,2024,false,Kyiv University of Culture and Arts (2024); Taras Shevchenko National Univ of Kyiv (2025),Anna Turchynska (College director),,kyiv-ukraine-1.webp; kyiv-ukraine-2.webp,,,2026-09-03T17:11:43.293Z
 101,Zhytomyr,Ukraine,50.9081,28.3868,2025,false,Zhytomyr Polytechnic State University (2025),"Anna Turchynska, Ivan (College Coordinator)",,zhytomyr-ukraine-1.webp; zhytomyr-ukraine-2.webp; zhytomyr-ukraine-3.webp,,,2026-09-03T17:17:03.970Z
 102,Cherkasy,Ukraine,49.1460,31.2272,2024,false,Bohdan Khmelnytsky National University of Cherkasy (2024),Anna Turchynska (College Cooordinator),,cherkasy-ukraine-1.webp; cherkasy-ukraine-2.webp; cherkasy-ukraine-3.webp,,,2026-09-03T17:19:48.408Z
