@@ -67,13 +67,64 @@ h1, h2, h3, .legend-label, .cluster-badge {
 }
 
 .site-header h1 {
-  margin: 0;
+  margin: 0 auto;
   pointer-events: auto;
   user-select: none;
-  font-size: clamp(18px, 3vw, 30px);
+  /* Flat, not scaled by vw — measured against the actual rendered text
+     width (see the two media queries below) to guarantee it clears the
+     nav-menu button whenever it's showing as one line, at every width
+     that range applies to, rather than a vw formula that could outgrow
+     that guarantee on some in-between viewport. */
+  font-size: 26px;
   letter-spacing: 0.06em;
   color: var(--ink);
   text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+}
+
+/* The title is split into two nowrap halves (see index.html) with a plain,
+   breakable space between them — stays on one line whenever it fits, and
+   when it doesn't, that space is the only place left to break, so it
+   always wraps right at "University / International" instead of wherever
+   a narrow viewport's natural word-wrap happens to land. */
+.site-header h1 .title-part {
+  white-space: nowrap;
+}
+
+/* Single-line range only: the header's own left/right padding alone isn't
+   enough clearance from the fixed nav-menu button (measured: the button's
+   left edge sits 34px inside the header's own right content edge), so a
+   centered one-line title needs extra room reserved on both sides — only
+   above the breakpoint below, since the two-line layout's lines are each
+   short enough to clear the button on their own (see that query's own
+   comment). Measured at 26px flat: the full title needs 755px, so this
+   only ever actually applies once there's room for that plus the 100px
+   reserved here. */
+@media (min-width: 951px) {
+  .site-header h1 {
+    max-width: calc(100% - 100px);
+  }
+}
+
+/* Left to its own devices the single line wouldn't wrap until it's shrunk
+   quite small (measured: ~560px viewport before the old vw-scaled version
+   was forced to) — cramped-looking, and cutting it close to the nav-menu
+   button. Forcing the two-line break here instead, well before that
+   natural point, means it never has to get that small on one line, and
+   each of the two now-shorter lines has enough room to size back up
+   bigger than the flat one-line size above ever reaches. Verified against
+   the actual rendered width of "International Ministries" (the longer
+   half) at every step from a 375px phone up to this breakpoint — the 20px
+   floor and 4.8vw rate both keep it inside the header's own padding alone
+   (no extra button reservation needed here: even at this breakpoint's own
+   32px cap, that half only needs 469px, far short of the ~860px on offer). */
+@media (max-width: 950px) {
+  .site-header h1 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.05em;
+    font-size: clamp(20px, 4.8vw, 32px);
+  }
 }
 
 /* ---------- Metrics overlay ---------- */
@@ -109,23 +160,42 @@ h1, h2, h3, .legend-label, .cluster-badge {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-  max-width: 480px;
+  max-width: 520px;
   margin: 0 auto;
 }
 
 .metric-box {
-  min-width: 68px;
-  padding: 6px 12px;
+  min-width: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px;
   background: rgba(247, 239, 220, 0.92);
   border: 1px solid var(--ink);
   box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
 }
 
 .metric-box-label {
+  /* Fixed to a 2-line-tall zone and middle-aligned, so a 1-line label
+     (Countries, Staff, Universities) sits centered in that zone rather
+     than at either edge — and the zone's fixed height still keeps every
+     box's number at the same height below it either way. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
   font-family: 'Cinzel', serif;
   font-size: 10px;
+  line-height: 1.2;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  text-align: center;
+  /* Only the deliberate <br> (see renderMetrics in js/app.js) should ever
+     break a label — nowrap doesn't suppress a forced break, just the
+     natural wrap that was letting "Universities" overflow past a
+     narrower box on small phones. */
+  white-space: nowrap;
   color: var(--ink-soft);
 }
 
@@ -208,9 +278,11 @@ h1, h2, h3, .legend-label, .cluster-badge {
   background: var(--parchment);
 }
 
-.nav-menu-item .color-swatch {
-  width: 12px;
-  height: 12px;
+.nav-menu-item .color-swatch,
+.nav-menu-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 /* ---------- Map ---------- */
@@ -1192,9 +1264,6 @@ img.popup-photo {
   .compass-rose {
     width: 80px;
     height: 80px;
-  }
-  .site-header h1 {
-    font-size: 16px;
   }
   .leaflet-popup-content {
     width: 300px !important;

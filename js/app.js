@@ -526,7 +526,7 @@ function renderMetrics(metrics, accentColor) {
   const textStyle = accentColor ? ` style="color:${accentColor}"` : '';
   container.innerHTML = metrics.map(({ label, num }) => `
     <div class="metric-box"${boxStyle}>
-      <div class="metric-box-label"${textStyle}>${escapeHtml(label)}</div>
+      <div class="metric-box-label"${textStyle}>${escapeHtml(label).replace(' ', '<br>')}</div>
       <div class="metric-box-num"${textStyle}>${num}</div>
     </div>
   `).join('');
@@ -592,7 +592,10 @@ function wireNavMenu() {
     toggle.setAttribute('aria-expanded', 'true');
   }
 
-  list.innerHTML = `<li><button type="button" class="nav-menu-item active" data-nav="world">World</button></li>`
+  list.innerHTML = `<li><button type="button" class="nav-menu-item active" data-nav="world">
+        <img class="nav-menu-icon" src="images/favicon.svg" alt="">
+        <span>World</span>
+      </button></li>`
     + Object.entries(DIVISIONS).map(([key, div]) => `
       <li><button type="button" class="nav-menu-item" data-nav="${escapeHtml(key)}">
         <span class="color-swatch" style="background:${div.pin}"></span>
@@ -1451,11 +1454,19 @@ function wireVideoLightbox() {
 function wireTitleEasterEgg() {
   const titleEl = document.getElementById('site-title');
   if (!titleEl) return;
-  const original = titleEl.textContent;
+  // Saved as markup, not just text — the title's real content is two
+  // nowrap <span>s (see index.html/the .title-part rule in style.css) so
+  // it only breaks at the "University / International" joint when it
+  // doesn't fit on one line; restoring via textContent would flatten that
+  // back to plain auto-wrapping text after the first toggle.
+  const originalHtml = titleEl.innerHTML;
   const joke = 'The sun never sets on the Brett-ish Empire';
+  let showingJoke = false;
   titleEl.addEventListener('click', (e) => {
     if (e.detail !== 3) return;
-    titleEl.textContent = titleEl.textContent === original ? joke : original;
+    showingJoke = !showingJoke;
+    if (showingJoke) titleEl.textContent = joke;
+    else titleEl.innerHTML = originalHtml;
   });
 }
 
