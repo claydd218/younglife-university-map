@@ -2284,13 +2284,15 @@ function wireReportPdfButton() {
     // rather than set immediately, so the label only ever switches to
     // "generating" once a click is actually turning out to be a slow live
     // one, not on every click regardless of which path this one takes.
-    // 2500ms, not something smaller — a cache hit still costs several
+    // 3000ms, not something smaller — a cache hit still costs several
     // sequential GitHub API round trips server-side (deploy-version +
     // report-meta.json, then the PDF itself via the Contents API and,
     // since it's over GitHub's 1MB inline-content limit, a second Blobs
-    // API call after that) before the multi-MB transfer even starts, and
-    // 800ms turned out too short for that in practice.
-    const GENERATING_LABEL_DELAY_MS = 2500;
+    // API call after that) before the multi-MB transfer even starts —
+    // 800ms, then 2500ms, both still turned out too short for that in
+    // practice (a brief flash to "Generating PDF…" on what was actually a
+    // cache hit).
+    const GENERATING_LABEL_DELAY_MS = 3000;
     const showGeneratingLabel = setTimeout(() => {
       btn.textContent = 'Generating PDF… this can take a few minutes';
     }, GENERATING_LABEL_DELAY_MS);
