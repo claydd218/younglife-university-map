@@ -409,10 +409,13 @@
     background: #f5f9fd;
   }
   .ministry-photos-dropzone.dragover { background: #eef4fb; border-color: #7aa8d8; }
-  /* City/Country aren't filled in yet — dims just the add affordance, not
-     any already-uploaded photos above it (still removable/reorderable). */
+  /* City/Country aren't filled in yet — dims just the add button/hint, not
+     any already-uploaded photos above it (still removable/reorderable) or
+     the note explaining why (kept at full opacity so the red still reads
+     clearly, not muted along with the rest). */
   .ministry-photos-dropzone.add-disabled .ministry-photos-add-row { opacity: 0.5; pointer-events: none; }
   .ministry-photos-add-row { display: flex; align-items: center; gap: 10px; }
+  .ministry-photo-disabled-note { margin-top: 8px; font-size: 12.5px; color: #c0392b; }
   .ministry-photos-drop-hint { font-size: 12.5px; color: #888; }
   .ministry-photos { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
   .ministry-photo-empty { font-size: 13px; color: #888; padding: 4px 2px; }
@@ -631,9 +634,9 @@
               <button type="button" class="btn secondary btn-small" id="add-ministry-photo-btn">+ Add Photo(s)</button>
               <span class="ministry-photos-drop-hint">or drop photos here</span>
             </div>
+            <div class="ministry-photo-disabled-note" id="ministry-photo-disabled-note" hidden>Fill in City and Country first, then add photos.</div>
           </div>
           <input type="file" id="ministry-photo-input" class="hidden-file-input" accept="image/*" multiple>
-          <div class="field-note" id="ministry-photo-disabled-note" hidden>Fill in City and Country first, then add photos.</div>
           <div class="ministry-photo-hint">First photo is the main one shown on the map popup — use the arrows to reorder. Recommended: at least 1200×900px (4:3).</div>
         </div>
 
