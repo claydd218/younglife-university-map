@@ -1920,6 +1920,12 @@ function wireDialog() {
   wireMinistryPhotoAdd();
   wireVideoLinkFields();
   $('field-city').addEventListener('blur', autoLookupLatLngOnBlur);
+  // The lookup status ("Found: ...", an error, etc.) describes whatever
+  // City held at the last blur — stale and potentially misleading the
+  // moment the field is edited again, so clear it as soon as typing
+  // resumes rather than leaving it up until the next blur re-runs the
+  // lookup and replaces it.
+  $('field-city').addEventListener('input', () => setLatLngLookupStatus(''));
   $('pin-placement-btn').addEventListener('click', togglePinPlacementMap);
   $('dialog-close-btn').addEventListener('click', saveMinistry);
   $('dialog-cancel-btn').addEventListener('click', () => $('ministry-dialog').close());
