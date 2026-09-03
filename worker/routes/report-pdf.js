@@ -12,7 +12,8 @@ import { errorResponse, committerFromRequest } from '../lib/http.js';
 import { getFile, getFileBase64 } from '../lib/github.js';
 import { DEPLOY_VERSION_PATH } from '../lib/deployVersion.js';
 import { generateReportPdf, withTimeout, GENERATE_TIMEOUT_MS } from '../lib/reportCapture.js';
-import { isMapsCacheFreshFor } from '../lib/mapArchive.js';
+import { captureAllMaps } from '../lib/mapCapture.js';
+import { isMapsCacheFreshFor, saveMapsNow } from '../lib/mapArchive.js';
 import { tryAcquireGenerationLock, releaseGenerationLock } from '../lib/browserLock.js';
 import {
   getReportCacheStatus,
@@ -54,29 +55,67 @@ async function pollForFreshCache(env, timeoutMs) {
   return null;
 }
 
-// maps/*.png are kept fresh by a completely separate background job
-// (worker/lib/mapArchive.js's regenerateMapArchive, triggered by the same
-// ministry edit as this report's own invalidation) that does its own full
-// live map capture — which can easily still be running well after this
-// report's own deploy-version check already says "the data is current,
-// go ahead". Confirmed live: a new ministry showed up correctly in the
-// listing and on the live interactive map, but the PDF's own map images
-// were the old ones, uncolored/unzoomed for it — generation ran before
-// the map capture had caught up. Waiting here for isMapsCacheFreshFor to
-// agree avoids embedding maps known not to match what's about to be
-// generated; best-effort only — if the map capture is itself unusually
-// slow or never ran (env.BROWSER missing on some future deploy, say),
-// this gives up after a bounded wait and generates anyway rather than
-// blocking the admin indefinitely over maps specifically.
-const MAPS_WAIT_TIMEOUT_MS = GENERATE_TIMEOUT_MS;
-async function waitForFreshMaps(env, deployVersion) {
-  if (await isMapsCacheFreshFor(env, deployVersion)) return true;
-  const deadline = Date.now() + MAPS_WAIT_TIMEOUT_MS;
+function bytesEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+const MAPS_DEPLOY_WAIT_TIMEOUT_MS = 150000;
+const MAPS_DEPLOY_WAIT_INTERVAL_MS = 5000;
+
+// Confirms a just-committed maps capture has actually gone live —
+// generateReportPdf's Puppeteer page load fetches maps/*.png over real
+// HTTP from the deployed site, so committing new bytes to the repo isn't
+// enough on its own, the deploy that includes them has to have landed
+// too. Compares world.png's actual bytes rather than reusing
+// data/deploy-version.txt (that file is a shared signal report-meta.json
+// freshness already keys off of via `deployVersion` above — bumping it
+// again here just to get something waitable would make the report look
+// stale again immediately for no real data change).
+async function waitForMapsDeploy(request, expectedWorldBytes) {
+  const url = new URL('/maps/world.png', request.url).toString();
+  const deadline = Date.now() + MAPS_DEPLOY_WAIT_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-    if (await isMapsCacheFreshFor(env, deployVersion)) return true;
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (res.ok) {
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (bytesEqual(bytes, expectedWorldBytes)) return true;
+      }
+    } catch {
+      // transient network hiccup — just retry until the deadline
+    }
+    await new Promise((resolve) => setTimeout(resolve, MAPS_DEPLOY_WAIT_INTERVAL_MS));
   }
   return false;
+}
+
+// maps/*.png are kept fresh by a completely separate background job
+// (worker/lib/mapArchive.js's regenerateMapArchive, triggered by the same
+// ministry edit as this report's own invalidation) — which depends on that
+// job's own waitForDeploy() call succeeding and actually running to
+// completion. Confirmed live it can silently fail to ever happen at all
+// (a fetch it makes got blocked by the site-gate redirect, or its own
+// deploy-confirmation raced a later deploy and never matched) — this used
+// to just poll isMapsCacheFreshFor and hope that job would eventually
+// catch up, which meant a stale map could stay stale forever with nothing
+// left to retry it. Since this request already holds the Browser
+// Rendering lock for its own report generation, it's simpler and far more
+// reliable to just capture fresh maps itself right here rather than wait
+// on a separate job that may never finish.
+async function ensureFreshMaps(env, request, deployVersion, commit) {
+  if (await isMapsCacheFreshFor(env, deployVersion)) return;
+  try {
+    const captured = await captureAllMaps(env, request);
+    await saveMapsNow(env, captured, commit, deployVersion);
+    const deployed = await waitForMapsDeploy(request, captured.world);
+    if (!deployed) {
+      console.error('Report generation: freshly-captured maps committed, but their deploy did not go live in time — the report may still embed the previous maps.');
+    }
+  } catch (err) {
+    console.error('Report generation: failed to refresh stale maps before embedding — using whatever is currently cached.', err);
+  }
 }
 
 // Reflects when the PDF was actually generated, not "today" — a re-served
@@ -137,12 +176,10 @@ export async function onRequestGet({ request, env, ctx }) {
     const currentDeployVersionFile = await getFile(env, DEPLOY_VERSION_PATH);
     const currentDeployVersion = currentDeployVersionFile ? currentDeployVersionFile.content.trim() : null;
 
-    // See waitForFreshMaps's own comment above — best-effort, generates
-    // with whatever maps/*.png currently has either way once this gives up.
-    const mapsFresh = await waitForFreshMaps(env, currentDeployVersion);
-    if (!mapsFresh) {
-      console.error('Report generation: maps/*.png did not catch up with the current data in time — generating with whatever is there now.');
-    }
+    // See ensureFreshMaps's own comment above — captures fresh maps itself
+    // (best-effort) when they're stale, rather than hoping a separate job
+    // already has or eventually will.
+    await ensureFreshMaps(env, request, currentDeployVersion, committerFromRequest(request));
 
     // Raced against the timeout below, not awaited directly — if the
     // timeout wins, generateReportPdf() (and its own finally-block

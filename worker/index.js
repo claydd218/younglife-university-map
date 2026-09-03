@@ -113,7 +113,15 @@ const PUBLIC_ADMIN_PATHS = new Set(['/bigtime/login.html', '/bigtime/login', '/b
 // satisfy this one (or vice versa) — simplest to reason about, and to
 // remove cleanly later, as two gates that never interact. Same *.html/
 // extensionless double-entry reasoning as PUBLIC_ADMIN_PATHS above.
-const PUBLIC_SITE_PATHS = new Set(['/site-login.html', '/site-login', '/site-login.js', '/api/site-login', '/api/site-logout']);
+// data/deploy-version.txt also has to be public: worker/lib/mapArchive.js's
+// and reportArchive.js's own waitForDeploy() fetches it directly, worker-
+// to-worker with no cookie at all (unlike reportCapture.js's Puppeteer
+// navigation above, which does carry the admin's cookie) — without this,
+// that fetch silently landed on the /site-login redirect target instead of
+// the real token, so it could never see its expected value and always
+// timed out, permanently skipping map/report regeneration. Confirmed live:
+// zero automatic map updates recorded since this gate went in.
+const PUBLIC_SITE_PATHS = new Set(['/site-login.html', '/site-login', '/site-login.js', '/api/site-login', '/api/site-logout', '/data/deploy-version.txt']);
 
 export default {
   async fetch(request, env, ctx) {
