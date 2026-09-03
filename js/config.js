@@ -20,15 +20,22 @@ const CONFIG = {
   COUNTRIES_GEOJSON_URL: 'data/world-countries.geojson',
 
   // Staff photos are looked up by filename, not stored in the CSV. A staff
-  // member "Joe Smith" resolves to images/joe-smith.png (accents and
+  // member "Joe Smith" resolves to images/joe-smith.jpg (accents and
   // punctuation stripped, lowercased, spaces become hyphens). Each
   // extension below is tried in order; if none exist, a generated
-  // initial-letter placeholder is shown instead.
+  // initial-letter placeholder is shown instead. jpg is listed first since
+  // every staff upload is always written as .jpg (worker/routes/upload.js's
+  // STAFF_OUTPUT_EXT), which also actively deletes any other-extension
+  // file for that same slug on every new upload — so any png/jpeg/webp
+  // staff photo left today is a pre-existing one nothing has re-uploaded
+  // yet, not the common case. Ordering jpg first means the normal case
+  // resolves on the first request instead of guaranteed-404ing through
+  // the other extensions first; they stay listed as a fallback only.
   // Ministry photos work differently — a ministry can have several, so
   // their filenames (images/<slug>-1.jpg, -2.jpg, ...) are listed directly
   // in ministries.csv's photos column instead of being guessed.
   IMAGES_DIR: 'images/',
-  IMAGE_EXTENSIONS: ['png', 'jpg', 'jpeg', 'webp'],
+  IMAGE_EXTENSIONS: ['jpg', 'png', 'jpeg', 'webp'],
 
   // Initial map view.
   MAP_CENTER: [35, 0],

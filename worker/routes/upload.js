@@ -101,12 +101,12 @@ export async function onRequestPost({ request, env, ctx }) {
     const existingForSlug = existing.filter((f) => f.name.startsWith(`${slug}.`));
     const sameExt = existingForSlug.find((f) => f.name === `${slug}.${STAFF_OUTPUT_EXT}`);
 
-    // CONFIG.IMAGE_EXTENSIONS on the public site tries .png before .jpg —
-    // if an existing photo is slug.png and this endpoint always writes
-    // slug.jpg without removing the old file, the new upload would
-    // silently never win that extension race and the old photo would
-    // keep showing. Clear out any other-extension file for this slug
-    // first (its own commit) before writing the new one.
+    // If an existing photo is slug.png (say) and this endpoint always
+    // writes slug.jpg without removing the old file, both would exist —
+    // and CONFIG.IMAGE_EXTENSIONS on the public site would have to keep
+    // trying jpg first forever for the new upload to actually win.
+    // Clear out any other-extension file for this slug first (its own
+    // commit) before writing the new one, so there's only ever one.
     for (const stale of existingForSlug) {
       if (stale.name === `${slug}.${STAFF_OUTPUT_EXT}`) continue;
       try {
