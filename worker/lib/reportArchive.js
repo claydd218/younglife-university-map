@@ -151,6 +151,17 @@ export async function getReportCacheStatus(env) {
   return { fresh, meta };
 }
 
+// Paused for a few weeks of heavy, concurrent editing from multiple
+// people — a background regeneration on every single edit isn't worth it
+// right now. This only controls whether an edit's invalidation gets acted
+// on immediately; the invalidation itself doesn't live here at all (see
+// getReportCacheStatus's deployVersion comparison above, which reads
+// state bumpDeployVersion already updates on every admin write regardless
+// of this flag) — so a paused edit still correctly invalidates the cache,
+// it just waits for the next Download click to notice and regenerate live
+// instead of an automatic background one. Flip back to true to resume.
+const BACKGROUND_REGEN_ENABLED = false;
+
 // Waits for deployVersion (from lib/deployVersion.js's bumpDeployVersion,
 // called right after the ministry/photo change that should trigger this)
 // to actually go live, then generates and saves a fresh report. Skips
@@ -163,6 +174,7 @@ export async function getReportCacheStatus(env) {
 // start, so there's no early HTTP response that could tear the execution
 // context down mid-generation the way there is for that route.
 export async function regenerateReportArchive(env, request, deployVersion, commit) {
+  if (!BACKGROUND_REGEN_ENABLED) return;
   if (!env.BROWSER) return;
   const deployed = await waitForDeploy(request, deployVersion);
   if (!deployed) {
