@@ -496,7 +496,7 @@ function missingFieldsMessage(kind) {
     : 'Fill in the Name first, then add a photo.';
 }
 
-function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialSlug, onUploaded }) {
+function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialSlug, onUploaded, watchInputs = [] }) {
   container.innerHTML = '';
   let photoSlug = initialUrl ? (initialSlug || null) : null;
 
@@ -550,6 +550,14 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   replaceCol.className = 'photo-col-replace';
   replaceCol.append(replaceLabel, replaceRow, replaceStatus, input);
 
+  // Proactively disabled (rather than only rejecting after a click/drop
+  // attempt — see handleFile's own getSlugParts() check below, kept as a
+  // safety net) whenever the fields this photo would be filed under
+  // (a staff row's Name, e.g.) aren't filled in yet.
+  const disabledNote = document.createElement('div');
+  disabledNote.className = 'photo-widget-disabled-note';
+  disabledNote.hidden = true;
+
   // Click a loaded photo to toggle a larger preview below the widget.
   const zoomRow = document.createElement('div');
   zoomRow.className = 'photo-zoom-row';
@@ -557,7 +565,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   const zoomImg = document.createElement('img');
   zoomRow.appendChild(zoomImg);
 
-  container.append(thumbCol, infoCol, replaceCol, zoomRow);
+  container.append(thumbCol, infoCol, replaceCol, disabledNote, zoomRow);
 
   // Staff photos: clicking an existing one re-opens the same crop dialog
   // an upload goes through, instead of just showing a bigger version — the
@@ -600,6 +608,16 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   };
 
   chooseBtn.addEventListener('click', () => input.click());
+
+  function updateEnabledState() {
+    const disabled = !getSlugParts();
+    chooseBtn.disabled = disabled;
+    container.classList.toggle('photo-widget-disabled', disabled);
+    disabledNote.textContent = disabled ? missingFieldsMessage(kind) : '';
+    disabledNote.hidden = !disabled;
+  }
+  updateEnabledState();
+  watchInputs.forEach((el) => el.addEventListener('input', updateEnabledState));
 
   // kind: 'error' | 'uploading' | '' (cleared)
   function setReplaceStatus(message, kind = '') {
@@ -692,7 +710,10 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   }
 
   input.addEventListener('change', () => handleFile(input.files[0]));
-  container.addEventListener('dragover', (e) => { e.preventDefault(); container.classList.add('dragover'); });
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (getSlugParts()) container.classList.add('dragover');
+  });
   container.addEventListener('dragleave', () => container.classList.remove('dragover'));
   container.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -851,17 +872,34 @@ async function handleAddMinistryPhotos(files) {
   }
 }
 
+// Proactively disabled (rather than only rejecting after a drop/click
+// attempt — see handleAddMinistryPhotos's own check, kept as a safety
+// net) whenever City/Country aren't filled in yet. Only dims the add
+// button/drop-hint row, not any photos already uploaded above it — those
+// stay removable/reorderable regardless.
+function updateMinistryPhotoAddState() {
+  const ready = Boolean($('field-city').value.trim() && $('field-country').value.trim());
+  $('add-ministry-photo-btn').disabled = !ready;
+  $('ministry-photos-dropzone').classList.toggle('add-disabled', !ready);
+  $('ministry-photo-disabled-note').hidden = ready;
+}
+
 function wireMinistryPhotoAdd() {
   const dropzone = $('ministry-photos-dropzone');
   $('add-ministry-photo-btn').addEventListener('click', () => $('ministry-photo-input').click());
   $('ministry-photo-input').addEventListener('change', (e) => handleAddMinistryPhotos(Array.from(e.target.files)));
-  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (!$('add-ministry-photo-btn').disabled) dropzone.classList.add('dragover');
+  });
   dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
   dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropzone.classList.remove('dragover');
     handleAddMinistryPhotos(Array.from(e.dataTransfer.files));
   });
+  $('field-city').addEventListener('input', updateMinistryPhotoAddState);
+  $('field-country').addEventListener('input', updateMinistryPhotoAddState);
 }
 
 // --- Video link --------------------------------------------------------
@@ -1230,6 +1268,7 @@ function addStaffRow(prefill = {}) {
     initialUrl,
     initialSlug: slug,
     onUploaded: markDialogDirty,
+    watchInputs: [nameInput],
   });
   if (slug) {
     findExistingImageUrl(slug).then(wireWidget);
@@ -1389,6 +1428,7 @@ function openDialog(row) {
   $('field-city').value = row ? row.city : '';
   $('field-country').value = row ? row.country : '';
   updateCityCountryMatchNote();
+  updateMinistryPhotoAddState();
   $('field-lat').value = row ? row.lat : '';
   $('field-lng').value = row ? row.lng : '';
   $('field-blurb').value = row ? row.blurb : '';
