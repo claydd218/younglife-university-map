@@ -94,3 +94,4 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 99,Helsinki,Finland,60.1666,24.9435,,false,,,test ministry - delete,,,,2026-09-03T15:47:30.329Z
 100,Kyiv,Ukraine,50.4500,30.5241,2024,false,Kyiv University of Culture and Arts (2024); Taras Shevchenko National Univ of Kyiv (2025),Anna Turchynska (College director),,kyiv-ukraine-1.webp; kyiv-ukraine-2.webp,,,2026-09-03T17:11:43.293Z
 101,Zhytomyr,Ukraine,50.9081,28.3868,2025,false,Zhytomyr Polytechnic State University (2025),"Anna Turchynska, Ivan (College Coordinator)",,zhytomyr-ukraine-1.webp; zhytomyr-ukraine-2.webp; zhytomyr-ukraine-3.webp,,,2026-09-03T17:17:03.970Z
+102,Cherkasy,Ukraine,49.1460,31.2272,2024,false,Bohdan Khmelnytsky National University of Cherkasy (2024),Anna Turchynska (College Cooordinator),,cherkasy-ukraine-1.webp; cherkasy-ukraine-2.webp; cherkasy-ukraine-3.webp,,,2026-09-03T17:19:48.408Z
