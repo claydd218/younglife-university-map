@@ -2241,6 +2241,60 @@ async function renderImagesTab() {
   applyImagesFilter();
 }
 
+// GET /bigtime/api/report-pdf usually just re-serves an already-cached PDF
+// (worker/lib/reportArchive.js keeps it fresh automatically after every
+// ministry/photo change — see that file), which resolves near-instantly.
+// The one case it doesn't is whenever the cache was just invalidated and
+// nobody's clicked this since (or a brand new month rolled over) — that
+// request runs a real ~3+ minute Puppeteer generation instead. This
+// button can't tell in advance which one a given click will be, so it
+// always shows the same "generating" loading state for the duration of
+// the one fetch either way — mirrors bigtime/reports2/reports2.js's old
+// downloadPdf() exactly, since reports2 is gone but this exact UX still
+// applies.
+function wireReportPdfButton() {
+  const btn = $('report-pdf-btn');
+  const status = $('report-pdf-status');
+  const originalLabel = btn.textContent;
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'Generating PDF… this can take a few minutes';
+    status.hidden = true;
+    status.classList.remove('error');
+    try {
+      const res = await fetch(`${API_BASE}/report-pdf`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `PDF generation failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // The server names this from when the PDF was actually generated
+      // (worker/routes/report-pdf.js's reportFilename) — a re-served
+      // cached copy from last month shouldn't be downloaded as if it were
+      // made today, so this reads that real name back off the response
+      // rather than computing one from today's date here.
+      const dispositionMatch = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/);
+      a.download = dispositionMatch ? dispositionMatch[1] : 'yl-uni-intl-ministry-report.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      status.textContent = err.message || String(err);
+      status.classList.add('error');
+      status.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  });
+}
+
 function wireSignOut() {
   $('sign-out-btn').addEventListener('click', async () => {
     if (!window.confirm('Sign out?')) return;
@@ -2263,5 +2317,6 @@ wireMinistriesFilterBar();
 wireCitySuggestions();
 wireDeployToast();
 wireMoveStaffDialog();
+wireReportPdfButton();
 wireSignOut();
 loadMinistries();

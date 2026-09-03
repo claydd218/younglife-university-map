@@ -1,142 +1,42 @@
-// Routes GET /bigtime/api/report-pdf — generates a real multi-page PDF of
-// /bigtime/reports2's content using Puppeteer's native page.pdf(), called
-// once per section (the overview page, then once per division) instead of
-// once for the whole document. Each call gets its own static
-// headerTemplate/footerTemplate baked in for that section — genuinely
-// page-aware, unlike bigtime/reports/'s plain-CSS-pagination approach:
-// Chrome repeats whatever header/footer a single page.pdf() call is given
-// on every physical page THAT call produces, so a division whose content
-// spans 3 pages gets the same (correct, division-specific) footer on all
-// 3, without ever needing to know "which page is this" — the question
-// that sank the Paged.js attempt (see bigtime/reports2/reports2.js's
-// header comment) and that plain CSS can't answer at all.
-//
-// The per-section PDFs are merged into one file with pdf-lib and returned
-// as a download.
+// Routes GET /bigtime/api/report-pdf — serves the cached report PDF
+// (reports/ministry-report.pdf, kept fresh automatically by
+// worker/lib/reportArchive.js after admin edits) when it's still current,
+// and falls back to a live Puppeteer generation
+// (worker/lib/reportCapture.js) — committing the result as the new cache
+// before returning it — when it isn't. The live path is the only slow
+// one; bigtime/admin.js's button shows a "generating" state for the
+// duration of its one fetch either way, since the client can't know in
+// advance which path a given click will take.
 
-import puppeteer from '@cloudflare/puppeteer';
-import { errorResponse } from '../lib/http.js';
-import { PDFDocument } from 'pdf-lib';
+import { errorResponse, committerFromRequest } from '../lib/http.js';
+import { getFile, getFileBase64 } from '../lib/github.js';
+import { DEPLOY_VERSION_PATH } from '../lib/deployVersion.js';
+import { generateReportPdf, withTimeout, GENERATE_TIMEOUT_MS } from '../lib/reportCapture.js';
+import { getReportCacheStatus, saveReportNow, PDF_PATH } from '../lib/reportArchive.js';
 
-const VIEWPORT = { width: 1600, height: 1200 };
-// Ministry data + every ministry/staff photo has to load (same as the
-// on-screen preview) before the report is ready to be sectioned off —
-// see reports2.js's window.__reportReady. Generous: this waits on real
-// network round trips (GitHub-backed API, dozens of images), not just
-// rendering.
-const REPORT_READY_TIMEOUT_MS = 60000;
-// Six-ish page.pdf() calls (overview + one per division) plus a pdf-lib
-// merge — same reasoning as worker/lib/mapCapture.js's CAPTURE_TIMEOUT_MS
-// for why this needs real headroom, not just what "should" be fast.
-const GENERATE_TIMEOUT_MS = 280000;
-const CLOSE_TIMEOUT_MS = 5000;
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
-function withTimeout(promise, ms, message) {
-  let timeoutId;
-  const timeout = new Promise((_resolve, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(message)), ms);
+// Reflects when the PDF was actually generated, not "today" — a re-served
+// cached copy wasn't made today, and claiming otherwise isn't accurate.
+function reportFilename(generatedAt) {
+  const d = generatedAt ? new Date(generatedAt) : new Date();
+  const month = d.toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
+  return `yl-uni-intl-ministry-report-${month}-${d.getFullYear()}.pdf`;
+}
+
+function pdfResponse(pdfBytes, generatedAt) {
+  return new Response(pdfBytes, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${reportFilename(generatedAt)}"`,
+      'Cache-Control': 'no-store',
+    },
   });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
-}
-
-// No footer at all — used for every map page (the world map / a
-// division's title+map+metrics page), since that page already shows the
-// report or division title on-page; repeating it in a footer is
-// redundant. A literal empty string still leaves Chrome to fall back to
-// its own default footer, so this has to be explicitly empty markup, the
-// same way headerTemplate below always is.
-const NO_FOOTER = '<span></span>';
-
-function footerTemplateFor(text, color) {
-  // Chrome renders header/footer templates in their own isolated document
-  // (no access to the report's own stylesheet), so this is a fully
-  // self-contained inline-styled snippet rather than a class name.
-  return `<div style="width:100%; font-size:9px; text-align:center; color:${color}; font-family: Georgia, 'EB Garamond', serif;">${text}</div>`;
-}
-
-async function generatePdf(env, request) {
-  const reportUrl = new URL('/bigtime/reports2', request.url);
-  const cookie = request.headers.get('Cookie') || '';
-
-  let browser;
-  try {
-    browser = await puppeteer.launch(env.BROWSER);
-    const page = await browser.newPage();
-    await page.setViewport(VIEWPORT);
-    // report-pdf.js's own request already proved the caller is logged in
-    // (worker/index.js's session check ran before this route did) —
-    // forwarding that same cookie is what lets this internal Puppeteer
-    // navigation into the auth-gated /bigtime/reports2 without a second
-    // login step.
-    if (cookie) await page.setExtraHTTPHeaders({ Cookie: cookie });
-    await page.goto(reportUrl.toString(), { waitUntil: 'networkidle0' });
-    await page.waitForFunction('window.__reportReady === true', { timeout: REPORT_READY_TIMEOUT_MS });
-
-    // Print media first — reports2.js's __shrinkImagesForPdf reads each
-    // image's *rendered* box (clientWidth/Height) to decide how much to
-    // downscale it by, and that box is smaller under print CSS (e.g.
-    // .report-map-shot's max-height:460px) than it is on screen.
-    await page.emulateMediaType('print');
-
-    const generatedLabel = await page.evaluate('window.__reportGeneratedLabel');
-    const divisionInfo = await page.evaluate('Object.fromEntries(Object.entries(DIVISIONS).map(([k, d]) => [k, { label: d.label, pin: d.pin }]))');
-    const sectionParts = await page.evaluate('window.__allSectionParts()');
-
-    const pdfBuffers = [];
-    for (const { key, part } of sectionParts) {
-      await page.evaluate(`window.__showOnlySectionPart(${JSON.stringify(key)}, ${JSON.stringify(part)})`);
-      // Shrunk per section/part (only what's visible right now), not once
-      // for the whole report — decoding a division's dozen-ish photos at a
-      // time instead of every photo across all 5 divisions at once is what
-      // keeps this from spiking the renderer's own memory and crashing the
-      // session outright. See reports2.js's comment on this function for
-      // the full story (an earlier version of this fix got this backwards).
-      await page.evaluate('window.__shrinkImagesForPdf()');
-      // Every map page (the overview's world map, and a division's own
-      // title+map+metrics page) already shows the report/division title
-      // on-page, so a repeated footer there is redundant — only the
-      // ministry-listing pages get one, in that division's own color
-      // (matching the title's own color on the page before it). A single
-      // page.pdf() call can't vary its footer from page to page, which is
-      // exactly why the header/areas split (reports2.js's
-      // __allSectionParts) exists: it's the only way to give the map page
-      // and the listing pages that follow it different footers.
-      const footerTemplate = part === 'areas'
-        ? footerTemplateFor(`Young Life University International Ministries — ${divisionInfo[key].label} — ${generatedLabel}`, divisionInfo[key].pin)
-        : NO_FOOTER;
-      // Explicit format/landscape/margin, not preferCSSPageSize — the
-      // page's own @page rule sets `size: landscape` (a bare keyword, no
-      // explicit dimensions), and letting Chrome's PDF engine resolve
-      // that itself produced a nonsense page size ("Invalid typed array
-      // length: 165408426" — ~158MB for a few PNG-embedded pages is not
-      // real content, it's a degenerate size calculation). Format+margin
-      // here reproduce the same geometry explicitly instead.
-      const pdfBytes = await page.pdf({
-        format: 'Letter',
-        landscape: true,
-        margin: { top: '14mm', right: '16mm', bottom: '14mm', left: '16mm' },
-        printBackground: true,
-        displayHeaderFooter: true,
-        headerTemplate: '<span></span>',
-        footerTemplate,
-      });
-      pdfBuffers.push(pdfBytes);
-    }
-
-    const merged = await PDFDocument.create();
-    for (const bytes of pdfBuffers) {
-      const src = await PDFDocument.load(bytes);
-      const copiedPages = await merged.copyPages(src, src.getPageIndices());
-      for (const copiedPage of copiedPages) merged.addPage(copiedPage);
-    }
-    return await merged.save();
-  } finally {
-    if (browser) {
-      await withTimeout(browser.close(), CLOSE_TIMEOUT_MS, 'browser.close() timed out').catch((err) => {
-        console.error('Failed to close the report-PDF browser session cleanly:', err);
-      });
-    }
-  }
 }
 
 export async function onRequestGet({ request, env, ctx }) {
@@ -144,13 +44,23 @@ export async function onRequestGet({ request, env, ctx }) {
     return errorResponse(500, 'Browser Rendering isn\'t configured for this Worker (env.BROWSER missing) — check wrangler.toml\'s [browser] binding and that it\'s enabled on the Cloudflare dashboard for this account.');
   }
 
+  const { fresh, meta } = await getReportCacheStatus(env);
+  if (fresh) {
+    const cached = await getFileBase64(env, PDF_PATH);
+    if (cached) return pdfResponse(base64ToBytes(cached.contentBase64), meta.generatedAt);
+    // Meta said fresh but the file itself is missing (shouldn't happen —
+    // they're always written together in saveReportNow) — fall through to
+    // a live generation rather than 500.
+  }
+
   // Raced against the timeout below, not awaited directly — if the
-  // timeout wins, generatePdf() (and its own finally-block browser.close())
-  // is still running. ctx.waitUntil keeps that alive after this request
-  // has already returned an error response, so a timed-out capture still
-  // gets its browser session torn down instead of leaking one that would
-  // count against Browser Rendering's concurrency limit for the next call.
-  const workPromise = generatePdf(env, request);
+  // timeout wins, generateReportPdf() (and its own finally-block
+  // browser.close()) is still running. ctx.waitUntil keeps that alive
+  // after this request has already returned an error response, so a
+  // timed-out generation still gets its browser session torn down instead
+  // of leaking one that would count against Browser Rendering's
+  // concurrency limit for the next call.
+  const workPromise = generateReportPdf(env, request);
   if (ctx) ctx.waitUntil(workPromise.catch(() => {}));
 
   let pdfBytes;
@@ -164,12 +74,20 @@ export async function onRequestGet({ request, env, ctx }) {
     return errorResponse(500, `PDF generation failed: ${err.message || err}`);
   }
 
-  const dateStr = new Date().toISOString().slice(0, 10);
-  return new Response(pdfBytes, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="ministry-report-${dateStr}.pdf"`,
-      'Cache-Control': 'no-store',
-    },
-  });
+  const generatedAt = new Date().toISOString();
+  // Saved before responding — unlike the background regeneration path
+  // (worker/lib/reportArchive.js's regenerateReportArchive, triggered by
+  // an unrelated admin write that shouldn't be held up by this), there's
+  // no other request here to avoid blocking: the admin is already waiting
+  // through the generation itself, so a few more seconds to commit the
+  // cache is negligible, and it guarantees the very next click hits the
+  // fast cached path instead of regenerating all over again.
+  try {
+    const currentDeployVersion = await getFile(env, DEPLOY_VERSION_PATH);
+    await saveReportNow(env, pdfBytes, currentDeployVersion ? currentDeployVersion.content.trim() : null, committerFromRequest(request));
+  } catch (err) {
+    console.error('Failed to save the freshly-generated report to the cache (still returning it to this request):', err);
+  }
+
+  return pdfResponse(pdfBytes, generatedAt);
 }

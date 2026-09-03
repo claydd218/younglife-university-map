@@ -1,50 +1,25 @@
-// Builds /bigtime/reports2 — an experimental parallel to /bigtime/reports
-// trying a different PDF strategy: real, page-aware headers/footers via
-// Chrome's own page.pdf() API instead of browser print-to-PDF.
+// Builds bigtime/report/index.html's content — a pure Puppeteer rendering
+// target for worker/routes/report-pdf.js. Real, page-aware headers/footers
+// via Chrome's own page.pdf() API: each top-level section here carries a
+// data-section attribute; report-pdf.js drives a headless Chrome session
+// that shows one section at a time and calls page.pdf() separately for
+// each, with a static headerTemplate/footerTemplate baked in for THAT
+// section. Chrome repeats that header/footer on every physical page a
+// single page.pdf() call produces, so a division whose content spans 3
+// pages gets the same (correct, division-specific) footer on all 3 —
+// genuinely page-aware, because the "which page is this" question never
+// has to be answered by the HTML/CSS at all. The per-section PDFs are
+// merged into one file with pdf-lib (worker/routes/report-pdf.js).
 //
-// bigtime/reports/ pages this exact same content with plain CSS
-// (break-before/break-inside) plus the browser's native print-to-PDF.
-// That's reliable but fundamentally can't do a footer whose text varies
-// by page/division, or a repeated "Division (Continued)" header — plain
-// CSS has no way to know where page breaks land, and Paged.js (the only
-// library that tries to give HTML/CSS that page-awareness) proved
-// unreliable in this environment (hangs, silently-empty output) when
-// tried earlier for the exact same thing.
-//
-// This page still builds the same on-screen HTML preview the same way
-// (buildReportHtml below is copied from reports.js essentially unchanged)
-// — the difference is entirely server-side. Each top-level section here
-// carries a data-section attribute; worker/routes/report-pdf.js drives a
-// headless Chrome session that shows one section at a time and calls
-// page.pdf() separately for each, with a static headerTemplate/
-// footerTemplate baked in for THAT section. Chrome repeats that
-// header/footer on every physical page a single page.pdf() call
-// produces, so a division whose content spans 3 pages gets the same
-// (correct, division-specific) footer on all 3 — genuinely page-aware,
-// because the "which page is this" question never has to be answered by
-// the HTML/CSS at all. The per-section PDFs are merged into one file with
-// pdf-lib (worker/routes/report-pdf.js).
-//
-// "Download PDF" hits that server route directly; there's no
-// window.print() path on this page at all.
+// Replaces bigtime/reports2/ (and the older bigtime/reports/) — this page
+// is never browsed directly by a person anymore (the "Download Report
+// PDF" button lives on bigtime/index.html and hits the PDF route
+// straight), so unlike those, there's no on-screen chrome, loading
+// overlay, or retry/regenerate UI here at all.
 
 const REPORT_TITLE = 'Young Life University International Ministries';
 
-const regenerateBtn = document.getElementById('regenerate-btn');
-const downloadBtn = document.getElementById('download-btn');
-const downloadStatus = document.getElementById('download-status');
 const output = document.getElementById('report-output');
-const overlay = document.getElementById('loading-overlay');
-const loadingSpinner = document.getElementById('loading-spinner');
-const loadingText = document.getElementById('loading-text');
-const retryBtn = document.getElementById('retry-btn');
-
-function setStatus(text, isError = false) {
-  loadingText.textContent = text;
-  loadingText.classList.toggle('error', isError);
-  loadingSpinner.hidden = isError;
-  retryBtn.hidden = !isError;
-}
 
 function escapeHtml(str) {
   return (str || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -96,11 +71,11 @@ async function loadImageManifest() {
 // Staff photos aren't stored with a known filename the way a ministry's own
 // `photos` column is, only a slugified name — so the actual extension has
 // to be checked against what's actually in images/ (imageFiles, loaded
-// once per report by loadImageManifest). This used to be a HEAD request
-// per candidate extension per staff member, fired via Promise.all across
-// every staff member in the report — with 100+ staff that was hundreds of
-// requests in one burst, which is what was behind the multi-thousand-
-// request spikes seen in Workers analytics every time a report generated.
+// once per report by loadImageManifest) rather than guessed via a burst of
+// HEAD requests per candidate extension per staff member (the old
+// approach — with 100+ staff that was hundreds of requests in one burst,
+// behind the multi-thousand-request spikes seen in Workers analytics
+// every time a report generated).
 function findStaffPhotoUrl(name, imageFiles) {
   const slug = slugify(name);
   for (const ext of CONFIG.IMAGE_EXTENSIONS) {
@@ -218,18 +193,18 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
   return metricsPage + divisionSectionsHtml.join('');
 }
 
-// worker/routes/report-pdf.js's Puppeteer session calls this once per
-// (section, part) pair before each page.pdf() call — hides every other
-// section so that call captures only this one. A division section has two
-// parts, each becoming its own page.pdf() call so each can get its own
-// footer: 'header' (title + map + metrics — always exactly one page) and
-// 'areas' (the ministry listing, which can span several). That split is
-// what lets the map page go out with no footer at all (see
-// __allSectionParts below) while the listing pages keep one — a single
-// page.pdf() call can't vary its footer page-to-page, so this is the only
-// way to make one page in a section look different from another.
-// 'overview' has no header/areas split (part is ignored for it — the
-// whole section is just the world map + metrics, shown as a whole).
+// report-pdf.js's Puppeteer session calls this once per (section, part)
+// pair before each page.pdf() call — hides every other section so that
+// call captures only this one. A division section has two parts, each
+// becoming its own page.pdf() call so each can get its own footer:
+// 'header' (title + map + metrics — always exactly one page) and 'areas'
+// (the ministry listing, which can span several). That split is what lets
+// the map page go out with no footer at all (see __allSectionParts below)
+// while the listing pages keep one — a single page.pdf() call can't vary
+// its footer page-to-page, so this is the only way to make one page in a
+// section look different from another. 'overview' has no header/areas
+// split (part is ignored for it — the whole section is just the world map
+// + metrics, shown as a whole).
 window.__showOnlySectionPart = function (sectionKey, part) {
   document.querySelectorAll('[data-section]').forEach((el) => {
     el.style.display = el.dataset.section === sectionKey ? '' : 'none';
@@ -260,31 +235,21 @@ window.__allSectionParts = function () {
 // gets embedded near-full-size. Across dozens of ministry areas across 5
 // divisions that's enough to blow well past what a Cloudflare Worker can
 // hold in memory ("Invalid typed array length" while pdf-lib assembles
-// the final file — the number was the real attempted allocation size,
-// not a bug: a synthetic 9-photo test already produced a ~40MB PDF
-// locally). This redraws every image onto a canvas sized to
-// PIXEL_DENSITY× its actual rendered box and swaps img.src for that
-// downscaled JPEG data URL.
+// the final file — the number was the real attempted allocation size, not
+// a bug: a synthetic 9-photo test already produced a ~40MB PDF locally).
+// This redraws every image onto a canvas sized to PIXEL_DENSITY× its
+// actual rendered box and swaps img.src for that downscaled JPEG data URL.
 //
-// Only ever runs inside worker/routes/report-pdf.js's Puppeteer session —
-// the live interactive site and the on-screen report preview both keep
-// full-resolution images. Two things keep this from spiking the
-// renderer's own memory instead of pdf-lib's: report-pdf.js calls this
-// once per section (right after window.__showOnlySection, not once
-// upfront with the whole report visible) — decoding one division's dozen
-// photos at a time instead of every photo across all 5 divisions at
-// once — and this itself processes sequentially (one full decode+redraw
-// fully finished before the next starts), not in parallel. The first
-// version of this fix did both wrong: it ran once for the whole report,
-// and used Promise.all to decode every image concurrently, which crashed
-// the Chrome session outright ("Protocol error: Target closed") instead
-// of hitting pdf-lib's allocation limit — worse, not better.
+// Only ever runs inside report-pdf.js's Puppeteer session. Two things
+// keep this from spiking the renderer's own memory instead of pdf-lib's:
+// report-pdf.js calls this once per section (right after
+// window.__showOnlySectionPart, not once upfront with the whole report
+// visible) — decoding one division's dozen photos at a time instead of
+// every photo across all 5 divisions at once — and this itself processes
+// sequentially (one full decode+redraw fully finished before the next
+// starts), not in parallel.
 window.__shrinkImagesForPdf = async function () {
   const PIXEL_DENSITY = 2; // crisp at print size without embedding the full original
-  // querySelectorAll (not filtering by visibility) is fine here — a
-  // hidden ancestor means clientWidth/Height are 0 below, so a
-  // currently-invisible image is skipped without needing a separate
-  // check for it.
   const images = Array.from(document.querySelectorAll('img'));
   for (const img of images) {
     await new Promise((resolve) => {
@@ -302,13 +267,7 @@ window.__shrinkImagesForPdf = async function () {
           canvas.width = targetW;
           canvas.height = targetH;
           // Replicates object-fit:cover (crop to fill, centered) instead
-          // of stretching the whole source into the target box — a
-          // naturalWidth/naturalHeight aspect ratio that doesn't match
-          // the box's own (any portrait ministry photo squeezed into the
-          // 220x165 box, for instance) visibly distorted once the image's
-          // own pixels were pre-stretched to the box's shape: the <img>
-          // tag's object-fit:cover CSS had nothing left to crop by the
-          // time it ever saw this replacement src.
+          // of stretching the whole source into the target box.
           const srcAspect = img.naturalWidth / img.naturalHeight;
           const dstAspect = targetW / targetH;
           let sx = 0;
@@ -316,11 +275,9 @@ window.__shrinkImagesForPdf = async function () {
           let sw = img.naturalWidth;
           let sh = img.naturalHeight;
           if (srcAspect > dstAspect) {
-            // Source is relatively wider than the box — crop its sides.
             sw = img.naturalHeight * dstAspect;
             sx = (img.naturalWidth - sw) / 2;
           } else {
-            // Source is relatively taller than the box — crop top/bottom.
             sh = img.naturalWidth / dstAspect;
             sy = (img.naturalHeight - sh) / 2;
           }
@@ -335,11 +292,9 @@ window.__shrinkImagesForPdf = async function () {
         // A broken image (e.g. a stale/missing filename) is also
         // "complete" — with naturalWidth 0 — and will never fire another
         // load/error event, since nothing is retrying its src. Treating
-        // that the same as "still loading" below hung this function
-        // forever on the very first broken photo it hit, which is what
-        // actually caused every "Protocol error: Target closed" crash:
-        // the report never finishes, so the outer page.evaluate() call
-        // never returns until Cloudflare kills the session.
+        // that the same as "still loading" hangs this function forever on
+        // the very first broken photo it hits — resolve immediately
+        // instead so a bad photo just gets skipped, not a hung report.
         if (img.naturalWidth) shrink(); else resolve();
       } else {
         img.addEventListener('load', shrink, { once: true });
@@ -350,13 +305,7 @@ window.__shrinkImagesForPdf = async function () {
 };
 
 async function generateReport() {
-  overlay.hidden = false;
-  regenerateBtn.hidden = true;
-  downloadBtn.hidden = true;
-  output.classList.remove('ready');
-  output.innerHTML = '';
   window.__reportReady = false;
-  setStatus('Loading ministry data…');
   try {
     const [rows, divisionByCountry, countryIsoByName, imageFiles] = await Promise.all([
       loadMinistryRows(),
@@ -365,21 +314,15 @@ async function generateReport() {
       loadImageManifest(),
     ]);
 
-    // Cached PNGs, not a live capture — same as bigtime/reports/reports.js.
+    // Cached PNGs, not a live capture — see worker/lib/mapArchive.js.
     const cacheBust = Date.now();
     const mapShots = {
       world: `../../maps/world.png?v=${cacheBust}`,
       divisions: Object.fromEntries(Object.keys(DIVISIONS).map((key) => [key, `../../maps/${key}.png?v=${cacheBust}`])),
     };
 
-    setStatus('Building report…');
     output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots, imageFiles);
-    output.classList.add('ready');
 
-    const fileDateStr = new Date().toISOString().slice(0, 10);
-    document.title = `Ministry Report ${fileDateStr}`;
-
-    setStatus('Waiting for images to load…');
     const images = output.querySelectorAll('img');
     await Promise.all(Array.from(images).map((img) => (
       img.complete ? Promise.resolve() : new Promise((resolve) => {
@@ -388,57 +331,17 @@ async function generateReport() {
       })
     )));
 
-    overlay.hidden = true;
-    regenerateBtn.hidden = false;
-    downloadBtn.hidden = false;
-    // Signal for worker/routes/report-pdf.js's Puppeteer capture to wait
-    // on — everything above this point is synchronous DOM work, so once
-    // it's run the report is visually complete and ready to be sectioned
-    // off for page.pdf().
+    // Signal for report-pdf.js's Puppeteer capture to wait on —
+    // everything above this point is synchronous DOM work, so once it's
+    // run the report is visually complete and ready to be sectioned off
+    // for page.pdf(). Left false (and this page.waitForFunction()'d out
+    // by report-pdf.js's own timeout) on any error below — nobody's
+    // watching this page for a retry UI anymore, so a failure here is
+    // just a failed generation request, same as any other.
     window.__reportReady = true;
   } catch (err) {
-    console.error(err);
-    setStatus(err.message || String(err), true);
+    console.error('Report generation failed:', err);
   }
 }
-
-// Generating the real PDF can take a while (a separate page.pdf() call
-// per division, then a merge) — this button's own loading state is
-// separate from the on-screen preview's overlay above, since the preview
-// is already done and visible by the time this is ever clickable.
-async function downloadPdf() {
-  const originalLabel = downloadBtn.textContent;
-  downloadBtn.disabled = true;
-  downloadBtn.textContent = 'Generating PDF…';
-  downloadStatus.hidden = true;
-  try {
-    const res = await fetch('/bigtime/api/report-pdf');
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.message || `PDF generation failed (${res.status})`);
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ministry-report-${new Date().toISOString().slice(0, 10)}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error(err);
-    downloadStatus.textContent = err.message || String(err);
-    downloadStatus.classList.add('error');
-    downloadStatus.hidden = false;
-  } finally {
-    downloadBtn.disabled = false;
-    downloadBtn.textContent = originalLabel;
-  }
-}
-
-regenerateBtn.addEventListener('click', generateReport);
-retryBtn.addEventListener('click', generateReport);
-downloadBtn.addEventListener('click', downloadPdf);
 
 generateReport();

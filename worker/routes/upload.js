@@ -5,6 +5,7 @@ import { listDir, deleteFile, putFileBase64, ConflictError } from '../lib/github
 import { slugify } from '../lib/text.js';
 import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
 import { bumpDeployVersion } from '../lib/deployVersion.js';
+import { regenerateReportArchive } from '../lib/reportArchive.js';
 
 const IMAGES_DIR = 'images';
 const MAX_BYTES = 6 * 1024 * 1024; // 6MB — defense in depth; the client is
@@ -47,7 +48,7 @@ function detectImageExt(base64) {
   return null;
 }
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, ctx }) {
   let body;
   try {
     body = await request.json();
@@ -80,6 +81,19 @@ export async function onRequestPost({ request, env }) {
   }
 
   const commit = committerFromRequest(request);
+  // A staff or ministry photo shows up directly in the report — see
+  // reportArchive.js. Unlike ministries.js/ministry-detail.js's map
+  // regeneration, this doesn't touch maps/*.png at all (a photo change
+  // never moves a pin), which is why only the report archive is hooked
+  // here.
+  function triggerReportRegen(deployVersion) {
+    if (!ctx) return;
+    ctx.waitUntil(
+      regenerateReportArchive(env, request, deployVersion, commit).catch((err) => {
+        console.error('Report archive regeneration failed:', err);
+      })
+    );
+  }
   const existing = await listDir(env, IMAGES_DIR);
 
   if (kind === 'staff') {
@@ -116,6 +130,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     const deployVersion = await bumpDeployVersion(env, commit);
+    triggerReportRegen(deployVersion);
     return jsonResponse({ ok: true, path: targetPath, filename: `${slug}.${STAFF_OUTPUT_EXT}`, sha: result.sha, deployVersion });
   }
 
@@ -146,5 +161,6 @@ export async function onRequestPost({ request, env }) {
   }
 
   const deployVersion = await bumpDeployVersion(env, commit);
+  triggerReportRegen(deployVersion);
   return jsonResponse({ ok: true, path: targetPath, filename, sha: result.sha, deployVersion });
 }

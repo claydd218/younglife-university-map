@@ -6,8 +6,8 @@
 //
 // Also scrubs data/ministries.csv itself. A ministry/city photo (unlike a
 // staff photo, which is never stored as an explicit filename — it's
-// resolved on the fly from a slugified name, see bigtime/reports/
-// reports.js's findStaffPhotoUrl) is referenced by exact filename in a
+// resolved on the fly from a slugified name, see bigtime/report/
+// report.js's findStaffPhotoUrl) is referenced by exact filename in a
 // ministry row's `photos` column. Deleting the file without also touching
 // that reference used to leave it dangling — the Ministries tab only wrote
 // an updated `photos` list back on the form's own Save, and the Images tab
@@ -26,6 +26,7 @@ import { parseCsv, stringifyCsv } from '../lib/csv.js';
 import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
 import { MINISTRIES_PATH, HEADER } from '../lib/ministries.js';
 import { bumpDeployVersion } from '../lib/deployVersion.js';
+import { regenerateReportArchive } from '../lib/reportArchive.js';
 
 const IMAGES_DIR = 'images';
 
@@ -62,7 +63,7 @@ async function scrubMinistryPhotoReferences(env, deletedFilenames, commit) {
     // succeeded, and can't be undone) — a losing race against some other
     // concurrent CSV write shouldn't turn into a failed delete response.
     // Worst case a reference is left stale here; report-pdf.js's own fix
-    // (see reports2.js's __shrinkImagesForPdf) means that's a skipped
+    // (see report.js's __shrinkImagesForPdf) means that's a skipped
     // photo, not a hang, so this is safe to just log and move on from.
     if (err instanceof ConflictError) {
       console.error('Could not clean up ministries.csv photo reference (conflict) — left stale:', err.message);
@@ -72,7 +73,7 @@ async function scrubMinistryPhotoReferences(env, deletedFilenames, commit) {
   }
 }
 
-export async function onRequestDelete({ request, env, params }) {
+export async function onRequestDelete({ request, env, ctx, params }) {
   const slug = params.slug;
   const existing = await listDir(env, IMAGES_DIR);
   // There should be at most one file per slug (upload.js's stale-extension
@@ -95,5 +96,14 @@ export async function onRequestDelete({ request, env, params }) {
   await scrubMinistryPhotoReferences(env, matches.map((f) => f.name), commit);
 
   const deployVersion = await bumpDeployVersion(env, commit);
+  // A deleted staff/ministry photo shows up (or stops showing up) in the
+  // report too — see reportArchive.js.
+  if (ctx) {
+    ctx.waitUntil(
+      regenerateReportArchive(env, request, deployVersion, commit).catch((err) => {
+        console.error('Report archive regeneration failed:', err);
+      })
+    );
+  }
   return jsonResponse({ ok: true, deployVersion });
 }

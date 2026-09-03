@@ -1,5 +1,5 @@
 // Persists captureAllMaps()'s output (worker/lib/mapCapture.js) to
-// maps/*.png in the repo, so /bigtime/reports and /bigtime/maps can read
+// maps/*.png in the repo, so /bigtime/report and /bigtime/maps can read
 // them as plain static files instead of running a live Puppeteer capture
 // on every page load. Called from two places, both via ctx.waitUntil so
 // the triggering request is never held up by however long this takes:

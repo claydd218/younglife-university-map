@@ -8,6 +8,7 @@ import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.j
 import { MINISTRIES_PATH, HEADER, rowFromBody } from '../lib/ministries.js';
 import { bumpDeployVersion } from '../lib/deployVersion.js';
 import { regenerateMapArchive } from '../lib/mapArchive.js';
+import { regenerateReportArchive } from '../lib/reportArchive.js';
 
 export async function onRequestPut({ request, env, ctx, params }) {
   let body;
@@ -68,6 +69,14 @@ export async function onRequestPut({ request, env, ctx, params }) {
         console.error('Map archive regeneration failed:', err);
       })
     );
+    // Any field edit here (blurb, staff, universities, photos, not just
+    // ones that would move a map pin) shows up in the report too — see
+    // reportArchive.js.
+    ctx.waitUntil(
+      regenerateReportArchive(env, request, deployVersion, committerFromRequest(request)).catch((err) => {
+        console.error('Report archive regeneration failed:', err);
+      })
+    );
   }
   return jsonResponse({ ok: true, id: updatedRow.id, sha: result.sha, deployVersion });
 }
@@ -111,6 +120,11 @@ export async function onRequestDelete({ request, env, ctx, params }) {
     ctx.waitUntil(
       regenerateMapArchive(env, request, deployVersion, committerFromRequest(request)).catch((err) => {
         console.error('Map archive regeneration failed:', err);
+      })
+    );
+    ctx.waitUntil(
+      regenerateReportArchive(env, request, deployVersion, committerFromRequest(request)).catch((err) => {
+        console.error('Report archive regeneration failed:', err);
       })
     );
   }

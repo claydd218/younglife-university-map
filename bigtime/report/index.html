@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ministry Report — Young Life University International</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* Pure Puppeteer rendering target — worker/routes/report-pdf.js is the
+     only thing that ever navigates here (via a forwarded admin session
+     cookie), waits on window.__reportReady, then calls page.pdf() once
+     per [data-section]/part (see report.js's header comment). Nobody
+     browses this page directly, so unlike the admin preview it replaced
+     (bigtime/reports2/), there's no on-screen chrome here at all — no
+     button, no loading overlay, no retry UI. */
+  body {
+    font-family: 'EB Garamond', Georgia, serif;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  h1, h2, h3 { font-family: 'Cinzel', 'Times New Roman', serif; }
+
+  /* ---------- Report content (built into #report-output by report.js's
+     buildReportHtml()) ---------- */
+  .report-map-title {
+    font-size: 24px;
+    text-align: center;
+    margin: 0 0 4px;
+  }
+  .report-generated-date {
+    font-size: 18px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #666;
+    margin: 0 0 14px;
+  }
+  .report-metrics {
+    display: flex;
+    gap: 36px;
+    justify-content: center;
+    width: 80%;
+    margin: 24px auto 28px;
+  }
+  .report-metric {
+    flex: 0 0 90px;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 2px solid #1a1a1a;
+    border-radius: 8px;
+    background: none;
+  }
+  .report-metric-label { font-size: 11px; color: #1a1a1a; text-transform: uppercase; letter-spacing: 0.03em; }
+  .report-metric-num { font-size: 24px; font-weight: 700; line-height: 1.2; margin-top: 4px; }
+  .report-map-shot { max-width: 100%; border: 1px solid #ccc; display: block; }
+
+  /* Every division (including the first, right after the metrics page)
+     starts on its own fresh printed page — native break-before, reliable
+     in every browser. The real PDF isn't produced by printing this
+     document at all — worker/routes/report-pdf.js calls Puppeteer's
+     page.pdf() once per [data-section] with a real per-section footer
+     (see report.js's header comment); this break-before is only what a
+     literal Ctrl+P of this page would look like. */
+  .division-section { break-before: page; }
+  .division-title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 80%;
+    margin: 0 auto 14px;
+  }
+  .division-title-report-name { font-size: 13px; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase; }
+  .division-title-division-name { font-size: 24px; }
+  .division-map-shot {
+    display: block;
+    max-width: 100%;
+    margin: 0 auto 20px;
+    border: 1px solid #ccc;
+  }
+  /* Ministry areas always start on their own fresh page after the
+     division's title/map/metrics. */
+  .division-areas { break-before: page; }
+
+  .ministry-area {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 16px;
+    margin-bottom: 6px;
+    break-inside: avoid;
+  }
+  .ministry-area-title {
+    grid-column: 1 / -1;
+    font-size: 15px;
+    font-weight: 700;
+    margin: 14px 0 4px;
+  }
+  .ministry-area-photo {
+    width: 220px;
+    height: 165px;
+    object-fit: cover;
+    border-radius: 3px;
+    background: #eee;
+  }
+  .ministry-area.no-photo { grid-template-columns: 1fr; }
+  .ministry-area-blurb { font-size: 13px; line-height: 1.45; margin: 0 0 10px; }
+  .ministry-staff { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+  .ministry-staff-item { width: 74px; text-align: center; }
+  .ministry-staff-photo {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #1a1a1a;
+    margin: 0 auto 4px;
+    display: block;
+  }
+  .ministry-staff-photo-fallback {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid #1a1a1a;
+    margin: 0 auto 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+  .ministry-staff-name { font-size: 10.5px; font-weight: 600; line-height: 1.2; }
+  .ministry-staff-role { font-size: 9.5px; color: #666; line-height: 1.2; }
+  .ministry-universities { font-size: 12px; color: #333; }
+  .ministry-universities-label { font-weight: 700; }
+
+  /* Kept in sync by hand with worker/routes/report-pdf.js's page.pdf()
+     options — see that file for why it passes explicit format/landscape/
+     margin instead of relying on this rule via preferCSSPageSize. */
+  @page {
+    size: landscape;
+    margin: 14mm 16mm;
+  }
+
+  @media print {
+    body { max-width: none; margin: 0; padding: 0; background: #fff; }
+    .report-map-shot { max-width: 100%; max-height: 460px; width: auto; margin: 0 auto; }
+    .division-map-shot { max-width: 100%; max-height: 440px; width: auto; margin: 0 auto 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="report-output"></div>
+
+<script src="../../js/utils.js"></script>
+<script src="../../js/config.js"></script>
+<script src="../../vendor/papaparse/papaparse.min.js"></script>
+<script type="module" src="report.js"></script>
+</body>
+</html>

@@ -101,6 +101,21 @@ export async function getFile(env, path) {
   return { content: decodeBase64Utf8(data.content), sha: data.sha };
 }
 
+// path -> { contentBase64: string, sha: string } | null (404 = doesn't
+// exist). Unlike getFile, does NOT decode as UTF-8 text — for binary files
+// (the cached report PDF), same reasoning as putFileBase64 vs putFile.
+export async function getFileBase64(env, path) {
+  const res = await fetch(`${apiBase(env)}/contents/${path}?ref=${branchName(env)}`, {
+    headers: headers(env),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new GitHubApiError(`GitHub GET ${path} failed`, res.status, await res.text());
+  }
+  const data = await res.json();
+  return { contentBase64: data.content.replace(/\n/g, ''), sha: data.sha };
+}
+
 // Writes UTF-8 text content (CSV files). `sha` is required to update an
 // existing file, omit to create a new one.
 export async function putFile(env, path, contentString, { sha, message, authorName, authorEmail } = {}) {

@@ -16,6 +16,9 @@
   }
   h1 { font-size: 22px; margin-bottom: 4px; }
   .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .page-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .page-header-actions .status-text { font-size: 12.5px; }
+  .page-header-actions .status-text.error { color: #a33; }
   .help-link {
     font-size: 17px;
     color: #888;
@@ -517,7 +520,11 @@
 
   <div class="page-header">
     <h1>Young Life University International Admin <a href="help.html" target="_blank" rel="noopener" class="help-link" title="Help" aria-label="Help">&#9432;</a></h1>
-    <button type="button" id="sign-out-btn" class="btn secondary btn-small">Sign Out</button>
+    <div class="page-header-actions">
+      <span id="report-pdf-status" class="status-text" hidden></span>
+      <button type="button" id="report-pdf-btn" class="btn secondary btn-small">Download Report PDF</button>
+      <button type="button" id="sign-out-btn" class="btn secondary btn-small">Sign Out</button>
+    </div>
   </div>
 
   <div id="banner" class="banner" hidden></div>

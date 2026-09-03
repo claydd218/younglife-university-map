@@ -2,7 +2,7 @@
 // a bundle of PNGs: the whole world plus one zoomed-in map per division
 // (js/config.js's DIVISIONS), each cropped to fully show that division's
 // countries. Manual "Regenerate" trigger for /bigtime/maps — the normal,
-// fast path for both /bigtime/maps and /bigtime/reports is now reading the
+// fast path for both /bigtime/maps and /bigtime/report is now reading the
 // cached maps/*.png files worker/lib/mapArchive.js keeps up to date
 // automatically on every ministry add/edit/delete (see
 // worker/routes/ministries.js and ministry-detail.js), not a live capture
