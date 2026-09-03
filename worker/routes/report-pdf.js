@@ -12,6 +12,7 @@ import { errorResponse, committerFromRequest } from '../lib/http.js';
 import { getFile, getFileBase64 } from '../lib/github.js';
 import { DEPLOY_VERSION_PATH } from '../lib/deployVersion.js';
 import { generateReportPdf, withTimeout, GENERATE_TIMEOUT_MS } from '../lib/reportCapture.js';
+import { isMapsCacheFreshFor } from '../lib/mapArchive.js';
 import {
   getReportCacheStatus,
   saveReportNow,
@@ -52,6 +53,31 @@ async function pollForFreshCache(env, timeoutMs) {
     if (result) return result;
   }
   return null;
+}
+
+// maps/*.png are kept fresh by a completely separate background job
+// (worker/lib/mapArchive.js's regenerateMapArchive, triggered by the same
+// ministry edit as this report's own invalidation) that does its own full
+// live map capture — which can easily still be running well after this
+// report's own deploy-version check already says "the data is current,
+// go ahead". Confirmed live: a new ministry showed up correctly in the
+// listing and on the live interactive map, but the PDF's own map images
+// were the old ones, uncolored/unzoomed for it — generation ran before
+// the map capture had caught up. Waiting here for isMapsCacheFreshFor to
+// agree avoids embedding maps known not to match what's about to be
+// generated; best-effort only — if the map capture is itself unusually
+// slow or never ran (env.BROWSER missing on some future deploy, say),
+// this gives up after a bounded wait and generates anyway rather than
+// blocking the admin indefinitely over maps specifically.
+const MAPS_WAIT_TIMEOUT_MS = GENERATE_TIMEOUT_MS;
+async function waitForFreshMaps(env, deployVersion) {
+  if (await isMapsCacheFreshFor(env, deployVersion)) return true;
+  const deadline = Date.now() + MAPS_WAIT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    if (await isMapsCacheFreshFor(env, deployVersion)) return true;
+  }
+  return false;
 }
 
 // Reflects when the PDF was actually generated, not "today" — a re-served
@@ -102,6 +128,23 @@ export async function onRequestGet({ request, env, ctx }) {
   }
 
   try {
+    // Read once, up front, and reused below for both the maps-freshness
+    // check and (after generation) what gets recorded to report-meta.json
+    // — deliberately the version from *before* generation started, not
+    // after. If another edit lands during the several minutes this takes,
+    // recording the later value would mark this result "fresh" for data
+    // it was never actually generated against; recording this earlier one
+    // means the next request correctly sees it as stale again instead.
+    const currentDeployVersionFile = await getFile(env, DEPLOY_VERSION_PATH);
+    const currentDeployVersion = currentDeployVersionFile ? currentDeployVersionFile.content.trim() : null;
+
+    // See waitForFreshMaps's own comment above — best-effort, generates
+    // with whatever maps/*.png currently has either way once this gives up.
+    const mapsFresh = await waitForFreshMaps(env, currentDeployVersion);
+    if (!mapsFresh) {
+      console.error('Report generation: maps/*.png did not catch up with the current data in time — generating with whatever is there now.');
+    }
+
     // Raced against the timeout below, not awaited directly — if the
     // timeout wins, generateReportPdf() (and its own finally-block
     // browser.close()) is still running. ctx.waitUntil keeps that alive
@@ -133,8 +176,7 @@ export async function onRequestGet({ request, env, ctx }) {
     // click hits the fast cached path instead of regenerating all over
     // again.
     try {
-      const currentDeployVersion = await getFile(env, DEPLOY_VERSION_PATH);
-      await saveReportNow(env, pdfBytes, currentDeployVersion ? currentDeployVersion.content.trim() : null, committerFromRequest(request));
+      await saveReportNow(env, pdfBytes, currentDeployVersion, committerFromRequest(request));
     } catch (err) {
       console.error('Failed to save the freshly-generated report to the cache (still returning it to this request):', err);
     }

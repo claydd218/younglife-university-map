@@ -131,7 +131,16 @@ export async function saveReportNow(env, pdfBytes, deployVersion, commit) {
 // still returned even when stale/missing, so a caller building a download
 // filename after a fresh live-generation doesn't need a second read.
 export async function getReportCacheStatus(env) {
-  const metaFile = await getFile(env, META_PATH);
+  // Fetched together, not one-after-the-other — deploy-version is needed
+  // regardless of what meta turns out to contain (or whether it even
+  // exists), so there's no reason to make a cache-hit response wait
+  // through two sequential GitHub round trips here on top of the two more
+  // (Contents API, then the Blobs API fallback — see getFileBase64) the
+  // PDF fetch itself still needs afterward.
+  const [metaFile, currentDeployVersion] = await Promise.all([
+    getFile(env, META_PATH),
+    getFile(env, DEPLOY_VERSION_PATH),
+  ]);
   if (!metaFile) return { fresh: false, meta: null };
   let meta;
   try {
@@ -140,7 +149,6 @@ export async function getReportCacheStatus(env) {
     return { fresh: false, meta: null };
   }
 
-  const currentDeployVersion = await getFile(env, DEPLOY_VERSION_PATH);
   if (!currentDeployVersion || currentDeployVersion.content.trim() !== meta.deployVersion) {
     return { fresh: false, meta };
   }
