@@ -75,10 +75,17 @@ const MAPS_DEPLOY_WAIT_INTERVAL_MS = 5000;
 // stale again immediately for no real data change).
 async function waitForMapsDeploy(request, expectedWorldBytes) {
   const url = new URL('/maps/world.png', request.url).toString();
+  // Same reasoning as mapScreenshot.js's openMapPage: this route is itself
+  // an authenticated admin request, and /maps/*.png sits outside the
+  // temporary site-wide gate's exemption list — without forwarding this
+  // cookie, every check here would land on the login page instead of the
+  // real PNG and never match, wasting the full timeout on every single
+  // report generation.
+  const cookie = request.headers.get('Cookie') || '';
   const deadline = Date.now() + MAPS_DEPLOY_WAIT_TIMEOUT_MS;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await fetch(url, { cache: 'no-store', headers: cookie ? { Cookie: cookie } : {} });
       if (res.ok) {
         const bytes = new Uint8Array(await res.arrayBuffer());
         if (bytesEqual(bytes, expectedWorldBytes)) return true;

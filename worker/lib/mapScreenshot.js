@@ -17,6 +17,19 @@ export async function openMapPage(env, request, viewport) {
   const browser = await puppeteer.launch(env.BROWSER);
   const page = await browser.newPage();
   await page.setViewport(viewport);
+  // Every caller of this (the manual Regenerate button, the automatic
+  // per-edit archive job, report generation's own maps refresh) is itself
+  // an authenticated admin request — forwarding that same cookie is what
+  // lets this internal Puppeteer navigation into the temporary site-wide
+  // password gate without a second login step, same fix already proven
+  // for reportCapture.js's /bigtime/report navigation. Without it, this
+  // silently loaded the site-login gate page instead of the real map —
+  // window.__mapReady never fires, this just times out below, and every
+  // caller's own try/catch swallows that as a quiet failure. Confirmed
+  // live as the reason zero maps/*.png updates landed after the site gate
+  // went in, Finland included.
+  const cookie = request.headers.get('Cookie') || '';
+  if (cookie) await page.setExtraHTTPHeaders({ Cookie: cookie });
   const mapUrl = new URL('/', request.url);
   await page.goto(mapUrl.toString(), { waitUntil: 'networkidle0' });
   await page.waitForFunction('window.__mapReady === true', { timeout: READY_TIMEOUT_MS });
