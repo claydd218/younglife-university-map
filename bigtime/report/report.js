@@ -85,7 +85,20 @@ function findStaffPhotoUrl(name, imageFiles) {
   return null;
 }
 
-function buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles) {
+// name -> role, for whichever ministry row lists them as home staff —
+// built once (buildReportHtml) so every ministry area can resolve who's
+// assigned there from elsewhere (row.assigned_staff, just names) without
+// a search per area. Mirrors js/app.js's state.staffHomeByName; see
+// worker/lib/ministries.js's comment on why a name is the only link.
+function buildStaffHomeByName(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    for (const s of row.staff) map.set(s.name, s.role);
+  }
+  return map;
+}
+
+function buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles, staffHomeByName) {
   const iso2 = countryIsoByName.get(row.country.trim());
   const flag = flagEmoji(iso2);
   const name = row.city === row.country ? row.city : `${row.city}, ${row.country}`;
@@ -95,8 +108,16 @@ function buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles) {
     ? `<img class="ministry-area-photo" data-src="../../${CONFIG.IMAGES_DIR}${encodeURIComponent(row.photos[0])}" alt="">`
     : '';
 
-  const staffUrls = row.staff.map((s) => findStaffPhotoUrl(s.name, imageFiles));
-  const staffHtml = row.staff.map((s, i) => {
+  // Assigned-elsewhere staff first — they're effectively the on-site lead
+  // (same ordering as js/app.js's popup). A name with no resolvable home
+  // (a dangling reference) is skipped rather than shown with no role.
+  const assignedStaff = row.assigned_staff
+    .map((n) => (staffHomeByName.has(n) ? { name: n, role: staffHomeByName.get(n) } : null))
+    .filter(Boolean);
+  const staff = [...assignedStaff, ...row.staff];
+
+  const staffUrls = staff.map((s) => findStaffPhotoUrl(s.name, imageFiles));
+  const staffHtml = staff.map((s, i) => {
     const photo = staffUrls[i]
       ? `<img class="ministry-staff-photo" data-src="${staffUrls[i]}" alt="">`
       : `<div class="ministry-staff-photo-fallback" style="background:${def.country};">${escapeHtml(initialsFor(s.name))}</div>`;
@@ -121,7 +142,7 @@ function buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles) {
       ${mainPhoto}
       <div>
         ${row.blurb ? `<p class="ministry-area-blurb">${escapeHtml(row.blurb)}</p>` : ''}
-        ${row.staff.length ? `<div class="ministry-staff">${staffHtml}</div>` : ''}
+        ${staff.length ? `<div class="ministry-staff">${staffHtml}</div>` : ''}
         ${universitiesHtml}
       </div>
     </div>`;
@@ -162,6 +183,8 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
       ${metricBoxesHtml(computeMetrics(rows))}
     </section>`;
 
+  const staffHomeByName = buildStaffHomeByName(rows);
+
   const byDivision = new Map();
   for (const row of rows) {
     const divisionKey = divisionByCountry.get(row.country.trim());
@@ -175,7 +198,7 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
     const divisionRows = byDivision.get(key);
     if (!divisionRows || !divisionRows.length) continue;
     divisionRows.sort((a, b) => a.country.localeCompare(b.country) || a.city.localeCompare(b.city));
-    const areasHtml = divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles)).join('');
+    const areasHtml = divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles, staffHomeByName)).join('');
     const divisionMapShot = mapShots.divisions[key];
     const divisionMapHtml = divisionMapShot
       ? `<img class="division-map-shot" data-src="${divisionMapShot}" alt="${escapeHtml(def.label)} map">`

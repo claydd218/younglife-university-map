@@ -731,6 +731,12 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
 // map popup; the rest are only visible in that popup's photo carousel.
 
 let currentMinistryPhotos = [];
+// Draft list of staff *names* assigned here from elsewhere (their home
+// entry is a different ministry — see the "Assign to Multiple Ministries"
+// section below). Same draft-until-Save treatment as currentMinistryPhotos,
+// for the same reason: this ministry's own row is the one currently open
+// for edit, so removing one here shouldn't fire its own out-of-band write.
+let currentAssignedStaff = [];
 // filename -> local blob URL, for photos uploaded earlier in this same
 // dialog session. GitHub's Contents API has a brief read-after-write lag,
 // so fetching a just-uploaded file straight from its repo URL can 404 for
@@ -1128,6 +1134,9 @@ async function deleteMinistry(id) {
     state.sha = result.sha;
     trackDeployVersion(result.deployVersion);
     renderMinistriesTable();
+    // Every staff member who called this ministry home just lost that
+    // home entirely — clean up any assignment elsewhere pointing at them.
+    await sweepAssignments(row.staff.map((s) => s.name));
   } catch (err) {
     handleWriteError(err, loadMinistries);
   }
@@ -1245,12 +1254,29 @@ function addStaffRow(prefill = {}) {
     openMoveStaffDialog(name, metaInput.value.trim(), item);
   });
 
+  const assignBtn = document.createElement('button');
+  assignBtn.type = 'button';
+  assignBtn.className = 'btn secondary btn-small';
+  assignBtn.textContent = 'Assign to Multiple Ministries…';
+  assignBtn.addEventListener('click', () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      showBanner('error', 'Fill in the staff member’s name before assigning them to other ministries.');
+      return;
+    }
+    if (!state.editingId) {
+      showBanner('error', 'Save this ministry first, then assign this staff member elsewhere.');
+      return;
+    }
+    openAssignStaffDialog(name);
+  });
+
   const staffGroup = $('staff-group');
   item.appendChild(makeReorderButtons(staffGroup, item));
 
   const actionsRow = document.createElement('div');
   actionsRow.className = 'staff-row-actions';
-  actionsRow.append(moveBtn, makeRemoveButton({
+  actionsRow.append(moveBtn, assignBtn, makeRemoveButton({
     danger: true,
     confirmMessage: 'Remove this staff member? This can’t be undone after you save the ministry.',
     onRemove: () => {
@@ -1339,6 +1365,7 @@ async function confirmMoveStaff(targetId) {
     photos: target.photos,
     video_url: target.video_url,
     video_label: target.video_label,
+    assigned_staff: target.assigned_staff,
   };
 
   try {
@@ -1362,6 +1389,208 @@ function wireMoveStaffDialog() {
     moveStaffContext = null;
     $('move-staff-dialog').close();
   });
+}
+
+// --- Assign staff to multiple ministries --------------------------------
+// A staff member has exactly one home ministry (their own row's Staff
+// list, edited as normal — name/role/photo) but can also be shown at
+// other ministries without duplicating any of that: assigning just adds
+// their name to the *target* ministry's own assigned_staff list. Nothing
+// about the home entry changes, and the public map/PDF/metrics resolve
+// role+photo by looking up wherever that name actually lives as home
+// staff (findStaffHome) — see worker/lib/ministries.js's own comment on
+// why a name is the only link, same as how staff photos already resolve.
+
+// Scans every ministry for whichever row's own Staff list contains this
+// exact name — the source of truth for their role (and, via the existing
+// slug-by-name photo lookup, their photo) wherever they're shown as an
+// assignment. Returns null for a dangling reference (their home entry was
+// renamed or removed since assigning — see sweepAssignments, which exists
+// specifically to keep this from happening under normal use).
+function findStaffHome(name) {
+  for (const row of state.rows) {
+    const match = row.staff.find((s) => s.name === name);
+    if (match) return { role: match.role, city: row.city, country: row.country };
+  }
+  return null;
+}
+
+// Writes `target`'s row with one or more fields overridden, preserving
+// everything else — shared by the assign-staff picker, its cleanup sweep,
+// and (mirrored inline, not through here) confirmMoveStaff above. Safe to
+// use for any *other* ministry than the one currently open in the dialog
+// — see currentAssignedStaff's own comment for why the currently-open
+// row's own assigned_staff specifically goes through the normal Save
+// draft instead of a call like this.
+async function putMinistryField(target, fieldOverrides) {
+  const body = {
+    sha: state.sha,
+    city: target.city,
+    country: target.country,
+    lat: target.lat,
+    lng: target.lng,
+    date_opened: target.date_opened,
+    is_developing: target.is_developing,
+    blurb: target.blurb,
+    staff: target.staff,
+    universities: target.universities,
+    photos: target.photos,
+    video_url: target.video_url,
+    video_label: target.video_label,
+    assigned_staff: target.assigned_staff,
+    ...fieldOverrides,
+  };
+  const result = await apiFetch(`/ministries/${encodeURIComponent(target.id)}`, { method: 'PUT', body: JSON.stringify(body) });
+  state.sha = result.sha;
+  trackDeployVersion(result.deployVersion);
+  const index = state.rows.findIndex((r) => r.id === target.id);
+  state.rows[index] = { ...target, ...fieldOverrides };
+  return state.rows[index];
+}
+
+// Called after a home staffer disappears from their own ministry's Staff
+// list (removed, or renamed away — saveMinistry/deleteMinistry both diff
+// old vs. new staff names and pass whatever dropped out here) — any other
+// ministry's assigned_staff still pointing at that exact old name would
+// otherwise silently stop resolving to anyone. Renaming isn't otherwise
+// migrated (there's no reliable way to tell "renamed" apart from
+// "removed, unrelated new person added" from names alone) — this at
+// least degrades to a clean unassignment instead of a dangling one.
+async function sweepAssignments(names) {
+  if (!names.length) return;
+  const affected = state.rows.filter((r) => r.assigned_staff.some((n) => names.includes(n)));
+  for (const row of affected) {
+    try {
+      await putMinistryField(row, { assigned_staff: row.assigned_staff.filter((n) => !names.includes(n)) });
+    } catch (err) {
+      console.error('Failed to clean up a stale staff assignment:', err);
+    }
+  }
+}
+
+// { name } for whichever staff row's "Assign to Multiple Ministries…" was
+// clicked.
+let assignStaffContext = null;
+let assignStaffShowDivision = false;
+
+function openAssignStaffDialog(name) {
+  assignStaffContext = { name };
+  assignStaffShowDivision = false;
+  $('assign-staff-title').textContent = `Assign ${name} to Multiple Ministries`;
+  renderAssignStaffList();
+  $('assign-staff-dialog').showModal();
+}
+
+function renderAssignStaffList() {
+  if (!assignStaffContext) return;
+  const { name } = assignStaffContext;
+  const country = $('field-country').value.trim();
+  const division = state.divisionByCountry.get(country);
+
+  const scopeBtn = $('assign-staff-scope-toggle');
+  scopeBtn.hidden = !division;
+  scopeBtn.textContent = assignStaffShowDivision ? 'Show Country Only' : 'Show Division';
+
+  const candidates = state.rows.filter((r) => {
+    if (r.id === state.editingId) return false; // already home here, not a valid target
+    return assignStaffShowDivision ? state.divisionByCountry.get(r.country) === division : r.country === country;
+  });
+
+  const byCountry = new Map();
+  for (const row of candidates) {
+    if (!byCountry.has(row.country)) byCountry.set(row.country, []);
+    byCountry.get(row.country).push(row);
+  }
+  const countries = [...byCountry.keys()].sort((a, b) => a.localeCompare(b));
+
+  const list = $('assign-staff-list');
+  if (!countries.length) {
+    list.innerHTML = '<p class="status-text">No other ministries in scope.</p>';
+    return;
+  }
+  list.innerHTML = countries.map((c) => `
+    <div class="assign-staff-country-group">
+      <h3 class="assign-staff-country-heading">${escapeHtml(c)}</h3>
+      ${byCountry.get(c).slice().sort((a, b) => a.city.localeCompare(b.city)).map((row) => `
+        <label class="assign-staff-option">
+          <input type="checkbox" data-id="${escapeHtml(row.id)}" ${row.assigned_staff.includes(name) ? 'checked' : ''}>
+          ${escapeHtml(row.city)}, ${escapeHtml(row.country)}
+        </label>
+      `).join('')}
+    </div>
+  `).join('');
+
+  list.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener('change', () => toggleAssignment(cb.dataset.id, name, cb.checked));
+  });
+}
+
+async function toggleAssignment(targetId, name, shouldAssign) {
+  const target = state.rows.find((r) => r.id === targetId);
+  if (!target) return;
+  const newAssigned = shouldAssign
+    ? [...target.assigned_staff, name]
+    : target.assigned_staff.filter((n) => n !== name);
+  try {
+    await putMinistryField(target, { assigned_staff: newAssigned });
+  } catch (err) {
+    handleWriteError(err, loadMinistries);
+    renderAssignStaffList(); // revert the checkbox to reflect what's actually saved
+  }
+}
+
+function wireAssignStaffDialog() {
+  $('assign-staff-scope-toggle').addEventListener('click', () => {
+    assignStaffShowDivision = !assignStaffShowDivision;
+    renderAssignStaffList();
+  });
+  $('assign-staff-done-btn').addEventListener('click', () => {
+    assignStaffContext = null;
+    $('assign-staff-dialog').close();
+  });
+}
+
+// A read-only row for someone assigned here from elsewhere — no name/role/
+// photo editing (that only happens at their home ministry), just a look
+// at who they are and a way to unassign. Rendered into its own
+// #assigned-staff-group, not #staff-group, so it never gets swept up in
+// that list's own reorder/collectRepeatable logic (which expects every
+// child to be a real .row-name/.row-meta editable pair).
+function addAssignedStaffRow(name) {
+  const home = findStaffHome(name);
+  const item = document.createElement('div');
+  item.className = 'assigned-staff-item';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'photo-placeholder assigned-staff-thumb';
+  findExistingImageUrl(slugify(name)).then((url) => {
+    if (!url) return;
+    const img = Object.assign(document.createElement('img'), { className: 'photo-thumb assigned-staff-thumb', src: url });
+    thumb.replaceWith(img);
+  });
+
+  const info = document.createElement('div');
+  info.className = 'assigned-staff-info';
+  info.innerHTML = `
+    <span class="assigned-staff-name">${escapeHtml(name)}</span>
+    ${home ? `<span class="assigned-staff-role">${escapeHtml(home.role)}</span>` : ''}
+    <span class="assigned-staff-badge">Assigned from ${home ? escapeHtml(`${home.city}, ${home.country}`) : 'elsewhere'}</span>
+  `;
+
+  const actionsRow = document.createElement('div');
+  actionsRow.className = 'staff-row-actions';
+  actionsRow.appendChild(makeRemoveButton({
+    danger: true,
+    confirmMessage: `Remove ${name}’s assignment to this ministry? Their home entry elsewhere is unaffected.`,
+    onRemove: () => {
+      currentAssignedStaff = currentAssignedStaff.filter((n) => n !== name);
+      item.remove();
+      $('assigned-staff-field').hidden = currentAssignedStaff.length === 0;
+    },
+  }));
+
+  item.append(thumb, info, actionsRow);
+  $('assigned-staff-group').appendChild(item);
 }
 
 function addUniversityRow(prefill = {}) {
@@ -1451,6 +1680,12 @@ function openDialog(row) {
 
   $('staff-group').innerHTML = '';
   $('universities-group').innerHTML = '';
+  $('assigned-staff-group').innerHTML = '';
+  currentAssignedStaff = row ? row.assigned_staff.slice() : [];
+  // Its own section, shown above Staff — see the top-level user request
+  // this was built for: "they will always be the leader there".
+  $('assigned-staff-field').hidden = currentAssignedStaff.length === 0;
+  currentAssignedStaff.forEach((name) => addAssignedStaffRow(name));
   if (row) {
     row.staff.forEach((s) => addStaffRow(s));
     row.universities.forEach((u) => addUniversityRow(u));
@@ -1620,6 +1855,13 @@ async function saveMinistry() {
     // this body is stringified) may rewrite entries in place if the
     // city/country changed, and this needs to pick up that final state.
     photos: currentMinistryPhotos,
+    // Checking/unchecking someone else's assignment to THIS ministry (the
+    // "Assigned from..." rows above the regular staff list) only updates
+    // this local draft, same as currentMinistryPhotos — not its own
+    // immediate PUT, since (unlike the picker's PUTs to *other* rows)
+    // this row is the one currently open, and an out-of-band write here
+    // would silently overwrite whatever else is mid-edit in this form.
+    assigned_staff: currentAssignedStaff,
   };
 
   if (body.country && !state.divisionByCountry.has(body.country)) {
@@ -1643,13 +1885,19 @@ async function saveMinistry() {
   try {
     await reconcileAllPhotos();
     if (state.editingId) {
+      const index = state.rows.findIndex((r) => r.id === state.editingId);
+      // Captured before state.rows[index] is overwritten below — anyone
+      // in the old list but not the new one just lost their home entry
+      // here (removed, or renamed away) and needs sweepAssignments.
+      const previousStaffNames = state.rows[index].staff.map((s) => s.name);
       const result = await apiFetch(`/ministries/${encodeURIComponent(state.editingId)}`, { method: 'PUT', body: JSON.stringify(body) });
       // Same read-after-write reasoning as deleteMinistry — update from the
       // write response instead of re-fetching.
-      const index = state.rows.findIndex((r) => r.id === state.editingId);
       state.rows[index] = { id: state.editingId, ...rowFields };
       state.sha = result.sha;
       trackDeployVersion(result.deployVersion);
+      const newStaffNames = new Set(rowFields.staff.map((s) => s.name));
+      await sweepAssignments(previousStaffNames.filter((n) => !newStaffNames.has(n)));
     } else {
       const result = await apiFetch('/ministries', { method: 'POST', body: JSON.stringify(body) });
       state.rows.push({ id: result.id, ...rowFields });
@@ -2401,6 +2649,7 @@ wireMinistriesFilterBar();
 wireCitySuggestions();
 wireDeployToast();
 wireMoveStaffDialog();
+wireAssignStaffDialog();
 wireReportPdfButton();
 wireSignOut();
 loadMinistries();

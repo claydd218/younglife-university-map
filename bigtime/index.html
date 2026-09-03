@@ -246,6 +246,50 @@
   }
   .move-staff-option:hover { background: #f4f4f4; border-color: #ccc; }
 
+  dialog#assign-staff-dialog {
+    width: min(480px, 92vw);
+    max-height: 80vh;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+  dialog#assign-staff-dialog[open] { display: flex; flex-direction: column; }
+  dialog#assign-staff-dialog::backdrop { background: rgba(0,0,0,0.4); }
+  .assign-staff-scope-row { margin-bottom: 10px; }
+  .assign-staff-country-group { margin-bottom: 12px; }
+  .assign-staff-country-heading { font-size: 13px; font-weight: 600; color: #555; margin: 0 0 6px; }
+  .assign-staff-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    padding: 6px 4px;
+    cursor: pointer;
+  }
+  .assign-staff-option:hover { background: #f4f4f4; border-radius: 4px; }
+
+  /* Read-only "assigned here from elsewhere" staff row — a lighter
+     treatment than a real editable .repeatable-item, since there's
+     nothing here to edit, only to look at and possibly unassign. */
+  .assigned-staff-item {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border: 1px solid #e5decf;
+    border-radius: 6px;
+    background: #fbf7ee;
+  }
+  .assigned-staff-thumb.photo-placeholder { width: 40px; height: 40px; border-radius: 50%; background: #eee; }
+  .assigned-staff-thumb.photo-thumb { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #ccc; }
+  .assigned-staff-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .assigned-staff-name { font-size: 14px; font-weight: 600; }
+  .assigned-staff-role { font-size: 12.5px; color: #666; }
+  .assigned-staff-badge { font-size: 12px; color: #8a6500; }
+
   dialog#video-preview-dialog {
     width: min(720px, 92vw);
     border: 1px solid #ccc;
@@ -665,6 +709,11 @@
           </label>
         </div>
 
+        <div class="field" id="assigned-staff-field" hidden>
+          <label>Assigned Here (home ministry is elsewhere)</label>
+          <div class="repeatable-group" id="assigned-staff-group"></div>
+        </div>
+
         <div class="field">
           <label>Staff</label>
           <div class="repeatable-group" id="staff-group"></div>
@@ -690,6 +739,19 @@
     <div class="dialog-body">
       <input type="text" id="move-staff-search" class="move-staff-search" placeholder="Search city or country…" autocomplete="off">
       <div id="move-staff-list" class="move-staff-list"></div>
+    </div>
+  </dialog>
+
+  <dialog id="assign-staff-dialog">
+    <div class="dialog-header">
+      <h2 id="assign-staff-title">Assign to Multiple Ministries</h2>
+      <div class="dialog-header-actions">
+        <button type="button" class="btn secondary" id="assign-staff-scope-toggle">Show Division</button>
+        <button type="button" class="btn" id="assign-staff-done-btn">Done</button>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <div id="assign-staff-list"></div>
     </div>
   </dialog>
 

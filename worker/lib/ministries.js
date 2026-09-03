@@ -8,7 +8,7 @@ import { parseParenList, joinParenList, assertNoParens, stripParens, parseVideoE
 
 export const MINISTRIES_PATH = 'data/ministries.csv';
 export const DIVISIONS_PATH = 'data/country-divisions.csv';
-export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'blurb', 'photos', 'video_url', 'video_label', 'updated_at'];
+export const HEADER = ['id', 'city', 'country', 'lat', 'lng', 'date_opened', 'is_developing', 'universities', 'staff', 'assigned_staff', 'blurb', 'photos', 'video_url', 'video_label', 'updated_at'];
 
 // country -> division, per data/country-divisions.csv.
 export async function loadDivisions(env) {
@@ -42,6 +42,11 @@ export function rowToApi(row) {
     date_opened: row.date_opened,
     is_developing: String(row.is_developing).trim().toLowerCase() === 'true',
     staff: parseParenList(row.staff).map(({ name, meta }) => ({ name, role: meta })),
+    // Names only, referencing another row's own `staff` entry as the
+    // source of truth for role/photo — see bigtime/admin.js's
+    // findStaffHome. Not a paren-list (no per-assignment role), just a
+    // plain `; `-joined list like `photos`.
+    assigned_staff: (row.assigned_staff || '').split(';').map((s) => s.trim()).filter(Boolean),
     universities: parseParenList(row.universities).map(({ name, meta }) => ({ name, year: meta })),
     blurb: row.blurb,
     photos: (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean),
@@ -97,6 +102,12 @@ export function rowFromBody(id, body) {
     is_developing: body.is_developing ? 'true' : 'false',
     universities: joinParenList(universitiesMeta),
     staff: joinParenList(staffMeta),
+    // Not editable from this same form — bigtime/admin.js's assign-staff
+    // dialog and its own cleanup sweep write this field directly via their
+    // own PUTs to the affected row(s), so a plain save just needs to pass
+    // whatever the client already has (state.rows' last-known value)
+    // straight through, not silently clear it.
+    assigned_staff: (body.assigned_staff || []).join('; '),
     blurb: (body.blurb || '').trim(),
     photos: (body.photos || []).join('; '),
     video_url: videoUrl,

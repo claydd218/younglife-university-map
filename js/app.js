@@ -20,6 +20,13 @@ const state = {
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
   openCountryTooltipLayer: null, // the one country layer whose tooltip is open, if any
+  // name -> {meta: role}, for whichever ministry row lists them as home
+  // staff — lets a popup resolve someone assigned there from elsewhere
+  // (row.assigned_staff, just names) without a search per popup. See
+  // buildPopupHtml and worker/lib/ministries.js's comment on why a name
+  // is the only link between an assignment and where its role/photo
+  // actually live.
+  staffHomeByName: new Map(),
   worldMetrics: null, // [{label, num}, ...], computed once ministry data loads
   metricsByDivision: new Map(), // division key -> [{label, num}, ...]
   currentNavView: 'world', // 'world' or a DIVISIONS key — which nav-menu item is active
@@ -307,7 +314,20 @@ function buildPopupHtml(row, divisionKey) {
   const div = DIVISIONS[divisionKey];
   const flag = flagEmoji(state.countryIsoByName.get(normalizeCountryName(row.country)));
 
-  const staff = parseParenList(row.staff);
+  // Staff assigned here from elsewhere (a name only — role/photo resolve
+  // through their home entry, state.staffHomeByName) render first, ahead
+  // of this ministry's own staff — they're effectively the on-site lead.
+  // A name with no resolvable home (a dangling reference) is skipped
+  // rather than shown with no role at all.
+  const assignedStaff = (row.assigned_staff || '').split(';')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((name) => {
+      const home = state.staffHomeByName.get(name);
+      return home ? { name, meta: home.meta } : null;
+    })
+    .filter(Boolean);
+  const staff = [...assignedStaff, ...parseParenList(row.staff)];
   const staffHtml = staff.length
     ? `<ul class="popup-staff">${staff
         .map((s) => {
@@ -1677,6 +1697,12 @@ async function init() {
         // see that handler's comment for why.
         zoomToBoundsOnClick: false,
       });
+    }
+
+    for (const row of ministryRows) {
+      for (const s of parseParenList(row.staff)) {
+        state.staffHomeByName.set(s.name, { meta: s.meta });
+      }
     }
 
     let placed = 0;
