@@ -58,7 +58,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 59,Puebla,Mexico,18.8333330,-98.0000000,,false,,Jae Jung (Staff),,puebla-mexico-1.webp; puebla-mexico-2.webp; puebla-mexico-3.webp,,,2026-08-28T17:30:33.289Z
 60,Buenos Aires,Argentina,-34.5927,-58.5063,,false,,Milton Mischuk (Staff),,,,,2026-09-03T17:29:47.504Z
 61,Bogota,Colombia,4.6807,-74.0767,,false,,Diego Rojas (Staff),,bogota-colombia-1.webp; bogota-colombia-2.webp; bogota-colombia-3.webp; bogota-colombia-4.webp,,,2026-08-28T02:57:09.593Z
-62,Santiago,Chile,-33.4376995,-70.6510671,,false,,Daniela Celis (Staff),,,,,
+62,Santiago,Chile,-33.4376995,-70.6510671,2022,false,Santiago University (2022),Daniela Celis (Staff),,santiago-chile-1.webp; santiago-chile-2.webp; santiago-chile-3.webp,,,2026-09-03T20:56:30.720Z
 63,Cuenca,Ecuador,-2.8974072,-79.0041726,2024,false,Universidad Estatal de Cuenca (2204); UNAE (2024),Pedro Diaz (Staff),,cuenca-ecuador-1.webp; cuenca-ecuador-2.webp,,,2026-09-03T16:16:16.526Z
 65,Nassau,The Bahamas,25.0782266,-77.3383438,,false,,,,,,,2026-08-28T16:21:41.613Z
 67,Krakow,Poland,50.0469432,19.9971534,2025,false,University of Economy (2025); Jagiellonian University (2025); University of Technology (2025); AGH University of Krakow (2025),Sonya Nikolayeva (Staff),,krakow-poland-1.webp; krakow-poland-2.webp; krakow-poland-3.webp,,,2026-09-03T16:42:31.098Z
