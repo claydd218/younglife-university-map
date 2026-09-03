@@ -28,6 +28,44 @@ const REPORTS_DIR = 'reports';
 export const PDF_PATH = `${REPORTS_DIR}/ministry-report.pdf`;
 export const META_PATH = `${REPORTS_DIR}/report-meta.json`;
 
+// Best-effort lock so a background regeneration (triggered by an admin
+// edit) and a live-generation fallback (worker/routes/report-pdf.js,
+// triggered by clicking Download before that background job finishes)
+// can't both spin up a Puppeteer session at the same time — confirmed
+// live: two at once can crash both ("Protocol error ... Target closed"),
+// almost certainly Browser Rendering's own concurrent-session limit for
+// this account. Not a strict mutex — Cloudflare KV is eventually
+// consistent, so this can't fully rule out two acquisitions racing, only
+// make it very unlikely — but that's a real improvement over no
+// coordination at all. Lives in the LOGIN_ATTEMPTS KV binding (name is
+// historical; it's just a generic key-value store, and this key is
+// clearly namespaced apart from loginRateLimit.js's own 'login:failures'
+// key) rather than provisioning a whole new namespace just for this.
+const GENERATING_KEY = 'report:generating';
+// Comfortably longer than GENERATE_TIMEOUT_MS so the lock self-expires
+// even if something crashes before ever releasing it, but not so long
+// that a genuinely stuck generation blocks new ones for longer than it
+// has to.
+const GENERATING_LOCK_TTL_SECONDS = Math.ceil(GENERATE_TIMEOUT_MS / 1000) + 60;
+
+// -> true if the lock was free and this call just claimed it (caller must
+// releaseGenerationLock when done, even on error), false if someone else
+// already holds it. Fails open (returns true, i.e. "go ahead") if the KV
+// binding itself is missing — no coordination is safer than silently
+// never generating at all.
+export async function tryAcquireGenerationLock(env) {
+  if (!env.LOGIN_ATTEMPTS) return true;
+  const existing = await env.LOGIN_ATTEMPTS.get(GENERATING_KEY);
+  if (existing) return false;
+  await env.LOGIN_ATTEMPTS.put(GENERATING_KEY, String(Date.now()), { expirationTtl: GENERATING_LOCK_TTL_SECONDS });
+  return true;
+}
+
+export async function releaseGenerationLock(env) {
+  if (!env.LOGIN_ATTEMPTS) return;
+  await env.LOGIN_ATTEMPTS.delete(GENERATING_KEY).catch(() => {});
+}
+
 // Same reasoning/value as mapArchive.js's DEPLOY_WAIT_TIMEOUT_MS: deploys
 // in this project have taken up to ~80s in past observation.
 const DEPLOY_WAIT_TIMEOUT_MS = 150000;
@@ -131,10 +169,24 @@ export async function regenerateReportArchive(env, request, deployVersion, commi
     console.error(`Report archive: deploy version ${deployVersion} did not go live within ${DEPLOY_WAIT_TIMEOUT_MS}ms — skipping regeneration to avoid saving a stale report.`);
     return;
   }
-  const pdfBytes = await withTimeout(
-    generateReportPdf(env, request),
-    GENERATE_TIMEOUT_MS,
-    `Report regeneration timed out after ${GENERATE_TIMEOUT_MS}ms — likely a stuck Browser Rendering session, not a code loop`
-  );
-  await saveReportNow(env, pdfBytes, deployVersion, commit);
+
+  // If a live download request got here first (see report-pdf.js), let
+  // that one own this generation — it'll save the result itself, which
+  // is exactly what this background job exists to keep the next request
+  // from having to do anyway.
+  const acquired = await tryAcquireGenerationLock(env);
+  if (!acquired) {
+    console.error('Report archive: another generation is already in progress — skipping this regeneration.');
+    return;
+  }
+  try {
+    const pdfBytes = await withTimeout(
+      generateReportPdf(env, request),
+      GENERATE_TIMEOUT_MS,
+      `Report regeneration timed out after ${GENERATE_TIMEOUT_MS}ms — likely a stuck Browser Rendering session, not a code loop`
+    );
+    await saveReportNow(env, pdfBytes, deployVersion, commit);
+  } finally {
+    await releaseGenerationLock(env);
+  }
 }
