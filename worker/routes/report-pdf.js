@@ -13,12 +13,11 @@ import { getFile, getFileBase64 } from '../lib/github.js';
 import { DEPLOY_VERSION_PATH } from '../lib/deployVersion.js';
 import { generateReportPdf, withTimeout, GENERATE_TIMEOUT_MS } from '../lib/reportCapture.js';
 import { isMapsCacheFreshFor } from '../lib/mapArchive.js';
+import { tryAcquireGenerationLock, releaseGenerationLock } from '../lib/browserLock.js';
 import {
   getReportCacheStatus,
   saveReportNow,
   PDF_PATH,
-  tryAcquireGenerationLock,
-  releaseGenerationLock,
 } from '../lib/reportArchive.js';
 
 function base64ToBytes(base64) {

@@ -16,6 +16,7 @@
 
 import { listDir, putFileBase64, putFile, getFile } from './github.js';
 import { captureAllMaps, toBase64 } from './mapCapture.js';
+import { waitForGenerationLock, releaseGenerationLock } from './browserLock.js';
 
 const MAPS_DIR = 'maps';
 // Written alongside the PNGs whenever a deployVersion is known (the
@@ -97,11 +98,23 @@ export async function isMapsCacheFreshFor(env, expectedVersion) {
   }
 }
 
+// Same rationale as report-pdf.js's own wait budget: genuinely how long a
+// concurrent report generation (the slowest thing that can hold this
+// lock) could still legitimately be running.
+const LOCK_WAIT_TIMEOUT_MS = 420000;
+
 // Waits for deployVersion (from lib/deployVersion.js's bumpDeployVersion,
 // called right after the ministry change that should trigger this) to
 // actually go live, then captures and saves every map. Skips the capture
 // entirely — logging instead of throwing, since this always runs detached
-// inside ctx.waitUntil — if the deploy doesn't land within the timeout.
+// inside ctx.waitUntil — if the deploy doesn't land within the timeout, or
+// if a report generation is already holding the shared Browser Rendering
+// lock (see browserLock.js) and doesn't free it up in time. In both skip
+// cases, the maps are simply left stale until the next ministry edit
+// triggers another attempt — this used to run unlocked and silently lose
+// a race against a concurrent report generation instead (confirmed live:
+// both crash, and the map side never got a retry since nothing else was
+// watching for it).
 export async function regenerateMapArchive(env, request, deployVersion, commit) {
   if (!env.BROWSER) return;
   const deployed = await waitForDeploy(request, deployVersion);
@@ -109,6 +122,15 @@ export async function regenerateMapArchive(env, request, deployVersion, commit) 
     console.error(`Map archive: deploy version ${deployVersion} did not go live within ${DEPLOY_WAIT_TIMEOUT_MS}ms — skipping capture to avoid saving a stale map.`);
     return;
   }
-  const captured = await captureAllMaps(env, request);
-  await saveMapsNow(env, captured, commit, deployVersion);
+  const locked = await waitForGenerationLock(env, LOCK_WAIT_TIMEOUT_MS);
+  if (!locked) {
+    console.error('Map archive: Browser Rendering stayed busy with another generation — skipping this capture; the next ministry edit will trigger another attempt.');
+    return;
+  }
+  try {
+    const captured = await captureAllMaps(env, request);
+    await saveMapsNow(env, captured, commit, deployVersion);
+  } finally {
+    await releaseGenerationLock(env);
+  }
 }
