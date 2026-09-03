@@ -40,20 +40,28 @@ function jsonError(status, message) {
 // Papaparse are vendored (vendor/) precisely so script-src doesn't need
 // to trust unpkg.com at all. What's left: Cloudflare Turnstile (the
 // login page's CAPTCHA widget — script, its iframe, and its own API
-// calls), Google Fonts (stylesheet + the font files it references), and
-// the two free geocoders bigtime/admin.js's ministry-location lookup
-// calls directly from the browser (Nominatim for "look up this city",
-// Photon for live city-name suggestions while typing — see admin.js's
-// comments on lookupLatLng/fetchCitySuggestions for why two different
-// services).
+// calls), Google Fonts (stylesheet + the font files it references), the
+// two free geocoders bigtime/admin.js's ministry-location lookup calls
+// directly from the browser (Nominatim for "look up this city", Photon
+// for live city-name suggestions while typing — see admin.js's comments
+// on lookupLatLng/fetchCitySuggestions for why two different services),
+// and Cloudflare's own Web Analytics (RUM) beacon — enabled at the zone
+// level (Cloudflare Dashboard's Recommendations flagged it on; no
+// in-dashboard toggle was findable to turn it back off), which
+// auto-injects its own loader snippet into every response and can't be
+// stripped from here. static.cloudflareinsights.com serves beacon.min.js
+// itself; cloudflareinsights.com is where it reports collected metrics.
 //
-// script-src has no 'unsafe-inline': the one inline <script> that used to
-// exist (bigtime/login.html) is now an external file so it needs no
-// allowance at all, and the two inline onerror="" attributes in
+// script-src has no blanket 'unsafe-inline': the one inline <script> that
+// used to exist (bigtime/login.html) is now an external file so it needs
+// no allowance at all, the two inline onerror="" attributes in
 // js/app.js's image-fallback chain (photoTag/ministry photo <img> tags)
-// are allowed by exact SHA-256 hash via 'unsafe-hashes' instead of
-// blanket 'unsafe-inline' — an injected onerror with any other content
-// still gets blocked.
+// are allowed by exact SHA-256 hash via 'unsafe-hashes' instead (an
+// injected onerror with any other content still gets blocked), and the
+// Cloudflare beacon's own auto-injected loader snippet is allowed the
+// same way — a plain hash entry, no 'unsafe-hashes' needed since that
+// keyword only applies to hashing inline event-handler attributes, not
+// whole <script> blocks.
 //
 // style-src does need 'unsafe-inline': dozens of inline style="..."
 // attributes are generated at runtime (per-division pin colors, mostly)
@@ -63,11 +71,11 @@ function jsonError(status, message) {
 // gap was narrowed above.
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' https://challenges.cloudflare.com 'unsafe-hashes' 'sha256-l+nb61U7KKpl4Wcot60MfghvQrADUbeax5hOQehBiVI=' 'sha256-AcfKIR6miDewAaBxREOcW4R7Mgq+qUNQqh/TiZ62OU4='",
+  "script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com 'unsafe-hashes' 'sha256-l+nb61U7KKpl4Wcot60MfghvQrADUbeax5hOQehBiVI=' 'sha256-AcfKIR6miDewAaBxREOcW4R7Mgq+qUNQqh/TiZ62OU4=' 'sha256-XwaJgjnLD5K8JyD3xdR8SEhEtsdmSSLuqZrtJjqdWZQ='",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
-  "connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io https://challenges.cloudflare.com",
+  "connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io https://challenges.cloudflare.com https://cloudflareinsights.com",
   "frame-src https://challenges.cloudflare.com",
   "object-src 'none'",
   "base-uri 'self'",
