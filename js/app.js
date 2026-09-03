@@ -1921,6 +1921,35 @@ async function init() {
       }
       const MARKER_PROXIMITY_DEGREES = 15;
 
+      // "containsOwnMarker" (a marker literally inside THIS piece) is
+      // deliberately precise per-piece, not per-country — see the comment
+      // above — but that precision has a real cost for a country whose
+      // core territory is itself split into a couple of comparably-sized
+      // major pieces with only one of them holding a marker: New Zealand's
+      // South Island, with every ministry on the North Island, was getting
+      // left out of Asia Pacific's frame entirely (confirmed live — it
+      // rendered partially cut off at the frame's edge). This first pass
+      // finds, per country, the largest piece that already qualifies on
+      // its own — used just below so a same-country sibling piece at least
+      // a quarter that size also earns a spot, the same way
+      // computeMainLandBounds folds in Mindanao next to Luzon. A country's
+      // actually-remote possession (Svalbard next to mainland Norway, a
+      // Russian Arctic island) stays excluded — nowhere near a quarter the
+      // size of the piece that does hold the marker.
+      const verifiedPieceAreaByCountry = new Map();
+      for (const p of pieces) {
+        const centerLng = (p.west + p.east) / 2;
+        const shift = Math.round((anchorCenterLng - centerLng) / 360) * 360;
+        const shiftedWest = p.west + shift, shiftedEast = p.east + shift;
+        const containsOwnMarker = markerPoints.some(
+          (m) => m.countryName === p.countryName && m.lng >= shiftedWest && m.lng <= shiftedEast && m.lat >= p.south && m.lat <= p.north
+        );
+        if (p !== anchor && !containsOwnMarker) continue;
+        const prevArea = verifiedPieceAreaByCountry.get(p.countryName) || 0;
+        if (p.area > prevArea) verifiedPieceAreaByCountry.set(p.countryName, p.area);
+      }
+      const SIBLING_SIZE_FRACTION = 0.25;
+
       let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
       // Proximity alone (nearMarker) pulls in whichever direction the
       // nearest neighboring countries happen to sit, which isn't always
@@ -1928,10 +1957,11 @@ async function init() {
       // Asia's markers (Russia, Kazakhstan, Uzbekistan, Kyrgyzstan) are
       // roughly as close to Turkey (worth keeping) as to Iran/Iraq/
       // Afghanistan (not, once they pull the frame's south edge that far
-      // down). coreMinLat tracks how far south the anchor/own-marker
-      // pieces alone would reach, and clamps the final south edge to that
-      // — proximity can still extend north/east/west, just not drag the
-      // bottom of the frame down toward a cluster of markerless countries.
+      // down). coreMinLat tracks how far south the anchor/own-marker/
+      // verified-sibling pieces alone would reach, and clamps the final
+      // south edge to that — proximity can still extend north/east/west,
+      // just not drag the bottom of the frame down toward a cluster of
+      // markerless countries.
       let coreMinLat = Infinity;
       for (const p of pieces) {
         const centerLng = (p.west + p.east) / 2;
@@ -1945,12 +1975,14 @@ async function init() {
         const nearMarker = !strict && markerPoints.some(
           (m) => Math.hypot(m.lng - shiftedCenterLng, m.lat - centerLat) <= MARKER_PROXIMITY_DEGREES
         );
-        if (p !== anchor && !containsOwnMarker && !nearMarker) continue;
+        const verifiedSiblingArea = verifiedPieceAreaByCountry.get(p.countryName);
+        const siblingOfVerified = !containsOwnMarker && verifiedSiblingArea != null && p.area >= verifiedSiblingArea * SIBLING_SIZE_FRACTION;
+        if (p !== anchor && !containsOwnMarker && !nearMarker && !siblingOfVerified) continue;
         if (shiftedWest < minLng) minLng = shiftedWest;
         if (shiftedEast > maxLng) maxLng = shiftedEast;
         if (p.south < minLat) minLat = p.south;
         if (p.north > maxLat) maxLat = p.north;
-        if (p === anchor || containsOwnMarker) {
+        if (p === anchor || containsOwnMarker || siblingOfVerified) {
           if (p.south < coreMinLat) coreMinLat = p.south;
         }
       }
