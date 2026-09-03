@@ -331,16 +331,23 @@ async function generateReport() {
       })
     )));
 
-    // Signal for report-pdf.js's Puppeteer capture to wait on —
+    // Signal for reportCapture.js's Puppeteer capture to wait on —
     // everything above this point is synchronous DOM work, so once it's
     // run the report is visually complete and ready to be sectioned off
     // for page.pdf(). Left false (and this page.waitForFunction()'d out
-    // by report-pdf.js's own timeout) on any error below — nobody's
+    // by reportCapture.js's own timeout) on any error below — nobody's
     // watching this page for a retry UI anymore, so a failure here is
     // just a failed generation request, same as any other.
     window.__reportReady = true;
   } catch (err) {
     console.error('Report generation failed:', err);
+    // reportCapture.js reads this back after its wait times out, so a
+    // failure here surfaces as an actual reason (e.g. "Could not load
+    // ministries (401)") instead of just Puppeteer's generic "Waiting
+    // failed: 60000ms exceeded" — that message alone gives no way to
+    // tell a real bug apart from data loading just legitimately being
+    // slow.
+    window.__reportError = String((err && err.message) || err);
   }
 }
 

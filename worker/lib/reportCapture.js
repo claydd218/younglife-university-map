@@ -20,8 +20,13 @@ const VIEWPORT = { width: 1600, height: 1200 };
 // Ministry data + every ministry/staff photo has to load before the
 // report is ready to be sectioned off — see bigtime/report/report.js's
 // window.__reportReady. Generous: this waits on real network round trips
-// (GitHub-backed API, dozens of images), not just rendering.
-const REPORT_READY_TIMEOUT_MS = 60000;
+// — two GitHub-backed API calls (the full ministries list, and the full
+// images/ directory listing for staff photo resolution) plus every
+// ministry/staff photo actually decoding — not just rendering. Confirmed
+// live at 60000ms: that was too tight for the real dataset and timed out
+// with no useful reason surfaced (see the window.__reportError read
+// below, added at the same time as this increase, for next time).
+const REPORT_READY_TIMEOUT_MS = 150000;
 // Six-ish page.pdf() calls (overview + one per division) plus a pdf-lib
 // merge — same reasoning as mapCapture.js's CAPTURE_TIMEOUT_MS for why
 // this needs real headroom, not just what "should" be fast.
@@ -67,7 +72,18 @@ async function generateWithPage(env, request) {
     // auth-gated /bigtime/report without a second login step.
     if (cookie) await page.setExtraHTTPHeaders({ Cookie: cookie });
     await page.goto(reportUrl.toString(), { waitUntil: 'networkidle0' });
-    await page.waitForFunction('window.__reportReady === true', { timeout: REPORT_READY_TIMEOUT_MS });
+    try {
+      await page.waitForFunction('window.__reportReady === true', { timeout: REPORT_READY_TIMEOUT_MS });
+    } catch (err) {
+      // report.js's own catch block records the real reason on failure
+      // (see window.__reportError there) — surfacing that here turns a
+      // bare "Waiting failed: Xms exceeded" (true either way, but useless
+      // for telling a real bug apart from data loading just being slow)
+      // into an actual cause when one was captured.
+      const reportError = await page.evaluate('window.__reportError').catch(() => null);
+      if (reportError) throw new Error(`Report page failed to build: ${reportError}`);
+      throw err;
+    }
 
     // Print media first — report.js's __shrinkImagesForPdf reads each
     // image's *rendered* box (clientWidth/Height) to decide how much to
