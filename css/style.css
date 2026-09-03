@@ -849,6 +849,16 @@ img.popup-photo {
   --ratio: 1.3333;
   width: min(92vw, calc(85vh * var(--ratio)), calc(900px * var(--ratio)));
   height: min(85vh, calc(92vw / var(--ratio)), 900px);
+  /* --ratio changing (a new photo with a different aspect ratio becoming
+     current) used to snap the box straight to its new size — jarring on
+     its own, and doubly so mid-slide, where the incoming photo would
+     otherwise sit letterboxed against the almost-black background at the
+     OLD size for the whole swipe before popping to its real size right as
+     the slide finished. Animating the resize instead, over the same
+     duration as the slide itself (SLIDE_MS in wireMinistryPhotoCarousel —
+     keep these in sync), makes the two read as one smooth motion instead
+     of a slide followed by a pop. */
+  transition: width 220ms ease, height 220ms ease;
   overflow: hidden;
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);

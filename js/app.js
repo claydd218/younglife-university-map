@@ -1191,7 +1191,14 @@ function wireMinistryPhotoCarousel() {
     index = 0;
     track.style.transition = 'none';
     track.style.transform = REST_TRANSFORM;
+    // Same reasoning as the track's own transition:none above — the very
+    // first photo should just appear at its real size, not visibly grow/
+    // shrink from the viewport's fallback --ratio (see style.css) into
+    // place while the lightbox fades in.
+    viewport.style.transition = 'none';
     await loadCurrentSlide();
+    void viewport.offsetWidth; // commits the instant resize before re-enabling the transition
+    viewport.style.transition = '';
     loadNeighbors();
     renderDots();
     const multi = photos.length > 1;
@@ -1217,6 +1224,21 @@ function wireMinistryPhotoCarousel() {
   function slideTo(newIndex, dir) {
     if (sliding || newIndex === index || photos.length < 2) return;
     sliding = true;
+
+    // The incoming slide was already loaded by the previous loadNeighbors()
+    // call, so its real dimensions are almost always already known this
+    // early — apply them now, right as the slide starts, so the
+    // viewport's own resize (see its transition in style.css) plays
+    // alongside the slide motion instead of only catching up once the
+    // slide finishes, which otherwise looked like the old (possibly
+    // larger) box sliding in a smaller photo letterboxed against black,
+    // then popping to the right size right at the end. loadCurrentSlide
+    // below still re-applies this once the slide settles, as a fallback
+    // for the rare case this fires before the incoming image has finished
+    // loading.
+    const incoming = dir === 1 ? slideNext : slidePrev;
+    if (incoming.complete && incoming.naturalWidth) applyViewportRatio(incoming);
+
     track.style.transition = `transform ${SLIDE_MS}ms ease`;
     // Forces the browser to commit the transition (and the drag's current
     // position, if this follows a swipe) before the transform below
