@@ -34,9 +34,12 @@ export async function openMapPage(env, request, viewport) {
   await page.goto(mapUrl.toString(), { waitUntil: 'networkidle0' });
   await page.waitForFunction('window.__mapReady === true', { timeout: READY_TIMEOUT_MS });
   // Injected here rather than in the public site's own CSS/JS so regular
-  // visitors are never affected by report/map-only chrome changes.
+  // visitors are never affected by report/map-only chrome changes. Also
+  // hides the metrics overlay and hamburger nav menu (added after this
+  // list was first written) — confirmed live those were showing up in
+  // captured maps/*.png otherwise.
   await page.addStyleTag({
-    content: '#site-title, .leaflet-control-container, #legend { display: none !important; }',
+    content: '#site-title, .leaflet-control-container, #legend, #metrics-overlay, #nav-menu-toggle, #nav-menu { display: none !important; }',
   });
   return { browser, page };
 }
