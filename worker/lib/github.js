@@ -113,7 +113,21 @@ export async function getFileBase64(env, path) {
     throw new GitHubApiError(`GitHub GET ${path} failed`, res.status, await res.text());
   }
   const data = await res.json();
-  return { contentBase64: data.content.replace(/\n/g, ''), sha: data.sha };
+  // The Contents API only inlines base64 content for files under 1MB —
+  // above that (the report PDF is several MB) `content` comes back empty
+  // even though the request itself succeeded, which silently produced a
+  // real 0-byte download here before this fallback existed. `sha` is
+  // still present either way, so fall back to the Git Blobs API (same
+  // repo, same sha, supports up to 100MB) whenever content wasn't inlined.
+  if (data.content) {
+    return { contentBase64: data.content.replace(/\n/g, ''), sha: data.sha };
+  }
+  const blobRes = await fetch(`${apiBase(env)}/git/blobs/${data.sha}`, { headers: headers(env) });
+  if (!blobRes.ok) {
+    throw new GitHubApiError(`GitHub GET blob ${data.sha} failed`, blobRes.status, await blobRes.text());
+  }
+  const blob = await blobRes.json();
+  return { contentBase64: blob.content.replace(/\n/g, ''), sha: data.sha };
 }
 
 // Writes UTF-8 text content (CSV files). `sha` is required to update an
