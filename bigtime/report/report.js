@@ -90,14 +90,15 @@ function buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles) {
   const flag = flagEmoji(iso2);
   const name = row.city === row.country ? row.city : `${row.city}, ${row.country}`;
 
+  // data-src, not src — see window.__loadSectionImages below for why.
   const mainPhoto = row.photos[0]
-    ? `<img class="ministry-area-photo" src="../../${CONFIG.IMAGES_DIR}${encodeURIComponent(row.photos[0])}" alt="">`
+    ? `<img class="ministry-area-photo" data-src="../../${CONFIG.IMAGES_DIR}${encodeURIComponent(row.photos[0])}" alt="">`
     : '';
 
   const staffUrls = row.staff.map((s) => findStaffPhotoUrl(s.name, imageFiles));
   const staffHtml = row.staff.map((s, i) => {
     const photo = staffUrls[i]
-      ? `<img class="ministry-staff-photo" src="${staffUrls[i]}" alt="">`
+      ? `<img class="ministry-staff-photo" data-src="${staffUrls[i]}" alt="">`
       : `<div class="ministry-staff-photo-fallback" style="background:${def.country};">${escapeHtml(initialsFor(s.name))}</div>`;
     return `
       <div class="ministry-staff-item">
@@ -157,7 +158,7 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
     <section class="report-page-one" data-section="overview">
       <h2 class="report-map-title">${escapeHtml(REPORT_TITLE)}</h2>
       <div class="report-generated-date">${escapeHtml(generatedLabel)}</div>
-      <img class="report-map-shot" src="${mapShots.world}" alt="Map of ministry locations">
+      <img class="report-map-shot" data-src="${mapShots.world}" alt="Map of ministry locations">
       ${metricBoxesHtml(computeMetrics(rows))}
     </section>`;
 
@@ -177,7 +178,7 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
     const areasHtml = divisionRows.map((row) => buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles)).join('');
     const divisionMapShot = mapShots.divisions[key];
     const divisionMapHtml = divisionMapShot
-      ? `<img class="division-map-shot" src="${divisionMapShot}" alt="${escapeHtml(def.label)} map">`
+      ? `<img class="division-map-shot" data-src="${divisionMapShot}" alt="${escapeHtml(def.label)} map">`
       : '';
     divisionSectionsHtml.push(`
       <section class="division-section" data-section="${key}">
@@ -193,7 +194,37 @@ async function buildReportHtml(rows, divisionByCountry, countryIsoByName, mapSho
   return metricsPage + divisionSectionsHtml.join('');
 }
 
-// report-pdf.js's Puppeteer session calls this once per (section, part)
+// Every photo/map <img> above is built with data-src, not src, so nothing
+// loads until this actually swaps it in — reportCapture.js's Puppeteer
+// session calls this for a section right before that section's own turn
+// in the page.pdf() loop (see window.__shrinkImagesForPdf's own header
+// comment for why processing one section at a time matters: an earlier
+// version of that function alone already crashed the Chrome session
+// outright once before, on a much smaller test case, from having every
+// photo across every division resident in memory at once). Loading was
+// the other half of that same problem — this is what closes it: at most
+// one section's worth of full-resolution photos is ever in memory at a
+// time, and __shrinkImagesForPdf immediately replaces even those with a
+// far smaller re-encoded copy once it runs. Idempotent — a division's
+// second call (for its 'areas' part, after 'header' already loaded
+// everything) just finds nothing left with data-src to swap.
+window.__loadSectionImages = async function (sectionKey) {
+  const section = document.querySelector(`[data-section="${sectionKey}"]`);
+  if (!section) return;
+  const lazyImages = Array.from(section.querySelectorAll('img[data-src]'));
+  for (const img of lazyImages) {
+    img.src = img.dataset.src;
+    img.removeAttribute('data-src');
+  }
+  await Promise.all(lazyImages.map((img) => (
+    img.complete ? Promise.resolve() : new Promise((resolve) => {
+      img.addEventListener('load', resolve, { once: true });
+      img.addEventListener('error', resolve, { once: true });
+    })
+  )));
+};
+
+// reportCapture.js's Puppeteer session calls this once per (section, part)
 // pair before each page.pdf() call — hides every other section so that
 // call captures only this one. A division section has two parts, each
 // becoming its own page.pdf() call so each can get its own footer:
@@ -240,14 +271,17 @@ window.__allSectionParts = function () {
 // This redraws every image onto a canvas sized to PIXEL_DENSITY× its
 // actual rendered box and swaps img.src for that downscaled JPEG data URL.
 //
-// Only ever runs inside report-pdf.js's Puppeteer session. Two things
-// keep this from spiking the renderer's own memory instead of pdf-lib's:
-// report-pdf.js calls this once per section (right after
+// Only ever runs inside reportCapture.js's Puppeteer session. Three
+// things keep this from spiking the renderer's own memory instead of
+// pdf-lib's: reportCapture.js calls this once per section (right after
 // window.__showOnlySectionPart, not once upfront with the whole report
 // visible) — decoding one division's dozen photos at a time instead of
-// every photo across all 5 divisions at once — and this itself processes
+// every photo across all 5 divisions at once; this itself processes
 // sequentially (one full decode+redraw fully finished before the next
-// starts), not in parallel.
+// starts), not in parallel; and window.__loadSectionImages (see its own
+// header comment) means a section's photos were never even downloaded
+// until just before this runs, so there's nothing extra sitting in
+// memory left over from earlier sections either.
 window.__shrinkImagesForPdf = async function () {
   const PIXEL_DENSITY = 2; // crisp at print size without embedding the full original
   const images = Array.from(document.querySelectorAll('img'));
@@ -323,13 +357,11 @@ async function generateReport() {
 
     output.innerHTML = await buildReportHtml(rows, divisionByCountry, countryIsoByName, mapShots, imageFiles);
 
-    const images = output.querySelectorAll('img');
-    await Promise.all(Array.from(images).map((img) => (
-      img.complete ? Promise.resolve() : new Promise((resolve) => {
-        img.addEventListener('load', resolve, { once: true });
-        img.addEventListener('error', resolve, { once: true });
-      })
-    )));
+    // No "wait for every image to load" step here — every photo/map <img>
+    // above was built with data-src, not src (see window.__loadSectionImages),
+    // specifically so nothing loads until each section's own turn in
+    // reportCapture.js's per-section loop. Waiting on all of them here
+    // would defeat that entirely.
 
     // Signal for reportCapture.js's Puppeteer capture to wait on —
     // everything above this point is synchronous DOM work, so once it's

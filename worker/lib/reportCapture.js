@@ -104,12 +104,19 @@ async function generateWithPage(env, request) {
 
     const pdfBuffers = [];
     for (const { key, part } of sectionParts) {
+      // Loaded per section, not once for the whole report — this section's
+      // photos/map only start downloading right now (see report.js's
+      // window.__loadSectionImages for why: every <img> is built with
+      // data-src, not src, specifically so nothing loads until this call).
+      // At most one section's worth of full-resolution photos is ever in
+      // memory at once, and the shrink call below immediately replaces
+      // even those with a far smaller re-encoded copy — confirmed live:
+      // loading every photo across every division at once crashed the
+      // Chrome session outright ("Protocol error: Target closed").
+      await page.evaluate(`window.__loadSectionImages(${JSON.stringify(key)})`);
       await page.evaluate(`window.__showOnlySectionPart(${JSON.stringify(key)}, ${JSON.stringify(part)})`);
-      // Shrunk per section/part (only what's visible right now), not once
-      // for the whole report — decoding a division's dozen-ish photos at a
-      // time instead of every photo across all 5 divisions at once is what
-      // keeps this from spiking the renderer's own memory and crashing the
-      // session outright.
+      // Shrunk per section/part (only what's visible right now) for the
+      // same reason — see window.__shrinkImagesForPdf's own header comment.
       await page.evaluate('window.__shrinkImagesForPdf()');
       // Every map page (the overview's world map, and a division's own
       // title+map+metrics page) already shows the report/division title
