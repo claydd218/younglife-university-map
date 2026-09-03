@@ -65,7 +65,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 67,Krakow,Poland,50.0469432,19.9971534,,false,,Sonya Nikolayeva (Staff),,krakow-poland-1.webp; krakow-poland-2.webp; krakow-poland-3.webp,,,2026-08-28T02:46:33.631Z
 68,Santiago,Dominican Republic,19.4508,-70.6947,,false,,,,santiago-dominican-republic-1.webp; santiago-dominican-republic-2.webp,,,2026-08-28T02:45:24.166Z
 69,Santa Domingo,Dominican Republic,18.4171,-69.9390,,false,,,,santa-domingo-dominican-republic-1.webp; santa-domingo-dominican-republic-2.webp,,,2026-08-28T17:48:03.619Z
-70,Quito,Ecuador,-0.2202,-78.5123,,false,,,,,,,
+70,Quito,Ecuador,-0.2202,-78.5123,2024,false,Universidad UDLA (2024); Club University Playa Chica (2024),David Caceres (College Coordinator),,quito-ecuador-1.webp; quito-ecuador-2.webp; quito-ecuador-3.webp,,,2026-09-03T16:23:54.079Z
 71,Sau Paulo,Brazil,-23.4648,-46.8584,,true,,Ivan Carvajal (College Coordinator),Ivan and his family moved from Colombia in 2026 and establishing ministry in Brazil.  He is a seasoned staff and brings a lot of wisdom and leadership.,,,,2026-09-02T22:28:35.737Z
 72,Pachuca,Mexico,20.1165,-98.7414,,false,"UPP Universidad Politécnica de Pachuca, UAEH Universidad Autónoma del Estado de Hidalgo, Universidad de Medicina.",Fito Angeles (College Coordinator); Efrain Hernandez (College Coordinator),,pachuca-mexico-4.webp; pachuca-mexico-7.webp; pachuca-mexico-5.webp; pachuca-mexico-1.webp; pachuca-mexico-2.webp,,,2026-08-28T17:19:16.144Z
 73,Queretaro,Mexico,20.8052,-99.8837,,false,AUQ Universidad Autónoma de Querétaro,Fede Arroyo (College Coordinator),,queretaro-mexico-1.webp,,,2026-08-28T17:17:20.243Z
