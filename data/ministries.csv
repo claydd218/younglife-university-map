@@ -91,7 +91,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,assigned_st
 97,Armidale,Australia,-30.5145,151.6657,2027,true,University of New England (2027),Caity Howie (Area Director),,Developing new ministry in Armidale with strategic plan to launch in January 2027.,armidale-australia-1.webp; armidale-australia-2.webp,,,2026-09-03T21:52:57.430Z
 98,Prague,Czechia,50.0875,14.4213,,false,,,,,,,,2026-09-03T03:56:38.355Z
 100,Kyiv,Ukraine,50.4500,30.5241,2024,false,Kyiv University of Culture and Arts (2024); Taras Shevchenko National Univ of Kyiv (2025),,Anna Turchynska,,kyiv-ukraine-1.webp; kyiv-ukraine-2.webp,,,2026-09-03T17:11:43.293Z
-101,Zhytomyr,Ukraine,50.9081,28.3868,2025,false,Zhytomyr Polytechnic State University (2025),,Anna Turchynska,,zhytomyr-ukraine-1.webp; zhytomyr-ukraine-2.webp; zhytomyr-ukraine-3.webp,,,2026-09-03T17:17:03.970Z
+101,Zhytomyr,Ukraine,50.9081,28.3868,2025,true,Zhytomyr Polytechnic State University (2025),,Anna Turchynska,,zhytomyr-ukraine-1.webp; zhytomyr-ukraine-2.webp; zhytomyr-ukraine-3.webp,,,2026-09-03T22:31:59.936Z
 102,Cherkasy,Ukraine,49.1460,31.2272,2024,false,Bohdan Khmelnytsky National University of Cherkasy (2024),,Anna Turchynska,,cherkasy-ukraine-1.webp; cherkasy-ukraine-2.webp; cherkasy-ukraine-3.webp,,,2026-09-03T17:19:48.408Z
 103,Zaporizhzhia,Ukraine,47.8508,35.1183,2024,false,Zaporizhzhia National University (2024),,Anna Turchynska,,zaporizhzhia-ukraine-1.webp; zaporizhzhia-ukraine-2.webp; zaporizhzhia-ukraine-3.webp,,,2026-09-03T17:23:22.560Z
 104,Ostroh,Ukraine,50.3290,26.5204,2024,false,National University of Ostroch Academy (2024),,Anna Turchynska,,ostroh-ukraine-4.webp; ostroh-ukraine-5.webp; ostroh-ukraine-6.webp,,,2026-09-03T17:37:56.111Z
