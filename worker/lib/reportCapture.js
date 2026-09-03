@@ -19,18 +19,25 @@ import { PDFDocument } from 'pdf-lib';
 const VIEWPORT = { width: 1600, height: 1200 };
 // Ministry data + every ministry/staff photo has to load before the
 // report is ready to be sectioned off — see bigtime/report/report.js's
-// window.__reportReady. Generous: this waits on real network round trips
-// — two GitHub-backed API calls (the full ministries list, and the full
+// window.__reportReady. This waits on real network round trips — two
+// GitHub-backed API calls (the full ministries list, and the full
 // images/ directory listing for staff photo resolution) plus every
 // ministry/staff photo actually decoding — not just rendering. Confirmed
 // live at 60000ms: that was too tight for the real dataset and timed out
 // with no useful reason surfaced (see the window.__reportError read
 // below, added at the same time as this increase, for next time).
-const REPORT_READY_TIMEOUT_MS = 150000;
+// Deliberately well under GENERATE_TIMEOUT_MS below, not just a large
+// number on its own — this is only the first phase; the six-ish
+// page.pdf() calls and pdf-lib merge that follow still have to fit in
+// what's left of that same outer budget.
+const REPORT_READY_TIMEOUT_MS = 180000;
 // Six-ish page.pdf() calls (overview + one per division) plus a pdf-lib
-// merge — same reasoning as mapCapture.js's CAPTURE_TIMEOUT_MS for why
-// this needs real headroom, not just what "should" be fast.
-const GENERATE_TIMEOUT_MS = 280000;
+// merge, on top of REPORT_READY_TIMEOUT_MS's own data-loading phase —
+// same reasoning as mapCapture.js's CAPTURE_TIMEOUT_MS for why this needs
+// real headroom, not just what "should" be fast. Raised alongside the
+// ready-timeout above so that increase actually has somewhere to land
+// instead of just moving the failure to this outer timeout instead.
+const GENERATE_TIMEOUT_MS = 360000;
 const CLOSE_TIMEOUT_MS = 5000;
 
 function withTimeout(promise, ms, message) {
