@@ -132,8 +132,20 @@ export default {
         return withSecurityHeaders(Response.redirect(new URL('/bigtime/login', request.url), 302));
       }
 
-      // See PUBLIC_SITE_PATHS above — TEMPORARY, remove alongside it.
-      const needsSiteSession = !isAdminPath && !PUBLIC_SITE_PATHS.has(pathname);
+      // See PUBLIC_SITE_PATHS above — TEMPORARY, remove alongside it. An
+      // already-authenticated admin is exempt on every path, not just
+      // /bigtime/* (checked here regardless of path, unlike sessionValid
+      // above which only ever gets computed for isAdminPath) — needed so
+      // worker/lib/reportCapture.js's internal Puppeteer navigation, which
+      // forwards the admin's own session cookie into the page it opens,
+      // can also reach the plain static assets that page loads (data/*.csv,
+      // maps/*.png, images/*, js/*.js) — all outside /bigtime/, so without
+      // this they'd get redirected to /site-login instead of their real
+      // content, which is what was actually causing report generation to
+      // hang and eventually crash the browser session rather than a
+      // simple, clean failure. Confirmed live.
+      const hasAdminSession = isAdminPath ? sessionValid : await hasValidSession(request, env);
+      const needsSiteSession = !isAdminPath && !PUBLIC_SITE_PATHS.has(pathname) && !hasAdminSession;
       const siteSessionValid = needsSiteSession && (await hasValidSiteSession(request, env));
       if (needsSiteSession && !siteSessionValid) {
         return withSecurityHeaders(Response.redirect(new URL('/site-login', request.url), 302));
