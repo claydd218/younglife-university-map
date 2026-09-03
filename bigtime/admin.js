@@ -1018,7 +1018,9 @@ let ministriesFilter = { recent: false, developing: false, noStaff: false, noUni
 function matchesMinistriesFilter(row) {
   if (ministriesFilter.recent && !isRecent(row)) return false;
   if (ministriesFilter.developing && !row.is_developing) return false;
-  if (ministriesFilter.noStaff && row.staff.length !== 0) return false;
+  // An assigned staffer covers this ministry just as much as a home one
+  // would — a ministry with only an assignment isn't "no staff".
+  if (ministriesFilter.noStaff && (row.staff.length !== 0 || row.assigned_staff.length !== 0)) return false;
   if (ministriesFilter.noUniversities && row.universities.length !== 0) return false;
   if (ministriesFilter.noMinistryPhoto && row.photos.length !== 0) return false;
   if (ministriesFilter.noBlurb && row.blurb.trim() !== '') return false;
@@ -1079,7 +1081,10 @@ function renderMinistriesTable() {
       <tr>
         <td>${escapeHtml(row.country)}</td>
         <td>${escapeHtml(row.city)}</td>
-        <td>${row.staff.map((s) => escapeHtml(s.name)).join(', ') || '—'}</td>
+        <td>${[
+          ...row.staff.map((s) => escapeHtml(s.name)),
+          ...row.assigned_staff.map((name) => `${escapeHtml(name)} (assigned)`),
+        ].join(', ') || '—'}</td>
         <td class="actions">
           <button type="button" class="btn secondary btn-small" data-edit="${escapeHtml(row.id)}">Edit</button>
           <button type="button" class="btn danger btn-small" data-delete="${escapeHtml(row.id)}">Delete</button>
