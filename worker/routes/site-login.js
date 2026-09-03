@@ -12,9 +12,14 @@ import { createSiteSessionCookie, clearSiteSessionCookie } from '../lib/siteSess
 
 export async function siteLogin(request, env) {
   const form = await request.formData();
-  const password = form.get('password');
+  // Trimmed on both sides — a stray leading/trailing space or newline is
+  // an easy copy-paste mistake into the dashboard's secret field (or a
+  // mobile keyboard's autocomplete), and there's no legitimate reason a
+  // real password here would need to start or end with whitespace.
+  const password = (form.get('password') || '').trim();
+  const expected = (env.SITE_SHARED_PASSWORD || '').trim();
 
-  if (!checkPassword(password, env.SITE_SHARED_PASSWORD)) {
+  if (!checkPassword(password, expected)) {
     return Response.redirect(new URL('/site-login?error=1', request.url), 302);
   }
 
