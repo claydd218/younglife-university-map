@@ -955,7 +955,7 @@ function isRecent(row) {
 // Each key narrows the list when on; all active filters combine with AND
 // (e.g. Recent + No Staff shows only ministries that are both). Off by
 // default so the list starts unfiltered.
-let ministriesFilter = { recent: false, developing: false, noStaff: false, noUniversities: false, noMinistryPhoto: false, noBlurb: false };
+let ministriesFilter = { recent: false, developing: false, noStaff: false, noUniversities: false, noMinistryPhoto: false, noBlurb: false, hasVideo: false };
 
 function matchesMinistriesFilter(row) {
   if (ministriesFilter.recent && !isRecent(row)) return false;
@@ -964,6 +964,7 @@ function matchesMinistriesFilter(row) {
   if (ministriesFilter.noUniversities && row.universities.length !== 0) return false;
   if (ministriesFilter.noMinistryPhoto && row.photos.length !== 0) return false;
   if (ministriesFilter.noBlurb && row.blurb.trim() !== '') return false;
+  if (ministriesFilter.hasVideo && row.video_url.trim() === '') return false;
   return true;
 }
 
@@ -975,6 +976,7 @@ function wireMinistriesFilterBar() {
     { key: 'noUniversities', status: 'no-universities', label: 'No Universities' },
     { key: 'noMinistryPhoto', status: 'no-ministry-photo', label: 'No Ministry Photo' },
     { key: 'noBlurb', status: 'no-blurb', label: 'No Blurb' },
+    { key: 'hasVideo', status: 'has-video', label: 'Has Video' },
     { key: 'developing', status: 'developing', label: 'Developing' },
   ];
   bar.innerHTML = defs.map((d) => `<button type="button" class="filter-toggle status-${d.status} ${ministriesFilter[d.key] ? 'on' : ''}" data-key="${d.key}">${d.label}</button>`).join('');
