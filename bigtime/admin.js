@@ -1875,9 +1875,12 @@ function openPinPlacementMap() {
   $('pin-placement-btn').classList.remove('secondary');
 
   pinPlacementMap = L.map('pin-placement-map').setView([lat, lng], 10);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd',
+  // CARTO's free basemaps.cartocdn.com tiles started watermarking
+  // "API KEY REQUIRED" over everything — their own service change, not
+  // something broken here. OSM's own tile server has no key requirement.
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    subdomains: 'abc',
     maxZoom: 19,
   }).addTo(pinPlacementMap);
 
