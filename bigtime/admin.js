@@ -2259,9 +2259,18 @@ function wireReportPdfButton() {
 
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-    btn.textContent = 'Generating PDF… this can take a few minutes';
     status.hidden = true;
     status.classList.remove('error');
+    // Most clicks hit an already-cached, near-instant PDF — delayed
+    // rather than set immediately, so the label only ever switches to
+    // "generating" once a click is actually turning out to be a slow live
+    // one, not on every click regardless of which path this one takes.
+    // 800ms is comfortably past what a cache-hit's own multi-MB transfer
+    // takes, so it doesn't flash for that either.
+    const GENERATING_LABEL_DELAY_MS = 800;
+    const showGeneratingLabel = setTimeout(() => {
+      btn.textContent = 'Generating PDF… this can take a few minutes';
+    }, GENERATING_LABEL_DELAY_MS);
     try {
       const res = await fetch(`${API_BASE}/report-pdf`);
       if (!res.ok) {
@@ -2289,6 +2298,7 @@ function wireReportPdfButton() {
       status.classList.add('error');
       status.hidden = false;
     } finally {
+      clearTimeout(showGeneratingLabel);
       btn.disabled = false;
       btn.textContent = originalLabel;
     }
