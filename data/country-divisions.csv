@@ -77,7 +77,7 @@ Estonia,europe
 Ethiopia,africa
 Falkland Islands,latin_america_caribbean
 Faroe Islands,europe
-Federated States of Micronesia,asia
+Micronesia,asia
 Fiji,asia
 Finland,europe
 France,europe
@@ -133,7 +133,7 @@ Libya,africa
 Liechtenstein,europe
 Lithuania,europe
 Luxembourg,europe
-Macao S.A.R,asia
+Macao,asia
 Madagascar,africa
 Malawi,africa
 Malaysia,asia
@@ -182,7 +182,7 @@ Poland,europe
 Portugal,europe
 Puerto Rico,latin_america_caribbean
 Qatar,middle_east_central_asia
-Republic of Serbia,europe
+Serbia,europe
 Republic of the Congo,africa
 Romania,europe
 Russia,middle_east_central_asia
@@ -241,10 +241,10 @@ Uganda,africa
 Ukraine,europe
 United Arab Emirates,middle_east_central_asia
 United Kingdom,europe
-United Republic of Tanzania,africa
+Tanzania,africa
 United States Minor Outlying Islands,asia
 United States Virgin Islands,latin_america_caribbean
-United States of America,
+United States,
 Uruguay,latin_america_caribbean
 Uzbekistan,middle_east_central_asia
 Vanuatu,asia
@@ -256,4 +256,4 @@ Western Sahara,africa
 Yemen,middle_east_central_asia
 Zambia,africa
 Zimbabwe,africa
-eSwatini,africa
+Eswatini,africa
