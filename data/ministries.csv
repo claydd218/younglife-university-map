@@ -60,7 +60,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 61,Bogota,Colombia,4.6807,-74.0767,,false,,Diego Rojas (Staff),,bogota-colombia-1.webp; bogota-colombia-2.webp; bogota-colombia-3.webp; bogota-colombia-4.webp,,,2026-08-28T02:57:09.593Z
 62,Santiago,Chile,-33.4376995,-70.6510671,,false,,Daniela Celis (Staff),,,,,
 63,Cuenca,Ecuador,-2.8974072,-79.0041726,2024,false,Universidad Estatal de Cuenca (2204); UNAE (2024),Pedro Diaz (Staff),,cuenca-ecuador-1.webp; cuenca-ecuador-2.webp,,,2026-09-03T16:16:16.526Z
-64,Shell,Ecuador,-1.4999375,-78.0615532,,false,,David Caceras (Staff),,,,,2026-09-02T22:07:59.520Z
+64,Quito,Ecuador,-0.2202,-78.5123,2026,true,Universadad San Fransisco de Quito (2026); Universidad Central de Equador (2026),David Caceras (Staff),,quito-ecuador-4.webp,,,2026-09-03T16:26:49.968Z
 65,Nassau,The Bahamas,25.0782266,-77.3383438,,false,,,,,,,2026-08-28T16:21:41.613Z
 67,Krakow,Poland,50.0469432,19.9971534,,false,,Sonya Nikolayeva (Staff),,krakow-poland-1.webp; krakow-poland-2.webp; krakow-poland-3.webp,,,2026-08-28T02:46:33.631Z
 68,Santiago,Dominican Republic,19.4508,-70.6947,,false,,,,santiago-dominican-republic-1.webp; santiago-dominican-republic-2.webp,,,2026-08-28T02:45:24.166Z
