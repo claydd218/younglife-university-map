@@ -87,7 +87,7 @@ id,city,country,lat,lng,date_opened,is_developing,universities,staff,blurb,photo
 92,Chisinau,Moldova,47.0245,28.8323,,false,,Elizabeth (College Coordinator),,,,,2026-08-28T15:33:50.554Z
 93,Belfast/Ulster,United Kingdom,54.6036,-5.9298,,false,Ulster University,Kathyrn Hardingham (College Coordinator),,belfast-ulster-united-kingdom-2.webp; belfast-ulster-united-kingdom-1.webp; belfast-ulster-united-kingdom-3.webp; belfast-ulster-united-kingdom-4.webp,,,2026-09-02T19:08:35.445Z
 94,Galway,Ireland,54.6707,-3.9455,2026,true,University of Galway (2026),,,,,,2026-09-03T13:13:18.606Z
-95,Maynooth,Ireland,53.3831,-6.6165,,false,University of Maynooth,Laolu Esho (College Coordinator),,maynooth-ireland-2.webp; maynooth-ireland-1.webp,,,2026-09-03T13:08:44.530Z
+95,Maynooth,Ireland,53.3831,-6.6165,2025,false,University of Maynooth (2025),Laolu Esho (College Coordinator),,maynooth-ireland-2.webp; maynooth-ireland-1.webp,,,2026-09-03T13:13:41.832Z
 96,Auckland,New Zealand,-36.8272,174.7609,,false,,Lyall Carter (YLU Coordinator),YLU in New Zealand was launched in 2026 by the existing local YL Staff.,auckland-new-zealand-1.webp,,,2026-09-02T08:48:52.015Z
 97,Armidale,Australia,-30.5145,151.6657,2027,true,University of New England (2027),Caity Howie (Area Director),Developing new ministry in Armidale with strategic plan to launch in January 2027.,,,,2026-09-02T07:55:10.775Z
 98,Prague,Czechia,50.0875,14.4213,,false,,,,,,,2026-09-03T03:56:38.355Z
