@@ -40,8 +40,21 @@ function escapeHtml(str) {
 
 // --- banner ------------------------------------------------------------------
 
+// A native <dialog> shown via showModal() (ministry-dialog) renders in the
+// browser's own top-layer — above every other element on the page
+// regardless of z-index, #banner included. A write error/conflict while
+// that dialog is open (very much the common case: saveMinistry is the
+// biggest source of 409s) used to render into #banner and look like
+// nothing happened at all — the dialog just sat there with no visible
+// feedback. #dialog-banner (inside the dialog's own markup) is the fix;
+// this picks whichever one is actually visible right now.
+function activeBannerEl() {
+  const dialog = $('ministry-dialog');
+  return dialog && dialog.open ? $('dialog-banner') : $('banner');
+}
+
 function showBanner(kind, message, actions = []) {
-  const el = $('banner');
+  const el = activeBannerEl();
   el.className = `banner ${kind}`;
   el.innerHTML = escapeHtml(message);
   for (const action of actions) {
@@ -56,6 +69,7 @@ function showBanner(kind, message, actions = []) {
 
 function hideBanner() {
   $('banner').hidden = true;
+  $('dialog-banner').hidden = true;
 }
 
 // --- Deploy status toast -----------------------------------------------
@@ -1368,6 +1382,7 @@ function markDialogDirty() {
 
 function openDialog(row) {
   clearFieldErrors();
+  $('dialog-banner').hidden = true;
   state.editingId = row ? row.id : null;
   $('dialog-title').textContent = row ? `Edit ${row.city}, ${row.country}` : 'Add Ministry';
 
@@ -1608,7 +1623,11 @@ async function saveMinistry() {
       showBanner('error', err.body.message);
       return;
     }
-    handleWriteError(err, loadMinistries);
+    // A conflict here means someone else's edit landed first — the open
+    // dialog is now showing a stale draft against data that's already
+    // gone, so "Reload Latest Data" should also close it rather than leave
+    // it open on top of freshly reloaded rows underneath.
+    handleWriteError(err, () => { $('ministry-dialog').close(); loadMinistries(); });
   } finally {
     closeBtn.textContent = state.editingId ? 'Update' : 'Save';
     updateSaveButtonState();

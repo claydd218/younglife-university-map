@@ -69,6 +69,11 @@
     cursor: pointer;
   }
   .banner[hidden] { display: none; }
+  /* #dialog-banner reuses .banner's own look but sits outside .dialog-body's
+     padding (so it can't get clipped by that panel's own overflow-y:auto,
+     e.g. a conflict banner appearing while the form is scrolled down) —
+     needs its own matching horizontal margin instead. */
+  #dialog-banner { margin: 12px 20px 0; }
 
   /* Non-modal — sits in a corner rather than blocking the toolbar like
      .banner, since publishing status isn't urgent enough to demand
@@ -573,6 +578,7 @@
           <button type="button" class="btn" id="dialog-close-btn">Update</button>
         </div>
       </div>
+      <div id="dialog-banner" class="banner" hidden></div>
       <div class="dialog-body">
         <div class="field-row">
           <div class="field">
