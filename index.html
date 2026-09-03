@@ -38,12 +38,26 @@
 
   <header class="site-header">
     <h1 id="site-title">Young Life University International Ministries</h1>
+    <div id="metrics-overlay" class="metrics-overlay" aria-hidden="true">
+      <div id="metrics-boxes" class="metrics-boxes"></div>
+    </div>
   </header>
 
   <div id="map"></div>
 
   <div class="frame-border" aria-hidden="true"></div>
   <div class="paper-grain" aria-hidden="true"></div>
+
+  <button id="nav-menu-toggle" class="nav-menu-toggle" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="nav-menu" aria-label="Choose view">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+      <line x1="3" y1="5.5" x2="17" y2="5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="3" y1="14.5" x2="17" y2="14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <div id="nav-menu" class="nav-menu" hidden>
+    <ul id="nav-menu-list" class="nav-menu-list"></ul>
+  </div>
 
   <svg class="compass-rose" width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
     <circle cx="60" cy="60" r="52" fill="none" stroke="#5a4a34" stroke-width="1.5"/>
@@ -75,9 +89,6 @@
       </div>
     </div>
     <div id="legend-body" class="legend-body">
-      <h3>Divisions</h3>
-      <ul id="legend-divisions"></ul>
-
       <h3>Ministry Stage</h3>
       <ul id="legend-stages"></ul>
     </div>

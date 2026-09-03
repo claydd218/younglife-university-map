@@ -20,6 +20,14 @@ const state = {
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
   openCountryTooltipLayer: null, // the one country layer whose tooltip is open, if any
+  worldMetrics: null, // [{label, num}, ...], computed once ministry data loads
+  metricsByDivision: new Map(), // division key -> [{label, num}, ...]
+  currentNavView: 'world', // 'world' or a DIVISIONS key — which nav-menu item is active
+  overlayDismissed: false, // has the metrics overlay been faded out by user interaction
+  // True only while a nav-menu selection's own programmatic setView/fitBounds
+  // is in flight, so that move doesn't immediately re-trigger the same
+  // dismiss-on-interaction logic it was called to override — see wireNavMenu.
+  suppressOverlayDismiss: false,
 };
 
 const map = L.map('map', {
@@ -171,6 +179,18 @@ function clampNorth() {
   }
 }
 map.on('move', clampNorth);
+
+// Closes whichever country name tooltip is currently open (state.
+// openCountryTooltipLayer, set in the country layer's own click handler in
+// init()) — top-level, not nested in init(), so the legend, search
+// directory, and nav menu can all call it too when they open, alongside
+// init()'s own map click/dragstart handlers.
+function closeOpenCountryTooltip() {
+  if (state.openCountryTooltipLayer) {
+    state.openCountryTooltipLayer.closeTooltip();
+    state.openCountryTooltipLayer = null;
+  }
+}
 
 function showStatus(message, isError) {
   const el = document.getElementById('status');
@@ -471,19 +491,6 @@ function recomputeCountriesWithVisiblePins(rows) {
 }
 
 function buildLegend() {
-  const list = document.getElementById('legend-divisions');
-  list.innerHTML = '';
-  for (const [, div] of Object.entries(DIVISIONS)) {
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <span class="legend-division-row">
-        <span class="color-swatch" style="background:${div.pin}"></span>
-        <span class="legend-label">${escapeHtml(div.label)}</span>
-      </span>
-    `;
-    list.appendChild(li);
-  }
-
   const stageList = document.getElementById('legend-stages');
   stageList.innerHTML = '';
   for (const stage of Object.values(STAGES)) {
@@ -496,6 +503,190 @@ function buildLegend() {
     `;
     stageList.appendChild(li);
   }
+}
+
+// Mirrors bigtime/reports2/reports2.js's computeMetrics, which drives the
+// same four numbers on the PDF report — kept in sync by eye since one runs
+// against parsed row objects (staff/universities already arrays) and this
+// one runs against the raw CSV rows this page loads (staff/universities
+// still semicolon-delimited strings, hence parseParenList here).
+function computeMetrics(rowsSubset) {
+  const countries = new Set(rowsSubset.map((r) => normalizeCountryName(r.country)).filter(Boolean));
+  return [
+    { label: 'Countries', num: countries.size },
+    { label: 'Ministry Areas', num: rowsSubset.length },
+    { label: 'Staff', num: rowsSubset.reduce((sum, r) => sum + parseParenList(r.staff).length, 0) },
+    { label: 'Universities', num: rowsSubset.reduce((sum, r) => sum + parseParenList(r.universities).length, 0) },
+  ];
+}
+
+function renderMetrics(metrics, accentColor) {
+  const container = document.getElementById('metrics-boxes');
+  const boxStyle = accentColor ? ` style="border-color:${accentColor}"` : '';
+  const textStyle = accentColor ? ` style="color:${accentColor}"` : '';
+  container.innerHTML = metrics.map(({ label, num }) => `
+    <div class="metric-box"${boxStyle}>
+      <div class="metric-box-label"${textStyle}>${escapeHtml(label)}</div>
+      <div class="metric-box-num"${textStyle}>${num}</div>
+    </div>
+  `).join('');
+}
+
+function showMetricsOverlay(metrics, accentColor) {
+  renderMetrics(metrics, accentColor);
+  const overlay = document.getElementById('metrics-overlay');
+  overlay.classList.remove('metrics-hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+  state.overlayDismissed = false;
+}
+
+function hideMetricsOverlay() {
+  if (state.overlayDismissed) return;
+  state.overlayDismissed = true;
+  const overlay = document.getElementById('metrics-overlay');
+  overlay.classList.add('metrics-hidden');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+// Any real map interaction dismisses the overlay: dragging/zooming
+// ('movestart' — zooming also fires this), opening a ministry popup
+// ('popupopen'), or a plain click that doesn't move the map at all (an
+// empty-area or country click — see the country click handler in init()).
+// Suppressed while a nav-menu selection's own setView/fitBounds is playing
+// out, so picking "World" or a division doesn't immediately re-hide the
+// overlay it just asked to show.
+function wireMetricsOverlayDismiss() {
+  function maybeHide() {
+    if (state.suppressOverlayDismiss) return;
+    hideMetricsOverlay();
+  }
+  map.on('movestart', maybeHide);
+  map.on('popupopen', maybeHide);
+  map.on('click', maybeHide);
+  // The overlay itself now has pointer-events:auto (see .metrics-overlay in
+  // css/style.css) specifically so a tap on it never falls through to
+  // whatever country/marker is underneath — which also means that tap
+  // never reaches the map's own 'click' event above, so it needs its own
+  // listener here to still dismiss the overlay.
+  document.getElementById('metrics-overlay').addEventListener('click', maybeHide);
+}
+
+// Upper-right hamburger menu: "World" re-centers on the default view and
+// shows the world metrics; each division pans/zooms to that division's
+// bounds (same __divisionBounds the PDF/report maps use) and shows its
+// metrics in its own color. Deliberately does NOT call __isolateDivision —
+// this is just a camera move, every division stays colored the way it
+// always does on the live map.
+function wireNavMenu() {
+  const toggle = document.getElementById('nav-menu-toggle');
+  const menu = document.getElementById('nav-menu');
+  const list = document.getElementById('nav-menu-list');
+
+  function closeMenu() {
+    menu.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+  function openMenu() {
+    closeOpenCountryTooltip();
+    menu.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+  }
+
+  list.innerHTML = `<li><button type="button" class="nav-menu-item active" data-nav="world">World</button></li>`
+    + Object.entries(DIVISIONS).map(([key, div]) => `
+      <li><button type="button" class="nav-menu-item" data-nav="${escapeHtml(key)}">
+        <span class="color-swatch" style="background:${div.pin}"></span>
+        <span>${escapeHtml(div.label)}</span>
+      </button></li>
+    `).join('');
+
+  function setActive(navKey) {
+    list.querySelectorAll('.nav-menu-item').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.nav === navKey);
+    });
+  }
+
+  // The nav-menu's own move is what's suppressing dismiss here, so it needs
+  // to un-suppress itself once that move actually settles. A big zoom
+  // change (world -> a division) doesn't animate as one single pan/zoom —
+  // Leaflet plays it as several legs (e.g. an animated pan, then a instant
+  // zoom step), each firing its own movestart/moveend, and marker-cluster
+  // re-clustering on top of that can fire more of the same — confirmed live
+  // by the overlay dismissing itself mid-transition when this only waited
+  // for the first moveend. So: debounce on every moveend seen and only
+  // actually clear once none has fired for a bit, with a hard ceiling in
+  // case moveend never fires cleanly at all (e.g. fitBounds silently no-ops
+  // when the map's already sitting at the requested view).
+  function withSuppressedDismiss(moveFn) {
+    state.suppressOverlayDismiss = true;
+    let cleared = false;
+    let debounceTimer = null;
+    const clear = () => {
+      if (cleared) return;
+      cleared = true;
+      state.suppressOverlayDismiss = false;
+      map.off('moveend', onMoveEnd);
+      clearTimeout(debounceTimer);
+    };
+    function onMoveEnd() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(clear, 300);
+    }
+    map.on('moveend', onMoveEnd);
+    setTimeout(clear, 3000);
+    moveFn();
+  }
+
+  function goToWorld() {
+    state.currentNavView = 'world';
+    setActive('world');
+    map.closePopup();
+    withSuppressedDismiss(() => {
+      map.setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM, { animate: true });
+    });
+    showMetricsOverlay(state.worldMetrics, null);
+  }
+
+  function goToDivision(key) {
+    const bounds = window.__divisionBounds(key);
+    if (!bounds) return;
+    state.currentNavView = key;
+    setActive(key);
+    map.closePopup();
+    withSuppressedDismiss(() => {
+      // Extra top padding clears the header/metrics overlay; the rest is
+      // just breathing room, same spirit as mapCapture.js's DIVISION_PADDING.
+      map.fitBounds(bounds, {
+        paddingTopLeft: [40, 170],
+        paddingBottomRight: [40, 40],
+        animate: true,
+      });
+    });
+    showMetricsOverlay(state.metricsByDivision.get(key) || [], DIVISIONS[key].pin);
+  }
+
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('.nav-menu-item');
+    if (!btn) return;
+    closeMenu();
+    if (btn.dataset.nav === 'world') goToWorld();
+    else goToDivision(btn.dataset.nav);
+  });
+
+  toggle.addEventListener('click', () => {
+    if (menu.hidden) openMenu(); else closeMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (menu.hidden) return;
+    if (toggle.contains(e.target) || menu.contains(e.target)) return;
+    closeMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.hidden) {
+      closeMenu();
+      toggle.focus();
+    }
+  });
 }
 
 function buildCountryDirectory(ministryRows) {
@@ -657,6 +848,7 @@ function flyToCountry(countryName) {
 }
 
 function openDirectory() {
+  closeOpenCountryTooltip();
   document.getElementById('directory-modal').hidden = false;
   const search = document.getElementById('directory-search');
   search.value = '';
@@ -756,6 +948,10 @@ function wireLegendToggle() {
   // on pointerdown suppresses the button's native click event even for a
   // simple tap, since the pointerup target gets redirected to this zone.
   swipeZone.addEventListener('pointerdown', (e) => {
+    // A tap/swipe here (the handle, title, or toggle button) never touches
+    // the map itself, so none of the map's own tooltip-dismiss handlers
+    // fire — do it here instead, covering both an expand and a collapse.
+    closeOpenCountryTooltip();
     startY = e.clientY;
     pointerId = e.pointerId;
     captured = false;
@@ -1383,18 +1579,15 @@ async function init() {
 
     // Clicking a different country already closes the previous tooltip
     // (see the click handler above). This covers the other two ways it
-    // should go away: clicking blank map area (a click that lands on no
-    // interactive layer at all only ever reaches the map itself, never a
-    // country click, so this can't double-close the one just opened), and
-    // starting a drag — 'dragstart' specifically, not 'movestart', so the
-    // pan/zoom our own click handler triggers for a ministry country
-    // doesn't immediately close the tooltip that same click just opened.
-    function closeOpenCountryTooltip() {
-      if (state.openCountryTooltipLayer) {
-        state.openCountryTooltipLayer.closeTooltip();
-        state.openCountryTooltipLayer = null;
-      }
-    }
+    // should go away on the map itself: clicking blank map area (a click
+    // that lands on no interactive layer at all only ever reaches the map
+    // itself, never a country click, so this can't double-close the one
+    // just opened), and starting a drag — 'dragstart' specifically, not
+    // 'movestart', so the pan/zoom our own click handler triggers for a
+    // ministry country doesn't immediately close the tooltip that same
+    // click just opened. closeOpenCountryTooltip itself is top-level (see
+    // above showStatus) — the legend/directory/nav-menu also call it when
+    // they open, since none of those clicks land on the map itself.
     let suppressNextMapClickClose = false;
     map.on('click', () => {
       if (suppressNextMapClickClose) {
@@ -1532,6 +1725,18 @@ async function init() {
     wireLegendToggle();
     buildCountryDirectory(ministryRows);
     wireDirectoryControls();
+
+    state.worldMetrics = computeMetrics(ministryRows);
+    for (const key of Object.keys(DIVISIONS)) {
+      const divisionRows = ministryRows.filter(
+        (row) => state.countryDivisionByName.get(normalizeCountryName(row.country)) === key
+      );
+      state.metricsByDivision.set(key, computeMetrics(divisionRows));
+    }
+    showMetricsOverlay(state.worldMetrics, null);
+    wireMetricsOverlayDismiss();
+    wireNavMenu();
+
     wirePhotoPreview();
     wireMinistryPhotoCarousel();
     wireVideoLightbox();

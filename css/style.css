@@ -76,6 +76,143 @@ h1, h2, h3, .legend-label, .cluster-badge {
   text-shadow: 0 1px 0 rgba(255,255,255,0.4);
 }
 
+/* ---------- Metrics overlay ---------- */
+
+/* Sits inside .site-header, right under the title, so it inherits the
+   header's own top safe-area padding and fade-to-transparent background —
+   the background gradient stretches to the header's new (taller) height
+   once this is present, so it still fades out by the new bottom edge. */
+.metrics-overlay {
+  margin-top: 10px;
+  /* auto (not inherited none, like the rest of .site-header) so a tap here
+     dismisses the overlay itself (see the click listener in
+     wireMetricsOverlayDismiss) instead of falling through to whatever
+     country/marker is underneath it on the map. */
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+/* Added by JS once the user pans, zooms, or opens a popup — see
+   hideMetricsOverlay in js/app.js. Only ever removed by explicitly
+   choosing "World" from the nav menu, never automatically. */
+.metrics-overlay.metrics-hidden {
+  opacity: 0;
+  /* Back to none once faded — otherwise this invisible box would keep
+     eating clicks meant for whatever country/marker sits underneath it. */
+  pointer-events: none;
+}
+
+.metrics-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.metric-box {
+  min-width: 68px;
+  padding: 6px 12px;
+  background: rgba(247, 239, 220, 0.92);
+  border: 1px solid var(--ink);
+  box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
+}
+
+.metric-box-label {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.metric-box-num {
+  font-size: clamp(16px, 4vw, 22px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* ---------- Nav menu (hamburger: World / Divisions) ---------- */
+
+.nav-menu-toggle {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 960;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: var(--card-bg);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
+  cursor: pointer;
+}
+
+.nav-menu-toggle:hover {
+  background: var(--parchment);
+}
+
+.nav-menu {
+  position: fixed;
+  top: calc(max(14px, env(safe-area-inset-top)) + 46px);
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 960;
+  width: 230px;
+  max-width: calc(100vw - 32px);
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+  box-shadow: 3px 3px 12px rgba(0,0,0,0.35);
+  padding: 6px 0;
+}
+
+.nav-menu[hidden] {
+  display: none;
+}
+
+.nav-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(59,42,26,0.08);
+  text-align: left;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 16px;
+  color: var(--ink);
+  padding: 9px 14px;
+  cursor: pointer;
+}
+
+.nav-menu-item:last-child {
+  border-bottom: none;
+}
+
+.nav-menu-item:hover,
+.nav-menu-item.active {
+  background: var(--parchment);
+}
+
+.nav-menu-item .color-swatch {
+  width: 12px;
+  height: 12px;
+}
+
 /* ---------- Map ---------- */
 
 #map {
@@ -295,13 +432,6 @@ h1, h2, h3, .legend-label, .cluster-badge {
 
 .legend li {
   margin: 4px 0;
-}
-
-.legend-division-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
 }
 
 .legend-label {
