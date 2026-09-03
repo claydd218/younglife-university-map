@@ -74,7 +74,11 @@ const CSP = [
   "script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com 'unsafe-hashes' 'sha256-l+nb61U7KKpl4Wcot60MfghvQrADUbeax5hOQehBiVI=' 'sha256-AcfKIR6miDewAaBxREOcW4R7Mgq+qUNQqh/TiZ62OU4=' 'sha256-XwaJgjnLD5K8JyD3xdR8SEhEtsdmSSLuqZrtJjqdWZQ='",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob:",
+  // basemaps.cartocdn.com serves the pin-placement map's base tiles
+  // (bigtime/admin.js's openPinPlacementMap) — the only place this admin
+  // tool loads a live map-tile image from, everything else (the public
+  // map, /bigtime/maps) draws its own vector country shapes instead.
+  "img-src 'self' data: blob: https://*.basemaps.cartocdn.com",
   "connect-src 'self' https://nominatim.openstreetmap.org https://photon.komoot.io https://challenges.cloudflare.com https://cloudflareinsights.com",
   "frame-src https://challenges.cloudflare.com",
   "object-src 'none'",
