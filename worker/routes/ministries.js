@@ -1,41 +1,42 @@
-// Routes /bigtime/api/ministries — list all ministries (GET) and create a new
-// one (POST). Editing/deleting a specific row is worker/routes/ministry-detail.js.
-// Dispatched by worker/index.js's router, which builds the same
-// {request, env, params} shape Cloudflare Pages Functions used to provide
-// automatically — kept so this handler code didn't need to change when the
-// project turned out to be a Worker-with-assets deployment, not Pages.
+// Routes /bigtime/api/ministries — list all ministries (GET) and create a
+// new one (POST). Editing/deleting a specific row is
+// worker/routes/ministry-detail.js. Dispatched by worker/index.js's
+// router with the same {request, env, ctx, params} shape as every other
+// route handler here.
 
-import { getFile, putFile, ConflictError } from '../lib/github.js';
-import { parseCsv, stringifyCsv } from '../lib/csv.js';
 import { ValidationError } from '../lib/text.js';
-import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
-import { MINISTRIES_PATH, HEADER, loadDivisions, rowToApi, rowFromBody, maxId } from '../lib/ministries.js';
-import { bumpDeployVersion } from '../lib/deployVersion.js';
+import { jsonResponse, errorResponse } from '../lib/http.js';
+import { loadDivisions } from '../lib/ministries.js';
+import { listMinistries, insertMinistry } from '../lib/db/ministries.js';
+import { bumpDataVersion } from '../lib/dataVersion.js';
 import { regenerateMapArchive } from '../lib/mapArchive.js';
 import { regenerateReportArchive } from '../lib/reportArchive.js';
 
-export async function onRequestGet({ env }) {
-  const file = await getFile(env, MINISTRIES_PATH);
-  if (!file) return errorResponse(500, 'data/ministries.csv not found in the repo');
-
-  const { rows: rawRows } = parseCsv(file.content);
-  const divisions = await loadDivisions(env);
-
-  const unmatchedCountries = new Set();
-  const rows = rawRows.map((r) => {
-    const country = (r.country || '').trim();
-    if (country && !divisions.has(country)) unmatchedCountries.add(country);
-    return rowToApi(r);
-  });
-
-  return jsonResponse({
-    sha: file.sha,
-    rows,
-    unmatchedCountries: Array.from(unmatchedCountries),
-  });
+function validateFields(body) {
+  const required = ['city', 'country', 'lat', 'lng'];
+  for (const field of required) {
+    if (!body[field] || !String(body[field]).trim()) {
+      throw new ValidationError(`${field} is required`, field);
+    }
+  }
+  if (Number.isNaN(Number(body.lat)) || Number.isNaN(Number(body.lng))) {
+    throw new ValidationError('Lat/Lng must be numbers', 'lat');
+  }
 }
 
-export async function onRequestPost({ request, env, ctx }) {
+export async function onRequestGet({ env, request }) {
+  const rows = await listMinistries(env);
+  const divisions = await loadDivisions(env, request);
+
+  const unmatchedCountries = new Set();
+  for (const r of rows) {
+    if (r.country && !divisions.has(r.country)) unmatchedCountries.add(r.country);
+  }
+
+  return jsonResponse({ rows, unmatchedCountries: Array.from(unmatchedCountries) });
+}
+
+export async function onRequestPost({ request, env, ctx, user }) {
   let body;
   try {
     body = await request.json();
@@ -43,58 +44,49 @@ export async function onRequestPost({ request, env, ctx }) {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  // Fetched for content (need every existing row to compute the new id and
-  // append to it), not to pre-check sha — see the longer note in
-  // ministry-detail.js's onRequestPut for why that pre-check was removed
-  // (GitHub read-after-write lag caused real false-positive 409s). GitHub's
-  // own write-time sha check on the putFile call below is authoritative.
-  const file = await getFile(env, MINISTRIES_PATH);
-  if (!file) return errorResponse(500, 'data/ministries.csv not found in the repo');
-
-  const { rows } = parseCsv(file.content);
-
-  let newRow;
   try {
-    newRow = rowFromBody(maxId(rows) + 1, body);
+    validateFields(body);
   } catch (err) {
     if (err instanceof ValidationError) {
       return errorResponse(400, err.message, { error: 'validation', field: err.field });
     }
     throw err;
   }
-  rows.push(newRow);
 
-  const newCsv = stringifyCsv(HEADER, rows);
-  let result;
-  try {
-    result = await putFile(env, MINISTRIES_PATH, newCsv, {
-      sha: body.sha || file.sha,
-      message: `Add ministry: ${newRow.city}, ${newRow.country}`,
-      ...committerFromRequest(request),
-    });
-  } catch (err) {
-    if (err instanceof ConflictError) return errorResponse(409, err.message, { error: 'conflict' });
-    throw err;
-  }
+  const result = await insertMinistry(env, {
+    city: body.city.trim(),
+    country: body.country.trim(),
+    lat: body.lat,
+    lng: body.lng,
+    date_opened: body.date_opened,
+    is_developing: !!body.is_developing,
+    universities: body.universities,
+    staff: body.staff,
+    blurb: body.blurb,
+    photos: body.photos,
+    video_url: body.video_url,
+    video_label: body.video_label,
+  }, user ? user.name : null);
 
-  const deployVersion = await bumpDeployVersion(env, committerFromRequest(request));
-  // Adding a ministry area can introduce a new pin/country — regenerate the
-  // cached maps/*.png files so /bigtime/report and /bigtime/maps stay
-  // current. Detached (never awaited by this response): waits for this
-  // change to actually go live first, then captures and commits.
+  const deployVersion = await bumpDataVersion(env);
+  // Adding a ministry area can introduce a new pin/country — regenerate
+  // the cached maps/*.png files so /bigtime/report and /bigtime/maps stay
+  // current. Detached (never awaited by this response) — D1/R2's own
+  // read-after-write consistency means this can run right away, no more
+  // waiting for a deploy to catch up first.
   if (ctx) {
     ctx.waitUntil(
-      regenerateMapArchive(env, request, deployVersion, committerFromRequest(request)).catch((err) => {
+      regenerateMapArchive(env, request, deployVersion).catch((err) => {
         console.error('Map archive regeneration failed:', err);
       })
     );
     // A new ministry area's blurb/staff/universities/photos all show up
     // in the report too, not just on the map — see reportArchive.js.
     ctx.waitUntil(
-      regenerateReportArchive(env, request, deployVersion, committerFromRequest(request)).catch((err) => {
+      regenerateReportArchive(env, request, deployVersion).catch((err) => {
         console.error('Report archive regeneration failed:', err);
       })
     );
   }
-  return jsonResponse({ ok: true, id: newRow.id, sha: result.sha, deployVersion });
+  return jsonResponse({ ok: true, id: result.id, sha: result.updated_at, updated_at: result.updated_at, deployVersion, row: result });
 }

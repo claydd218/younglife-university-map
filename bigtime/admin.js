@@ -19,8 +19,7 @@ const PHOTO_MINIMUMS = {
 };
 
 const state = {
-  rows: [],
-  sha: null,
+  rows: [], // each row carries its own `sha` (an alias for its D1 updated_at) — the per-row optimistic-concurrency token, no single global one anymore
   divisionByCountry: new Map(),
   editingId: null, // null while adding, otherwise the id being edited
   dialogDirty: false, // edit mode only — see markDialogDirty/updateDialogButtons
@@ -74,60 +73,26 @@ function hideBanner() {
 
 // --- Deploy status toast -----------------------------------------------
 
-// Confirms a save isn't just committed to git but actually live — polls a
-// small public marker file (worker/lib/deployVersion.js) on the deployed
-// site until it reflects the token the just-completed write's response
-// came back with. Only the *latest* token is ever tracked: a newer save
-// made while an older one is still publishing simply replaces the target,
-// since once the live site catches up to the newer token the earlier
-// change (committed first) is necessarily live too — no need to track
-// multiple in-flight saves separately.
-const DEPLOY_VERSION_URL = '../data/deploy-version.txt';
-const DEPLOY_POLL_MS = 3000;
-const DEPLOY_POLL_MAX_ATTEMPTS = 40; // ~2 minutes, then give up quietly
+// Used to confirm a save wasn't just committed to git but had actually
+// gone live — polling a small public marker file
+// (worker/lib/deployVersion.js) until it caught up, since a git commit
+// took real time (a Cloudflare rebuild+redeploy) to actually reach the
+// live site. Ministry/staff data lives in D1 now (worker/lib/dataVersion.js),
+// which has no such publishing delay at all — a write is visible to the
+// very next read, including from a different browser tab, the instant
+// the API response comes back. So `token` just confirms a version was
+// recorded (server-side bump succeeded); there's nothing left to wait
+// out. Kept as a `trackDeployVersion` no-op-if-null call at every write
+// site rather than removing those calls outright, so this can go back to
+// meaning something later if a slower-to-propagate write path ever
+// returns here.
+let deployToastHideTimer = null;
 
-let deployTarget = null;
-let deployPollTimer = null;
-let deployPollAttempts = 0;
-
-// token is null when the server-side bump itself failed (see
-// bumpDeployVersion's own comment) — the save still succeeded, there's
-// just nothing to poll for, so this is a no-op rather than showing a
-// toast that would never resolve.
 function trackDeployVersion(token) {
   if (!token) return;
-  deployTarget = token;
-  deployPollAttempts = 0;
-  showDeployToast('Publishing changes…', false);
-  if (!deployPollTimer) pollDeployVersion();
-}
-
-async function pollDeployVersion() {
-  deployPollTimer = null;
-  if (!deployTarget) return; // dismissed since this was scheduled
-  deployPollAttempts++;
-  try {
-    const res = await fetch(DEPLOY_VERSION_URL, { cache: 'no-store' });
-    if (res.ok) {
-      const live = (await res.text()).trim();
-      if (live === deployTarget) {
-        showDeployToast('Changes are live', true);
-        deployTarget = null;
-        setTimeout(hideDeployToast, 3000);
-        return;
-      }
-    }
-  } catch {
-    // Network hiccup — just retry on the next tick rather than surfacing
-    // it; this status check is a nicety, not something worth alarming
-    // over when the actual save already succeeded.
-  }
-  if (deployPollAttempts >= DEPLOY_POLL_MAX_ATTEMPTS) {
-    hideDeployToast();
-    deployTarget = null;
-    return;
-  }
-  deployPollTimer = setTimeout(pollDeployVersion, DEPLOY_POLL_MS);
+  showDeployToast('Changes saved', true);
+  clearTimeout(deployToastHideTimer);
+  deployToastHideTimer = setTimeout(hideDeployToast, 3000);
 }
 
 function showDeployToast(text, done) {
@@ -141,13 +106,9 @@ function hideDeployToast() {
   $('deploy-toast').hidden = true;
 }
 
-// Dismissing stops polling outright rather than just hiding the toast —
-// once the user's stopped watching for it, there's no value in silently
-// confirming a fact nobody's waiting on anymore.
 function wireDeployToast() {
   $('deploy-toast-dismiss').addEventListener('click', () => {
-    deployTarget = null;
-    if (deployPollTimer) { clearTimeout(deployPollTimer); deployPollTimer = null; }
+    clearTimeout(deployToastHideTimer);
     hideDeployToast();
   });
 }
@@ -203,7 +164,9 @@ function wireTabs() {
       const tab = btn.dataset.tab;
       $('tab-ministries').hidden = tab !== 'ministries';
       $('tab-images').hidden = tab !== 'images';
+      $('tab-log').hidden = tab !== 'log';
       if (tab === 'images') renderImagesTab();
+      if (tab === 'log') renderLogTab();
     });
   });
 }
@@ -1129,14 +1092,12 @@ async function deleteMinistry(id) {
   try {
     const result = await apiFetch(`/ministries/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-      body: JSON.stringify({ sha: state.sha }),
+      body: JSON.stringify({ sha: row.sha }),
     });
     // Update state from what we already know rather than re-fetching —
-    // GitHub's Contents API has a brief read-after-write lag immediately
-    // after a commit, so an instant re-GET can occasionally still show the
-    // pre-write data. The write response already has everything needed.
+    // avoids a round trip, and this row's own data already has everything
+    // needed.
     state.rows = state.rows.filter((r) => r.id !== id);
-    state.sha = result.sha;
     trackDeployVersion(result.deployVersion);
     renderMinistriesTable();
     // Every staff member who called this ministry home just lost that
@@ -1240,6 +1201,11 @@ function addStaffRow(prefill = {}) {
     nameLabel: 'Name', metaLabel: 'Role', metaPlaceholder: 'e.g. College Coordinator',
     name: prefill.name, meta: prefill.role,
   });
+  // Lets the server (worker/lib/db/staff.js's upsertHomeStaff) match this
+  // row back to its real staff record even after a rename — a brand-new
+  // row (no prefill.id) is left unset, correctly telling it to insert
+  // rather than update.
+  if (prefill.id != null) item.dataset.staffId = prefill.id;
   const nameInput = item.querySelector('.row-name');
   const metaInput = item.querySelector('.row-meta');
   const photoWidget = document.createElement('div');
@@ -1256,7 +1222,11 @@ function addStaffRow(prefill = {}) {
       showBanner('error', 'Fill in the staff member’s name before moving them.');
       return;
     }
-    openMoveStaffDialog(name, metaInput.value.trim(), item);
+    if (!item.dataset.staffId) {
+      showBanner('error', 'Save this ministry first, then Move this staff member — a brand-new row needs a real record to move.');
+      return;
+    }
+    openMoveStaffDialog(name, Number(item.dataset.staffId), item);
   });
 
   const assignBtn = document.createElement('button');
@@ -1310,13 +1280,18 @@ function addStaffRow(prefill = {}) {
 
 // --- Move staff to another ministry -----------------------------------
 
-// { name, role, item } for whichever staff row's Move… was clicked —
+// { name, staffId, item } for whichever staff row's Move… was clicked —
 // item is the DOM row so confirmMoveStaff can remove it once the target
-// ministry's write succeeds.
+// ministry's write succeeds. staffId is the staffer's real database id
+// (the Move button already refuses to open this dialog without one) —
+// the atomic /bigtime/api/staff/:id/move endpoint re-homes that exact
+// row instead of inserting a new one at the target and orphaning the old
+// one at the source, which is what PUTting a no-id {name, role} entry
+// used to do.
 let moveStaffContext = null;
 
-function openMoveStaffDialog(name, role, item) {
-  moveStaffContext = { name, role, item };
+function openMoveStaffDialog(name, staffId, item) {
+  moveStaffContext = { name, staffId, item };
   const search = $('move-staff-search');
   search.value = '';
   renderMoveStaffList('');
@@ -1344,41 +1319,43 @@ function renderMoveStaffList(query) {
   });
 }
 
-// Writes straight to the target ministry's last-known-saved data
-// (state.rows), not the currently open form's draft — moving a staff
-// member is its own self-contained action and shouldn't also commit
-// whatever unrelated field edits happen to be sitting in the open dialog.
+// Calls the atomic move endpoint (worker/routes/staff-move.js) rather than
+// PUTting the whole target ministry with a no-id {name, role} entry — that
+// older approach always inserted a brand-new staff row at the target
+// (upsertHomeStaff has no way to know it's "the same person" without an
+// id) and left the original row, and any staff_assignments pointing at it,
+// orphaned at the source until/unless that ministry happened to be saved
+// again.
 async function confirmMoveStaff(targetId) {
   const target = state.rows.find((r) => r.id === targetId);
   if (!target || !moveStaffContext) return;
-  const { name, role, item } = moveStaffContext;
+  const { name, staffId, item } = moveStaffContext;
   if (!window.confirm(`Move ${name} to ${target.city}, ${target.country}?`)) return;
 
   $('move-staff-dialog').close();
-  const newStaff = [...target.staff, { name, role }];
-  const body = {
-    sha: state.sha,
-    city: target.city,
-    country: target.country,
-    lat: target.lat,
-    lng: target.lng,
-    date_opened: target.date_opened,
-    is_developing: target.is_developing,
-    blurb: target.blurb,
-    staff: newStaff,
-    universities: target.universities,
-    photos: target.photos,
-    video_url: target.video_url,
-    video_label: target.video_label,
-    assigned_staff: target.assigned_staff,
-  };
 
   try {
-    const result = await apiFetch(`/ministries/${encodeURIComponent(targetId)}`, { method: 'PUT', body: JSON.stringify(body) });
-    state.sha = result.sha;
+    const result = await apiFetch(`/staff/${encodeURIComponent(staffId)}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ targetMinistryId: targetId }),
+    });
     trackDeployVersion(result.deployVersion);
     const targetIndex = state.rows.findIndex((r) => r.id === targetId);
-    state.rows[targetIndex] = { ...target, staff: newStaff };
+    state.rows[targetIndex] = result.row;
+    // The source ministry's own state.rows entry (the one still open in
+    // this dialog) still has the moved staffer in its local .staff array
+    // until reloaded — drop them here too, so reopening the source
+    // without an intervening page reload doesn't re-show and re-save a
+    // duplicate of someone who has already moved.
+    if (state.editingId != null) {
+      const sourceIndex = state.rows.findIndex((r) => r.id === state.editingId);
+      if (sourceIndex !== -1) {
+        state.rows[sourceIndex] = {
+          ...state.rows[sourceIndex],
+          staff: state.rows[sourceIndex].staff.filter((s) => s.id !== staffId),
+        };
+      }
+    }
     item.remove();
     markDialogDirty();
   } catch (err) {
@@ -1429,7 +1406,7 @@ function findStaffHome(name) {
 // draft instead of a call like this.
 async function putMinistryField(target, fieldOverrides) {
   const body = {
-    sha: state.sha,
+    sha: target.sha,
     city: target.city,
     country: target.country,
     lat: target.lat,
@@ -1446,10 +1423,9 @@ async function putMinistryField(target, fieldOverrides) {
     ...fieldOverrides,
   };
   const result = await apiFetch(`/ministries/${encodeURIComponent(target.id)}`, { method: 'PUT', body: JSON.stringify(body) });
-  state.sha = result.sha;
   trackDeployVersion(result.deployVersion);
   const index = state.rows.findIndex((r) => r.id === target.id);
-  state.rows[index] = { ...target, ...fieldOverrides };
+  state.rows[index] = { ...target, ...fieldOverrides, sha: result.sha, updated_at: result.updated_at };
   return state.rows[index];
 }
 
@@ -1715,6 +1691,18 @@ function collectRepeatable(group, nameField, metaField) {
   })).filter((entry) => entry[nameField]);
 }
 
+// Same as collectRepeatable, plus each row's staffId (addStaffRow's own
+// dataset.staffId, set only for a row that started from an existing
+// record) — server-side, worker/lib/db/staff.js's upsertHomeStaff needs
+// this to tell a rename apart from a delete-and-recreate.
+function collectStaffRows(group) {
+  return Array.from(group.querySelectorAll('.repeatable-item')).map((item) => ({
+    id: item.dataset.staffId ? Number(item.dataset.staffId) : undefined,
+    name: item.querySelector('.row-name').value.trim(),
+    role: item.querySelector('.row-meta').value.trim(),
+  })).filter((entry) => entry.name);
+}
+
 // There's no standalone "date opened" field anymore — it's derived from
 // the ministry's own data instead of asking for it twice. A university's
 // Year field isn't always a year (it's whatever's in that entry's last
@@ -1839,8 +1827,12 @@ async function saveMinistry() {
   const universities = collectRepeatable($('universities-group'), 'name', 'year')
     .map(({ name, year }) => ({ name: stripParens(name), year: stripParens(year) }));
   const videoUrl = $('field-video-url').value.trim();
+  // Only meaningful when editing an existing row (its own current sha,
+  // the per-row concurrency token) — a brand-new ministry has no prior
+  // row to conflict with, so the server ignores this for POST.
+  const editingRow = state.editingId ? state.rows.find((r) => r.id === state.editingId) : null;
   const body = {
-    sha: state.sha,
+    sha: editingRow ? editingRow.sha : undefined,
     city: $('field-city').value.trim(),
     country: $('field-country').value.trim(),
     lat: $('field-lat').value.trim(),
@@ -1854,7 +1846,7 @@ async function saveMinistry() {
     // from this body after save, not re-fetched) matches what actually
     // got written, same reasoning as stripParens above.
     video_label: videoUrl ? ($('field-video-label').value.trim() || defaultVideoLabel()) : '',
-    staff: collectRepeatable($('staff-group'), 'name', 'role'),
+    staff: collectStaffRows($('staff-group')),
     universities,
     // Reference, not a copy — reconcileAllPhotos() (called below, before
     // this body is stringified) may rewrite entries in place if the
@@ -1876,12 +1868,6 @@ async function saveMinistry() {
   }
 
   const { sha: _staleSha, ...rowFields } = body;
-  // Mirrors rowFromBody's server-side stamp (worker/lib/ministries.js) so
-  // the locally-patched state.rows entry (updated from this request body,
-  // not re-fetched) matches what the server actually wrote — otherwise
-  // the new/edited row has no updated_at until the next full reload, and
-  // silently drops out of the Recent filter until then.
-  rowFields.updated_at = new Date().toISOString();
 
   const closeBtn = $('dialog-close-btn');
   closeBtn.disabled = true;
@@ -1896,17 +1882,19 @@ async function saveMinistry() {
       // here (removed, or renamed away) and needs sweepAssignments.
       const previousStaffNames = state.rows[index].staff.map((s) => s.name);
       const result = await apiFetch(`/ministries/${encodeURIComponent(state.editingId)}`, { method: 'PUT', body: JSON.stringify(body) });
-      // Same read-after-write reasoning as deleteMinistry — update from the
-      // write response instead of re-fetching.
-      state.rows[index] = { id: state.editingId, ...rowFields };
-      state.sha = result.sha;
+      // The write response's own `row` — the server's authoritative state,
+      // not this request's echoed-back body — critically including the
+      // real database id for any staff member added in this same save
+      // (needed so a second save of this same dialog, no reload in
+      // between, recognizes them as an update rather than inserting a
+      // duplicate — see worker/lib/db/staff.js's upsertHomeStaff).
+      state.rows[index] = result.row;
       trackDeployVersion(result.deployVersion);
       const newStaffNames = new Set(rowFields.staff.map((s) => s.name));
       await sweepAssignments(previousStaffNames.filter((n) => !newStaffNames.has(n)));
     } else {
       const result = await apiFetch('/ministries', { method: 'POST', body: JSON.stringify(body) });
-      state.rows.push({ id: result.id, ...rowFields });
-      state.sha = result.sha;
+      state.rows.push(result.row);
       trackDeployVersion(result.deployVersion);
     }
     renderMinistriesTable();
@@ -2246,7 +2234,6 @@ async function loadMinistries() {
       state.divisionByCountry.size ? Promise.resolve(state.divisionByCountry) : loadDivisionsDirect(),
     ]);
     state.rows = data.rows;
-    state.sha = data.sha;
     state.divisionByCountry = divisions;
 
     const datalist = $('country-list');
@@ -2632,6 +2619,75 @@ function wireReportPdfButton() {
   });
 }
 
+// --- Log tab -------------------------------------------------------------
+// Reads worker/routes/logs.js's paginated view of ministry_edits (the
+// lightweight audit table added with the D1 migration, now with a
+// user_name column — see the admin-users plan). Reloaded fresh every time
+// the tab is opened, not cached, so it always reflects edits made
+// elsewhere (another tab, another admin) since it was last viewed.
+
+const LOG_ACTION_LABELS = {
+  create: 'Created',
+  update: 'Updated',
+  delete: 'Deleted',
+  'staff-move': 'Moved staff',
+};
+
+let logNextBefore = null;
+
+async function renderLogTab() {
+  logNextBefore = null;
+  $('log-tbody').innerHTML = '';
+  $('log-load-more-btn').hidden = true;
+  await loadLogPage();
+}
+
+async function loadLogPage() {
+  const status = $('log-status');
+  const loadMoreBtn = $('log-load-more-btn');
+  status.textContent = 'Loading…';
+  loadMoreBtn.hidden = true;
+  try {
+    const query = logNextBefore ? `?before=${encodeURIComponent(logNextBefore)}` : '';
+    const result = await apiFetch(`/logs${query}`);
+    appendLogRows(result.rows);
+    logNextBefore = result.nextBefore;
+    loadMoreBtn.hidden = !logNextBefore;
+    status.textContent = '';
+  } catch (err) {
+    status.textContent = err.message || String(err);
+  }
+}
+
+function appendLogRows(rows) {
+  const tbody = $('log-tbody');
+  if (!rows.length && !tbody.children.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="status-text">No changes logged yet.</td></tr>';
+    return;
+  }
+  const html = rows.map((row) => {
+    const label = LOG_ACTION_LABELS[row.action] || row.action;
+    const place = row.city ? `${row.city}${row.country ? `, ${row.country}` : ''}` : `ministry #${row.ministry_id}`;
+    const when = new Date(row.changed_at);
+    const whenText = Number.isNaN(when.getTime()) ? row.changed_at : when.toLocaleString();
+    // user_name is NULL for edits made before per-user accounts existed
+    // (or by the old shared login) — shown as "—", not blank, so it reads
+    // as "no author recorded" rather than looking like a rendering bug.
+    return `
+      <tr>
+        <td class="log-when">${escapeHtml(whenText)}</td>
+        <td>${escapeHtml(label)} — ${escapeHtml(place)}</td>
+        <td class="log-by">${escapeHtml(row.user_name || '—')}</td>
+      </tr>
+    `;
+  }).join('');
+  tbody.insertAdjacentHTML('beforeend', html);
+}
+
+function wireLogTab() {
+  $('log-load-more-btn').addEventListener('click', loadLogPage);
+}
+
 function wireSignOut() {
   $('sign-out-btn').addEventListener('click', async () => {
     if (!window.confirm('Sign out?')) return;
@@ -2656,5 +2712,6 @@ wireDeployToast();
 wireMoveStaffDialog();
 wireAssignStaffDialog();
 wireReportPdfButton();
+wireLogTab();
 wireSignOut();
 loadMinistries();

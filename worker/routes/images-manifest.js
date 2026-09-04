@@ -12,12 +12,12 @@
 // this manifest once and checking membership in-memory replaces all of
 // that with a single request.
 
-import { listDir } from '../lib/github.js';
+import { listObjects } from '../lib/r2.js';
 import { jsonResponse } from '../lib/http.js';
 
 const IMAGES_DIR = 'images';
 
 export async function onRequestGet({ env }) {
-  const files = await listDir(env, IMAGES_DIR);
+  const files = await listObjects(env, `${IMAGES_DIR}/`);
   return jsonResponse({ files: files.map((f) => f.name) });
 }

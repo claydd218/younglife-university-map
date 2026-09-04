@@ -172,6 +172,10 @@
   td.actions button { margin-left: 6px; }
   .btn-small { font-size: 12.5px; padding: 5px 10px; }
 
+  .log-table td.log-when { white-space: nowrap; color: #666; }
+  .log-table td.log-by { white-space: nowrap; }
+  .log-load-more-row { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px; }
+
   /* max-height alone isn't enough — <dialog> has no overflow rule by
      default, so once content (e.g. several staff/university rows) pushes
      past it, the dialog itself starts scrolling as a whole instead of just
@@ -600,6 +604,7 @@
   <div class="tabs">
     <button type="button" class="tab-btn active" data-tab="ministries">Ministries</button>
     <button type="button" class="tab-btn" data-tab="images">Images</button>
+    <button type="button" class="tab-btn" data-tab="log">Log</button>
   </div>
 
   <section id="tab-ministries" class="tab-panel">
@@ -624,6 +629,19 @@
     </div>
     <div class="filter-bar" id="images-filter-bar"></div>
     <div id="images-report"></div>
+  </section>
+
+  <section id="tab-log" class="tab-panel" hidden>
+    <table class="log-table">
+      <thead>
+        <tr><th>When</th><th>Change</th><th>By</th></tr>
+      </thead>
+      <tbody id="log-tbody"></tbody>
+    </table>
+    <div class="log-load-more-row">
+      <span id="log-status" class="status-text"></span>
+      <button type="button" class="btn secondary btn-small" id="log-load-more-btn" hidden>Load more</button>
+    </div>
   </section>
 
   <dialog id="ministry-dialog">

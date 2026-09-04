@@ -1,12 +1,13 @@
-// Stateless signed-cookie session for the TEMPORARY public-site password
-// gate — see worker/index.js's "Temporary public-site password gate"
-// block and bigtime/SETUP.md. Deliberately a separate, self-contained
-// copy of worker/lib/session.js's scheme rather than a shared refactor:
-// this whole feature is meant to be ripped out with a handful of file
-// deletions once the real public launch happens, and that's only true if
-// it never touches the admin login's own code path.
+// Stateless signed-cookie session for the superbigtime area (admin-user
+// management) — a separate, permanent, single-shared-password gate,
+// independent of both the per-user /bigtime/ admin login (session.js) and
+// the temporary public-site gate (siteSession.js). Deliberately its own
+// self-contained copy of the same HMAC-cookie scheme rather than a shared
+// refactor, for the same reason siteSession.js stayed separate: this gate
+// should be freely removable/rewritable without ever touching the other
+// two login flows.
 
-const COOKIE_NAME = 'site_session';
+const COOKIE_NAME = 'superadmin_session';
 const SESSION_DAYS = 30;
 
 async function hmacHex(secret, message) {
@@ -28,30 +29,32 @@ function timingSafeEqual(a, b) {
   return result === 0;
 }
 
-export async function createSiteSessionCookie(env) {
-  if (!env.SITE_SESSION_SECRET) {
-    throw new Error('SITE_SESSION_SECRET unavailable (mid-deploy?) — try again shortly');
+export async function createSuperSessionCookie(env) {
+  if (!env.SUPERADMIN_SESSION_SECRET) {
+    throw new Error('SUPERADMIN_SESSION_SECRET unavailable (mid-deploy?) — try again shortly');
   }
   const expiresAt = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
-  const sig = await hmacHex(env.SITE_SESSION_SECRET, String(expiresAt));
+  const sig = await hmacHex(env.SUPERADMIN_SESSION_SECRET, String(expiresAt));
   const value = `${expiresAt}.${sig}`;
   return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_DAYS * 24 * 60 * 60}`;
 }
 
-export function clearSiteSessionCookie() {
+export function clearSuperSessionCookie() {
   return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
 }
 
-export async function hasValidSiteSession(request, env) {
-  if (!env.SITE_SESSION_SECRET) return false;
+export async function hasValidSuperSession(request, env) {
+  if (!env.SUPERADMIN_SESSION_SECRET) return false;
   const cookieHeader = request.headers.get('Cookie') || '';
   // Anchored to a cookie boundary — see worker/lib/session.js's identical
-  // fix for why an unanchored match here is a real bug, not just theory.
+  // fix for why an unanchored match here is a real bug, not just theory:
+  // "superadmin_session" contains "admin_session" as a substring, so an
+  // unanchored regex on either name risks matching inside the other.
   const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`));
   if (!match) return false;
   const [expiresAtStr, sig] = decodeURIComponent(match[1]).split('.');
   const expiresAt = parseInt(expiresAtStr, 10);
   if (!expiresAt || Date.now() > expiresAt) return false;
-  const expectedSig = await hmacHex(env.SITE_SESSION_SECRET, expiresAtStr);
+  const expectedSig = await hmacHex(env.SUPERADMIN_SESSION_SECRET, expiresAtStr);
   return timingSafeEqual(sig || '', expectedSig);
 }

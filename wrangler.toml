@@ -48,3 +48,20 @@ binding = "BROWSER"
 [[kv_namespaces]]
 binding = "LOGIN_ATTEMPTS"
 id = "3275a550019a47559e2d529d30de9a1d"
+
+# Ministry/staff data — replaces worker/lib/github.js (data/ministries.csv)
+# as the app's persistence layer. See worker/lib/db/*.js. Named "DB", not
+# the project name, since it's the only database this Worker has.
+[[d1_databases]]
+binding = "DB"
+database_name = "younglife-map-db"
+database_id = "aa079f07-abaf-4501-a2ef-38c08304b145"
+
+# Photos, generated maps, and generated PDF reports — replaces
+# worker/lib/github.js (images/, maps/, reports/) as the app's blob
+# storage. Served back out through worker/routes/media.js, not public R2
+# access — see that file's own comment for why. Named "MEDIA", not "R2",
+# to avoid any ambiguity with the "ASSETS" static-assets binding above.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "younglife-map-media"

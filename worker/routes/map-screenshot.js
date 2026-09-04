@@ -13,12 +13,11 @@
 // than a raw multi-image response so the client can just set them as
 // <img src> directly.
 
-import { errorResponse, committerFromRequest } from '../lib/http.js';
+import { errorResponse } from '../lib/http.js';
 import { captureAllMaps, toBase64 } from '../lib/mapCapture.js';
 import { saveMapsNow } from '../lib/mapArchive.js';
 import { waitForGenerationLock, releaseGenerationLock } from '../lib/browserLock.js';
-import { getFile } from '../lib/github.js';
-import { DEPLOY_VERSION_PATH } from '../lib/deployVersion.js';
+import { getDataVersion } from '../lib/dataVersion.js';
 
 // Same rationale as mapArchive.js's own wait budget — this is a manual,
 // live admin request, but it shares the same Browser Rendering
@@ -48,20 +47,19 @@ export async function onRequestGet({ request, env, ctx }) {
 
   // Keeps the cached maps/*.png files in sync with a manual regenerate
   // too, reusing the bytes just captured (no second browser launch).
-  // Doesn't block the response — a slow GitHub write shouldn't make
-  // "Regenerate" feel slower than it has to. Also records the deploy
-  // version live right now as what this capture reflects (captureAllMaps
-  // screenshots the live deployed site, so that's an accurate stamp) —
-  // without this, a manual regenerate left maps-meta.json's freshness
-  // marker untouched even though the images themselves were current,
-  // which would make report-pdf.js's waitForFreshMaps poll and time out
-  // needlessly on the next download.
+  // Doesn't block the response — a slow R2 write shouldn't make
+  // "Regenerate" feel slower than it has to. Also records the current
+  // data version as what this capture reflects (captureAllMaps
+  // screenshots the live site, so that's an accurate stamp) — without
+  // this, a manual regenerate left maps-meta.json's freshness marker
+  // untouched even though the images themselves were current, which
+  // would make report generation treat them as stale needlessly.
   if (ctx) {
     ctx.waitUntil(
-      getFile(env, DEPLOY_VERSION_PATH)
-        .then((f) => saveMapsNow(env, captured, committerFromRequest(request), f ? f.content.trim() : undefined))
+      getDataVersion(env)
+        .then((deployVersion) => saveMapsNow(env, captured, deployVersion))
         .catch((err) => {
-          console.error('Failed to save maps to the repo archive:', err);
+          console.error('Failed to save maps to the archive:', err);
         })
     );
   }

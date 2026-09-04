@@ -1,10 +1,10 @@
 // Routes /bigtime/api/upload — add or replace a staff/city photo.
 // Deletion is worker/routes/photo.js.
 
-import { listDir, deleteFile, putFileBase64, ConflictError } from '../lib/github.js';
+import { listObjects, deleteObject, putObject } from '../lib/r2.js';
 import { slugify } from '../lib/text.js';
-import { jsonResponse, errorResponse, committerFromRequest } from '../lib/http.js';
-import { bumpDeployVersion } from '../lib/deployVersion.js';
+import { jsonResponse, errorResponse } from '../lib/http.js';
+import { bumpDataVersion } from '../lib/dataVersion.js';
 import { regenerateReportArchive } from '../lib/reportArchive.js';
 
 const IMAGES_DIR = 'images';
@@ -16,9 +16,9 @@ const MAX_BYTES = 6 * 1024 * 1024; // 6MB — defense in depth; the client is
 // guesses staff photo extensions by trying each in turn, so an existing
 // staff photo's extension has to keep matching what this always writes (see
 // the stale-extension note below). City/ministry photos have no such
-// guessing (the exact filename is stored in ministries.csv), so they're
-// free to use .webp for the real size win — see bigtime/admin.js's
-// reencodeImage for why staff photos aren't switched too.
+// guessing (the exact filename is stored per-ministry), so they're free to
+// use .webp for the real size win — see bigtime/admin.js's reencodeImage
+// for why staff photos aren't switched too.
 const STAFF_OUTPUT_EXT = 'jpg';
 
 function decodedByteLength(base64) {
@@ -26,6 +26,16 @@ function decodedByteLength(base64) {
   const padding = (cleaned.match(/=+$/) || [''])[0].length;
   return Math.floor((cleaned.length * 3) / 4) - padding;
 }
+
+function base64ToBytes(base64) {
+  const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, '');
+  const binary = atob(cleaned);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+const CONTENT_TYPE_BY_EXT = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 
 // City/ministry photos take their extension from the image's own actual
 // bytes rather than a fixed '.webp' constant. Safari's canvas.toBlob
@@ -80,7 +90,6 @@ export async function onRequestPost({ request, env, ctx }) {
     return errorResponse(400, `Image is ${(byteLength / 1024 / 1024).toFixed(1)}MB, over the ${MAX_BYTES / 1024 / 1024}MB limit`);
   }
 
-  const commit = committerFromRequest(request);
   // A staff or ministry photo shows up directly in the report — see
   // reportArchive.js. Unlike ministries.js/ministry-detail.js's map
   // regeneration, this doesn't touch maps/*.png at all (a photo change
@@ -89,49 +98,34 @@ export async function onRequestPost({ request, env, ctx }) {
   function triggerReportRegen(deployVersion) {
     if (!ctx) return;
     ctx.waitUntil(
-      regenerateReportArchive(env, request, deployVersion, commit).catch((err) => {
+      regenerateReportArchive(env, request, deployVersion).catch((err) => {
         console.error('Report archive regeneration failed:', err);
       })
     );
   }
-  const existing = await listDir(env, IMAGES_DIR);
+  const bytes = base64ToBytes(imageBase64);
+  const existing = await listObjects(env, `${IMAGES_DIR}/${slug}`);
 
   if (kind === 'staff') {
     const targetPath = `${IMAGES_DIR}/${slug}.${STAFF_OUTPUT_EXT}`;
-    const existingForSlug = existing.filter((f) => f.name.startsWith(`${slug}.`));
-    const sameExt = existingForSlug.find((f) => f.name === `${slug}.${STAFF_OUTPUT_EXT}`);
+    const existingForSlug = existing.filter((f) => f.key.startsWith(`${IMAGES_DIR}/${slug}.`));
 
     // If an existing photo is slug.png (say) and this endpoint always
     // writes slug.jpg without removing the old file, both would exist —
     // and CONFIG.IMAGE_EXTENSIONS on the public site would have to keep
-    // trying jpg first forever for the new upload to actually win.
-    // Clear out any other-extension file for this slug first (its own
-    // commit) before writing the new one, so there's only ever one.
+    // trying jpg first forever for the new upload to actually win. Clear
+    // out any other-extension file for this slug first, so there's only
+    // ever one.
     for (const stale of existingForSlug) {
-      if (stale.name === `${slug}.${STAFF_OUTPUT_EXT}`) continue;
-      try {
-        await deleteFile(env, stale.path, stale.sha, `Remove stale photo: ${stale.name}`, commit);
-      } catch (err) {
-        if (err instanceof ConflictError) return errorResponse(409, err.message, { error: 'conflict' });
-        throw err;
-      }
+      if (stale.key === targetPath) continue;
+      await deleteObject(env, stale.key);
     }
 
-    let result;
-    try {
-      result = await putFileBase64(env, targetPath, imageBase64, {
-        sha: sameExt ? sameExt.sha : undefined,
-        message: `${sameExt ? 'Update' : 'Add'} photo: ${slug}`,
-        ...commit,
-      });
-    } catch (err) {
-      if (err instanceof ConflictError) return errorResponse(409, err.message, { error: 'conflict' });
-      throw err;
-    }
+    await putObject(env, targetPath, bytes, { contentType: CONTENT_TYPE_BY_EXT[STAFF_OUTPUT_EXT] });
 
-    const deployVersion = await bumpDeployVersion(env, commit);
+    const deployVersion = await bumpDataVersion(env);
     triggerReportRegen(deployVersion);
-    return jsonResponse({ ok: true, path: targetPath, filename: `${slug}.${STAFF_OUTPUT_EXT}`, sha: result.sha, deployVersion });
+    return jsonResponse({ ok: true, path: targetPath, filename: `${slug}.${STAFF_OUTPUT_EXT}`, deployVersion });
   }
 
   // kind === 'city': a ministry can have multiple photos, so each upload
@@ -149,18 +143,9 @@ export async function onRequestPost({ request, env, ctx }) {
   const filename = `${slug}-${nextIndex}.${cityExt}`;
   const targetPath = `${IMAGES_DIR}/${filename}`;
 
-  let result;
-  try {
-    result = await putFileBase64(env, targetPath, imageBase64, {
-      message: `Add photo: ${filename}`,
-      ...commit,
-    });
-  } catch (err) {
-    if (err instanceof ConflictError) return errorResponse(409, err.message, { error: 'conflict' });
-    throw err;
-  }
+  await putObject(env, targetPath, bytes, { contentType: CONTENT_TYPE_BY_EXT[cityExt] });
 
-  const deployVersion = await bumpDeployVersion(env, commit);
+  const deployVersion = await bumpDataVersion(env);
   triggerReportRegen(deployVersion);
-  return jsonResponse({ ok: true, path: targetPath, filename, sha: result.sha, deployVersion });
+  return jsonResponse({ ok: true, path: targetPath, filename, deployVersion });
 }
