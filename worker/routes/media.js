@@ -40,7 +40,16 @@ export async function serveMedia(env, request, key) {
   const ext = key.split('.').pop().toLowerCase();
   const headers = new Headers();
   headers.set('Content-Type', object.httpMetadata?.contentType || CONTENT_TYPE_BY_EXT[ext] || 'application/octet-stream');
-  headers.set('Cache-Control', 'public, max-age=300');
+  // `no-cache`, not `max-age` — R2 overwrites a photo in place at the
+  // exact same key on every crop/replace, so a positive max-age let the
+  // browser serve a stale cached copy for that whole window with no
+  // request to this Worker at all, defeating the If-None-Match check
+  // below entirely (it only runs when the browser actually asks).
+  // no-cache still lets the browser keep the bytes, it just always
+  // revalidates via ETag first — a cheap 304 when unchanged, a real
+  // fetch the instant it isn't. Confirmed live: a re-cropped staff photo
+  // kept showing the old crop until this.
+  headers.set('Cache-Control', 'no-cache');
   if (object.httpEtag) headers.set('ETag', object.httpEtag);
   if (object.size != null) headers.set('Content-Length', String(object.size));
 
