@@ -238,7 +238,15 @@ export default {
         // below so these paths never fall through to it (there's nothing
         // there to fall through to anymore; the files themselves aren't
         // deployed as static assets going forward).
-        if ((pathname.startsWith('/images/') || pathname.startsWith('/maps/') || pathname.startsWith('/reports/')) && method === 'GET') {
+        // HEAD is included alongside GET — bigtime/admin.js's
+        // findExistingImageUrl() HEAD-probes these paths to check whether a
+        // photo already exists before showing it in the photo widget.
+        // GET-only here silently 404s every HEAD probe (env.ASSETS.fetch
+        // has nothing to fall through to, since images live only in R2
+        // now, not the static asset bundle) — confirmed live as the cause
+        // of newly-uploaded staff photos looking fine on the public site
+        // but never showing back up in the admin's own photo widget.
+        if ((pathname.startsWith('/images/') || pathname.startsWith('/maps/') || pathname.startsWith('/reports/')) && (method === 'GET' || method === 'HEAD')) {
           return await serveMedia(env, request, pathname.slice(1));
         }
 

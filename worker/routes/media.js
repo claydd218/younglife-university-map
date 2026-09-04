@@ -53,5 +53,9 @@ export async function serveMedia(env, request, key) {
   if (object.httpEtag) headers.set('ETag', object.httpEtag);
   if (object.size != null) headers.set('Content-Length', String(object.size));
 
-  return new Response(object.body, { headers });
+  // HEAD (bigtime/admin.js's findExistingImageUrl uses it to check
+  // whether a photo exists without downloading it) must not send a body —
+  // the headers above are enough to answer that question.
+  const body = request.method === 'HEAD' ? null : object.body;
+  return new Response(body, { headers });
 }
