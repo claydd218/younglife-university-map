@@ -2891,7 +2891,9 @@ function openAdminUserDialog(user) {
   $('admin-user-name').value = user ? user.name : '';
   $('admin-user-login').value = user ? user.login : '';
   $('admin-user-password').value = '';
-  $('admin-user-password-hint').textContent = user ? 'Leave blank to keep the current password.' : '';
+  $('admin-user-password-hint').textContent = user
+    ? 'Leave blank to keep the current password, or enter a new one (at least 8 characters).'
+    : 'At least 8 characters.';
   $('admin-user-is-admin').checked = user ? user.is_admin : false;
   $('admin-user-dialog').showModal();
   $('admin-user-name').focus();

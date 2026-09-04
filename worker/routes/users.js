@@ -12,10 +12,19 @@ function requireAdmin(user) {
   return null;
 }
 
+const MIN_PASSWORD_LENGTH = 8;
+
 function validateFields(body, { requirePassword }) {
   if (!body.name || !String(body.name).trim()) return 'Name is required';
   if (!body.login || !String(body.login).trim()) return 'Login is required';
   if (requirePassword && !body.password) return 'Password is required';
+  // Applies whenever a password is actually being set — required on
+  // create, optional-but-still-validated on edit (an admin resetting
+  // someone's password to something weak is exactly what this exists to
+  // catch too, not just the create path).
+  if (body.password && body.password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+  }
   return null;
 }
 

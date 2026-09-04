@@ -107,6 +107,17 @@ export async function onRequestPost({ request, env, ctx }) {
   const existing = await listObjects(env, `${IMAGES_DIR}/${slug}`);
 
   if (kind === 'staff') {
+    // Unlike the city path below, this always stores under a fixed
+    // .jpg extension/content-type regardless of what's uploaded — so this
+    // check isn't picking an extension, just confirming the bytes are
+    // actually a recognizable image before writing and serving them as
+    // one (previously only enforced for city photos; a defense-in-depth
+    // gap, not a working exploit, since serveMedia's forced Content-Type
+    // plus the site-wide X-Content-Type-Options: nosniff header already
+    // block a browser from executing non-image content served this way).
+    if (!detectImageExt(imageBase64)) {
+      return errorResponse(400, "Couldn't recognize the image format (expected JPEG, PNG, or WebP)");
+    }
     const targetPath = `${IMAGES_DIR}/${slug}.${STAFF_OUTPUT_EXT}`;
     const existingForSlug = existing.filter((f) => f.key.startsWith(`${IMAGES_DIR}/${slug}.`));
 

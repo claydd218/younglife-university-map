@@ -28,11 +28,6 @@ export async function listUsers(env) {
   return results.map(toShape);
 }
 
-export async function countAdmins(env) {
-  const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM admin_users WHERE is_admin = 1').first();
-  return row.n;
-}
-
 export async function createUser(env, { name, login, password, isAdmin }) {
   const passwordHash = await hashPassword(password);
   const now = new Date().toISOString();
@@ -44,29 +39,44 @@ export async function createUser(env, { name, login, password, isAdmin }) {
 
 // `password` optional — omitted (or empty) leaves the existing hash alone,
 // so an edit that only changes the display name doesn't force a reset.
+//
+// The last-admin guard is baked into the UPDATE's own WHERE clause (a
+// correlated COUNT subquery), not a separate SELECT-then-write — D1 runs
+// a single prepared statement as one atomic step, so this closes a real
+// race a "check count, then write" pair left open: two concurrent
+// demotions of the last two admins could each see count=2 in their own
+// check and both proceed, leaving zero. A single conditional statement
+// can't be interleaved like that.
 export async function updateUser(env, id, { name, login, password, isAdmin }) {
-  const existing = await env.DB.prepare('SELECT is_admin FROM admin_users WHERE id = ?').bind(id).first();
-  if (existing && existing.is_admin && !isAdmin && (await countAdmins(env)) <= 1) {
-    throw new LastAdminError('This is the last remaining admin — promote someone else first.');
-  }
-  if (password) {
-    const passwordHash = await hashPassword(password);
-    await env.DB.prepare('UPDATE admin_users SET name = ?, login = ?, password_hash = ?, is_admin = ? WHERE id = ?')
-      .bind(name, login, passwordHash, isAdmin ? 1 : 0, id).run();
-  } else {
-    await env.DB.prepare('UPDATE admin_users SET name = ?, login = ?, is_admin = ? WHERE id = ?')
-      .bind(name, login, isAdmin ? 1 : 0, id).run();
+  const isAdminInt = isAdmin ? 1 : 0;
+  const guard = '(? = 1 OR is_admin = 0 OR (SELECT COUNT(*) FROM admin_users WHERE is_admin = 1) > 1)';
+  const passwordHash = password ? await hashPassword(password) : null;
+  const result = passwordHash
+    ? await env.DB.prepare(`UPDATE admin_users SET name = ?, login = ?, password_hash = ?, is_admin = ? WHERE id = ? AND ${guard}`)
+        .bind(name, login, passwordHash, isAdminInt, id, isAdminInt).run()
+    : await env.DB.prepare(`UPDATE admin_users SET name = ?, login = ?, is_admin = ? WHERE id = ? AND ${guard}`)
+        .bind(name, login, isAdminInt, id, isAdminInt).run();
+
+  if (result.meta.changes === 0) {
+    // Ambiguous on its own (blocked by the guard, or id doesn't exist) —
+    // a cheap follow-up read tells them apart for the right error.
+    const stillExists = await env.DB.prepare('SELECT 1 FROM admin_users WHERE id = ?').bind(id).first();
+    if (stillExists) throw new LastAdminError('This is the last remaining admin — promote someone else first.');
+    return null;
   }
   const row = await env.DB.prepare('SELECT * FROM admin_users WHERE id = ?').bind(id).first();
   return row ? toShape(row) : null;
 }
 
 export async function deleteUser(env, id) {
-  const existing = await env.DB.prepare('SELECT is_admin FROM admin_users WHERE id = ?').bind(id).first();
-  if (existing && existing.is_admin && (await countAdmins(env)) <= 1) {
-    throw new LastAdminError('This is the last remaining admin — promote someone else before removing this account.');
+  const result = await env.DB.prepare(
+    'DELETE FROM admin_users WHERE id = ? AND (is_admin = 0 OR (SELECT COUNT(*) FROM admin_users WHERE is_admin = 1) > 1)'
+  ).bind(id).run();
+
+  if (result.meta.changes === 0) {
+    const stillExists = await env.DB.prepare('SELECT 1 FROM admin_users WHERE id = ?').bind(id).first();
+    if (stillExists) throw new LastAdminError('This is the last remaining admin — promote someone else before removing this account.');
   }
-  await env.DB.prepare('DELETE FROM admin_users WHERE id = ?').bind(id).run();
 }
 
 // -> {id, name} on success, null on any failure (unknown login OR wrong
