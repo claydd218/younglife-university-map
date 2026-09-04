@@ -64,7 +64,14 @@ export function clearSessionCookie() {
 async function readSessionCookie(request, env) {
   if (!env.ADMIN_SESSION_SECRET) return null;
   const cookieHeader = request.headers.get('Cookie') || '';
-  const match = cookieHeader.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
+  // Anchored to a cookie boundary (string start or "; ") — unanchored, this
+  // would also match inside "superadmin_session=..." (which contains
+  // "admin_session" as a substring), silently reading the wrong cookie's
+  // value whenever a browser carries both. Confirmed live: a superbigtime
+  // session cookie caused every /bigtime/ login to bounce back to the
+  // login page with no error, because the real admin_session cookie's
+  // value never got read at all.
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`));
   if (!match) return null;
   const parts = decodeURIComponent(match[1]).split('.');
   if (parts.length !== 3) return null;

@@ -45,7 +45,9 @@ export function clearSiteSessionCookie() {
 export async function hasValidSiteSession(request, env) {
   if (!env.SITE_SESSION_SECRET) return false;
   const cookieHeader = request.headers.get('Cookie') || '';
-  const match = cookieHeader.match(new RegExp(`${COOKIE_NAME}=([^;]+)`));
+  // Anchored to a cookie boundary — see worker/lib/session.js's identical
+  // fix for why an unanchored match here is a real bug, not just theory.
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`));
   if (!match) return false;
   const [expiresAtStr, sig] = decodeURIComponent(match[1]).split('.');
   const expiresAt = parseInt(expiresAtStr, 10);
