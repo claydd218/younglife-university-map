@@ -61,9 +61,18 @@ export async function login(request, env) {
 
   // Checked first (and reported with the same generic error as a wrong
   // login/password) so a failed captcha never reveals whether it was the
-  // human check or the credentials that actually failed.
+  // human check or the credentials that actually failed. Deliberately
+  // does NOT call recordLoginFailure — a missing/invalid Turnstile token
+  // costs an attacker nothing (no siteverify round trip even happens,
+  // per verifyTurnstile's own early return, and no CAPTCHA has to be
+  // solved), so letting it count toward the same global lockout budget
+  // as a real wrong-password guess let anyone, unauthenticated, lock out
+  // every admin for isLoginLockedOut's whole window just by POSTing here
+  // repeatedly with an empty body — confirmed live as a real, free,
+  // no-skill denial-of-service. The lockout still does its actual job:
+  // it only starts counting once someone has passed Turnstile and is
+  // genuinely guessing passwords.
   if (!(await verifyTurnstile(turnstileToken, env, request))) {
-    await recordLoginFailure(env);
     return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
 
