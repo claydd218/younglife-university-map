@@ -18,6 +18,7 @@
 
 import { onRequestGet as ministriesGet, onRequestPost as ministriesPost } from './routes/ministries.js';
 import { onRequestPut as ministryPut, onRequestDelete as ministryDelete } from './routes/ministry-detail.js';
+import { onRequestPost as staffMovePost } from './routes/staff-move.js';
 import { onRequestPost as uploadPost } from './routes/upload.js';
 import { onRequestDelete as photoDelete } from './routes/photo.js';
 import { onRequestGet as mapScreenshotGet } from './routes/map-screenshot.js';
@@ -193,6 +194,12 @@ export default {
           const params = { id: decodeURIComponent(ministryMatch[1]) };
           if (method === 'PUT') return await ministryPut({ request, env, ctx, params });
           if (method === 'DELETE') return await ministryDelete({ request, env, ctx, params });
+        }
+
+        const staffMoveMatch = pathname.match(/^\/bigtime\/api\/staff\/([^/]+)\/move$/);
+        if (staffMoveMatch && method === 'POST') {
+          const params = { id: decodeURIComponent(staffMoveMatch[1]) };
+          return await staffMovePost({ request, env, ctx, params });
         }
 
         if (pathname === '/bigtime/api/upload' && method === 'POST') {

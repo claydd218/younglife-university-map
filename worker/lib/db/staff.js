@@ -69,6 +69,20 @@ export async function upsertHomeStaff(env, ministryId, staffEntries) {
   }
 }
 
+// Atomically re-homes a staffer to a different ministry, preserving their
+// id (and thus their staff_assignments) — the fix for "Move to Ministry"
+// used to PUT the whole target ministry with a brand-new {name, role}
+// entry (no id), which upsertHomeStaff always treats as an insert. That
+// left a duplicate row at the target and a dangling orphaned row (and its
+// assignments) at the source, cleaned up only if/when the source ministry
+// happened to be saved again — same bug class as the rename corruption
+// upsertHomeStaff's own comment describes.
+export async function moveStaffHome(env, staffId, newMinistryId) {
+  const now = new Date().toISOString();
+  await env.DB.prepare('UPDATE staff SET home_ministry_id = ?, updated_at = ? WHERE id = ?')
+    .bind(newMinistryId, now, staffId).run();
+}
+
 export async function setAssignment(env, staffId, ministryId) {
   await env.DB.prepare('INSERT OR IGNORE INTO staff_assignments (staff_id, ministry_id) VALUES (?, ?)').bind(staffId, ministryId).run();
 }

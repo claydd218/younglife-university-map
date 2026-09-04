@@ -1220,7 +1220,11 @@ function addStaffRow(prefill = {}) {
       showBanner('error', 'Fill in the staff member’s name before moving them.');
       return;
     }
-    openMoveStaffDialog(name, metaInput.value.trim(), item);
+    if (!item.dataset.staffId) {
+      showBanner('error', 'Save this ministry first, then Move this staff member — a brand-new row needs a real record to move.');
+      return;
+    }
+    openMoveStaffDialog(name, Number(item.dataset.staffId), item);
   });
 
   const assignBtn = document.createElement('button');
@@ -1274,13 +1278,18 @@ function addStaffRow(prefill = {}) {
 
 // --- Move staff to another ministry -----------------------------------
 
-// { name, role, item } for whichever staff row's Move… was clicked —
+// { name, staffId, item } for whichever staff row's Move… was clicked —
 // item is the DOM row so confirmMoveStaff can remove it once the target
-// ministry's write succeeds.
+// ministry's write succeeds. staffId is the staffer's real database id
+// (the Move button already refuses to open this dialog without one) —
+// the atomic /bigtime/api/staff/:id/move endpoint re-homes that exact
+// row instead of inserting a new one at the target and orphaning the old
+// one at the source, which is what PUTting a no-id {name, role} entry
+// used to do.
 let moveStaffContext = null;
 
-function openMoveStaffDialog(name, role, item) {
-  moveStaffContext = { name, role, item };
+function openMoveStaffDialog(name, staffId, item) {
+  moveStaffContext = { name, staffId, item };
   const search = $('move-staff-search');
   search.value = '';
   renderMoveStaffList('');
@@ -1308,43 +1317,43 @@ function renderMoveStaffList(query) {
   });
 }
 
-// Writes straight to the target ministry's last-known-saved data
-// (state.rows), not the currently open form's draft — moving a staff
-// member is its own self-contained action and shouldn't also commit
-// whatever unrelated field edits happen to be sitting in the open dialog.
+// Calls the atomic move endpoint (worker/routes/staff-move.js) rather than
+// PUTting the whole target ministry with a no-id {name, role} entry — that
+// older approach always inserted a brand-new staff row at the target
+// (upsertHomeStaff has no way to know it's "the same person" without an
+// id) and left the original row, and any staff_assignments pointing at it,
+// orphaned at the source until/unless that ministry happened to be saved
+// again.
 async function confirmMoveStaff(targetId) {
   const target = state.rows.find((r) => r.id === targetId);
   if (!target || !moveStaffContext) return;
-  const { name, role, item } = moveStaffContext;
+  const { name, staffId, item } = moveStaffContext;
   if (!window.confirm(`Move ${name} to ${target.city}, ${target.country}?`)) return;
 
   $('move-staff-dialog').close();
-  const newStaff = [...target.staff, { name, role }];
-  const body = {
-    sha: target.sha,
-    city: target.city,
-    country: target.country,
-    lat: target.lat,
-    lng: target.lng,
-    date_opened: target.date_opened,
-    is_developing: target.is_developing,
-    blurb: target.blurb,
-    staff: newStaff,
-    universities: target.universities,
-    photos: target.photos,
-    video_url: target.video_url,
-    video_label: target.video_label,
-    assigned_staff: target.assigned_staff,
-  };
 
   try {
-    const result = await apiFetch(`/ministries/${encodeURIComponent(targetId)}`, { method: 'PUT', body: JSON.stringify(body) });
+    const result = await apiFetch(`/staff/${encodeURIComponent(staffId)}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ targetMinistryId: targetId }),
+    });
     trackDeployVersion(result.deployVersion);
     const targetIndex = state.rows.findIndex((r) => r.id === targetId);
-    // The response's own row, not a local reconstruction — includes the
-    // moved staffer's real new database id (see saveMinistry's identical
-    // reasoning on why that matters for a same-session re-save).
     state.rows[targetIndex] = result.row;
+    // The source ministry's own state.rows entry (the one still open in
+    // this dialog) still has the moved staffer in its local .staff array
+    // until reloaded — drop them here too, so reopening the source
+    // without an intervening page reload doesn't re-show and re-save a
+    // duplicate of someone who has already moved.
+    if (state.editingId != null) {
+      const sourceIndex = state.rows.findIndex((r) => r.id === state.editingId);
+      if (sourceIndex !== -1) {
+        state.rows[sourceIndex] = {
+          ...state.rows[sourceIndex],
+          staff: state.rows[sourceIndex].staff.filter((s) => s.id !== staffId),
+        };
+      }
+    }
     item.remove();
     markDialogDirty();
   } catch (err) {
