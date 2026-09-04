@@ -48,6 +48,10 @@ export async function deleteUser(env, id) {
 // the old shared-password checkPassword: never reveal which one was wrong.
 export async function verifyLogin(env, login, password) {
   const row = await env.DB.prepare('SELECT * FROM admin_users WHERE login = ?').bind(login).first();
+  // TEMP diagnostic — logs the submitted login (not a secret) and whether
+  // a row was found, plus lengths only, never password/hash content.
+  // Remove once the reported login failure is resolved.
+  console.log(`[bigtime login diag] login=${JSON.stringify(login)} found=${!!row} passwordLen=${password ? password.length : 0}`);
   if (!row) {
     // Still runs a full PBKDF2 derivation against a dummy stored value so
     // a nonexistent login doesn't respond measurably faster than a wrong
@@ -56,6 +60,7 @@ export async function verifyLogin(env, login, password) {
     return null;
   }
   const ok = await verifyPassword(password, row.password_hash);
+  console.log(`[bigtime login diag] passwordMatch=${ok} storedHashLen=${row.password_hash.length}`);
   if (!ok) return null;
   await env.DB.prepare('UPDATE admin_users SET last_login_at = ? WHERE id = ?').bind(new Date().toISOString(), row.id).run();
   return { id: row.id, name: row.name };
