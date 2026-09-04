@@ -121,6 +121,7 @@
   .deploy-toast-dismiss:hover { color: #fff; }
 
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .admin-section-heading { font-size: 15px; margin: 32px 0 14px; padding-top: 20px; border-top: 1px solid #ddd; color: #444; }
   .toolbar-left { display: flex; align-items: center; gap: 12px; }
   .ministries-search-wrap { position: relative; display: flex; align-items: center; }
   .ministries-search {
@@ -671,6 +672,12 @@
       </thead>
       <tbody id="admin-users-tbody"></tbody>
     </table>
+
+    <h2 class="admin-section-heading">Data export</h2>
+    <div class="toolbar">
+      <span id="photos-export-status" class="status-text" hidden></span>
+      <button type="button" id="photos-export-btn" class="btn secondary">Download Photos (ZIP)</button>
+    </div>
   </section>
 
   <dialog id="admin-user-dialog">

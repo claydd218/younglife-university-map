@@ -2740,6 +2740,49 @@ function wireReportPdfButton() {
   });
 }
 
+// Streams every uploaded staff/ministry photo as one ZIP
+// (worker/routes/photos-export.js) — an on-demand offsite copy, on top of
+// the automatic daily backup (worker/lib/imageBackup.js). No cache to hit
+// here (unlike the report PDF), so this always shows the loading state;
+// the archive can run tens of MB and take a real moment to stream.
+function wirePhotosExportButton() {
+  const btn = $('photos-export-btn');
+  const status = $('photos-export-status');
+  const originalLabel = btn.textContent;
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    status.hidden = true;
+    status.classList.remove('error');
+    btn.textContent = 'Preparing download…';
+    try {
+      const res = await fetch(`${API_BASE}/photos-export`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `Export failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const dispositionMatch = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/);
+      a.download = dispositionMatch ? dispositionMatch[1] : 'yl-uni-intl-photos.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      status.textContent = err.message || String(err);
+      status.classList.add('error');
+      status.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  });
+}
+
 // --- Log tab -------------------------------------------------------------
 // Reads worker/routes/logs.js's paginated view of ministry_edits (the
 // lightweight audit table added with the D1 migration, now with a
@@ -2983,6 +3026,7 @@ wireAssignStaffDialog();
 wireReportPdfButton();
 wireLogTab();
 wireAdminUsersTab();
+wirePhotosExportButton();
 wireSignOut();
 checkAdminAccess();
 loadMinistries();
