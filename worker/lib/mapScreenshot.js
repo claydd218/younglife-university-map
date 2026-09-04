@@ -6,6 +6,7 @@
 // calling page.screenshot().
 
 import puppeteer from '@cloudflare/puppeteer';
+import { forwardCookiesToPage } from './pageCookies.js';
 
 // The map fetches its own CSV/GeoJSON data and builds ~250 country shapes
 // plus every ministry marker after the page loads — waitForFunction below
@@ -27,9 +28,11 @@ export async function openMapPage(env, request, viewport) {
   // window.__mapReady never fires, this just times out below, and every
   // caller's own try/catch swallows that as a quiet failure. Confirmed
   // live as the reason zero maps/*.png updates landed after the site gate
-  // went in, Finland included.
-  const cookie = request.headers.get('Cookie') || '';
-  if (cookie) await page.setExtraHTTPHeaders({ Cookie: cookie });
+  // went in, Finland included. Via the page's actual cookie jar (see
+  // pageCookies.js), not a raw header blasted at every request the page
+  // makes — this page loads Google Fonts, and the header approach was
+  // sending the session cookie there too.
+  await forwardCookiesToPage(page, request);
   const mapUrl = new URL('/', request.url);
   await page.goto(mapUrl.toString(), { waitUntil: 'networkidle0' });
   await page.waitForFunction('window.__mapReady === true', { timeout: READY_TIMEOUT_MS });

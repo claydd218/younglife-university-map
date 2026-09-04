@@ -15,6 +15,7 @@
 
 import puppeteer from '@cloudflare/puppeteer';
 import { PDFDocument } from 'pdf-lib';
+import { forwardCookiesToPage } from './pageCookies.js';
 
 const VIEWPORT = { width: 1600, height: 1200 };
 // Ministry data + every ministry/staff photo has to load before the
@@ -65,7 +66,6 @@ function footerTemplateFor(text, color) {
 
 async function generateWithPage(env, request) {
   const reportUrl = new URL('/bigtime/report', request.url);
-  const cookie = request.headers.get('Cookie') || '';
 
   let browser;
   try {
@@ -76,8 +76,12 @@ async function generateWithPage(env, request) {
     // Worker's own session check ran before either the route or the
     // background regeneration that leads here) — forwarding that same
     // cookie is what lets this internal Puppeteer navigation into the
-    // auth-gated /bigtime/report without a second login step.
-    if (cookie) await page.setExtraHTTPHeaders({ Cookie: cookie });
+    // auth-gated /bigtime/report without a second login step. Via the
+    // page's actual cookie jar (see pageCookies.js), not a raw header
+    // blasted at every request the page makes — the report page loads
+    // Google Fonts, and the header approach was sending the session
+    // cookie there too.
+    await forwardCookiesToPage(page, request);
     await page.goto(reportUrl.toString(), { waitUntil: 'networkidle0' });
     try {
       await page.waitForFunction('window.__reportReady === true', { timeout: REPORT_READY_TIMEOUT_MS });
