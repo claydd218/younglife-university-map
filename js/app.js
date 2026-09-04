@@ -1555,10 +1555,10 @@ function wireBackButtonReset() {
 async function init() {
   showStatus('Loading ministries…');
   try {
-    const [countryGeo, divisionRows, ministryRows] = await Promise.all([
+    const [countryGeo, divisionRows, { rows: ministryRows }] = await Promise.all([
       fetchJson(CONFIG.COUNTRIES_GEOJSON_URL),
       fetchCsv(CONFIG.COUNTRY_DIVISIONS_CSV_URL),
-      fetchCsv(CONFIG.MINISTRIES_CSV_URL),
+      fetchJson(CONFIG.MINISTRIES_API_URL),
     ]);
 
     for (const row of divisionRows) {

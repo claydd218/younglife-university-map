@@ -23,6 +23,8 @@ import { onRequestDelete as photoDelete } from './routes/photo.js';
 import { onRequestGet as mapScreenshotGet } from './routes/map-screenshot.js';
 import { onRequestGet as reportPdfGet } from './routes/report-pdf.js';
 import { onRequestGet as imagesManifestGet } from './routes/images-manifest.js';
+import { onRequestGet as publicMinistriesGet } from './routes/public-ministries.js';
+import { serveMedia } from './routes/media.js';
 import { login, logout } from './routes/login.js';
 import { hasValidSession, createSessionCookie } from './lib/session.js';
 import { siteLogin, siteLogout } from './routes/site-login.js';
@@ -126,15 +128,12 @@ const PUBLIC_ADMIN_PATHS = new Set(['/bigtime/login.html', '/bigtime/login', '/b
 // satisfy this one (or vice versa) — simplest to reason about, and to
 // remove cleanly later, as two gates that never interact. Same *.html/
 // extensionless double-entry reasoning as PUBLIC_ADMIN_PATHS above.
-// data/deploy-version.txt also has to be public: worker/lib/mapArchive.js's
-// and reportArchive.js's own waitForDeploy() fetches it directly, worker-
-// to-worker with no cookie at all (unlike reportCapture.js's Puppeteer
-// navigation above, which does carry the admin's cookie) — without this,
-// that fetch silently landed on the /site-login redirect target instead of
-// the real token, so it could never see its expected value and always
-// timed out, permanently skipping map/report regeneration. Confirmed live:
-// zero automatic map updates recorded since this gate went in.
-const PUBLIC_SITE_PATHS = new Set(['/site-login.html', '/site-login', '/site-login.js', '/api/site-login', '/api/site-logout', '/data/deploy-version.txt']);
+// GET /api/ministries, /images/*, /maps/*, /reports/* are deliberately
+// NOT listed here — they're the same gated public surface
+// data/ministries.csv, images/*, maps/*, and reports/* always were
+// (see worker/routes/public-ministries.js and worker/routes/media.js),
+// just backed by D1/R2 now instead of static files.
+const PUBLIC_SITE_PATHS = new Set(['/site-login.html', '/site-login', '/site-login.js', '/api/site-login', '/api/site-logout']);
 
 export default {
   async fetch(request, env, ctx) {
@@ -222,9 +221,23 @@ export default {
           return jsonError(404, `No admin API route for ${method} ${pathname}`);
         }
 
+        if (pathname === '/api/ministries' && method === 'GET') {
+          return await publicMinistriesGet({ env });
+        }
+
+        // images/, maps/, and reports/ used to be plain static files
+        // (git-committed) — now they're R2 objects, streamed back out by
+        // worker/routes/media.js. Checked before the ASSETS fallthrough
+        // below so these paths never fall through to it (there's nothing
+        // there to fall through to anymore; the files themselves aren't
+        // deployed as static assets going forward).
+        if ((pathname.startsWith('/images/') || pathname.startsWith('/maps/') || pathname.startsWith('/reports/')) && method === 'GET') {
+          return await serveMedia(env, request, pathname.slice(1));
+        }
+
         // Everything else — the public map, bigtime/index.html (once past
         // the session check above), bigtime/admin.js, bigtime/login.html,
-        // css/js/images/data — is a plain static file.
+        // css/js — is a plain static file.
         return await env.ASSETS.fetch(request);
       };
 

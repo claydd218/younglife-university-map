@@ -19,8 +19,7 @@ const PHOTO_MINIMUMS = {
 };
 
 const state = {
-  rows: [],
-  sha: null,
+  rows: [], // each row carries its own `sha` (an alias for its D1 updated_at) — the per-row optimistic-concurrency token, no single global one anymore
   divisionByCountry: new Map(),
   editingId: null, // null while adding, otherwise the id being edited
   dialogDirty: false, // edit mode only — see markDialogDirty/updateDialogButtons
@@ -1129,14 +1128,12 @@ async function deleteMinistry(id) {
   try {
     const result = await apiFetch(`/ministries/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-      body: JSON.stringify({ sha: state.sha }),
+      body: JSON.stringify({ sha: row.sha }),
     });
     // Update state from what we already know rather than re-fetching —
-    // GitHub's Contents API has a brief read-after-write lag immediately
-    // after a commit, so an instant re-GET can occasionally still show the
-    // pre-write data. The write response already has everything needed.
+    // avoids a round trip, and this row's own data already has everything
+    // needed.
     state.rows = state.rows.filter((r) => r.id !== id);
-    state.sha = result.sha;
     trackDeployVersion(result.deployVersion);
     renderMinistriesTable();
     // Every staff member who called this ministry home just lost that
@@ -1357,7 +1354,7 @@ async function confirmMoveStaff(targetId) {
   $('move-staff-dialog').close();
   const newStaff = [...target.staff, { name, role }];
   const body = {
-    sha: state.sha,
+    sha: target.sha,
     city: target.city,
     country: target.country,
     lat: target.lat,
@@ -1375,10 +1372,9 @@ async function confirmMoveStaff(targetId) {
 
   try {
     const result = await apiFetch(`/ministries/${encodeURIComponent(targetId)}`, { method: 'PUT', body: JSON.stringify(body) });
-    state.sha = result.sha;
     trackDeployVersion(result.deployVersion);
     const targetIndex = state.rows.findIndex((r) => r.id === targetId);
-    state.rows[targetIndex] = { ...target, staff: newStaff };
+    state.rows[targetIndex] = { ...target, staff: newStaff, sha: result.sha, updated_at: result.updated_at };
     item.remove();
     markDialogDirty();
   } catch (err) {
@@ -1429,7 +1425,7 @@ function findStaffHome(name) {
 // draft instead of a call like this.
 async function putMinistryField(target, fieldOverrides) {
   const body = {
-    sha: state.sha,
+    sha: target.sha,
     city: target.city,
     country: target.country,
     lat: target.lat,
@@ -1446,10 +1442,9 @@ async function putMinistryField(target, fieldOverrides) {
     ...fieldOverrides,
   };
   const result = await apiFetch(`/ministries/${encodeURIComponent(target.id)}`, { method: 'PUT', body: JSON.stringify(body) });
-  state.sha = result.sha;
   trackDeployVersion(result.deployVersion);
   const index = state.rows.findIndex((r) => r.id === target.id);
-  state.rows[index] = { ...target, ...fieldOverrides };
+  state.rows[index] = { ...target, ...fieldOverrides, sha: result.sha, updated_at: result.updated_at };
   return state.rows[index];
 }
 
@@ -1839,8 +1834,12 @@ async function saveMinistry() {
   const universities = collectRepeatable($('universities-group'), 'name', 'year')
     .map(({ name, year }) => ({ name: stripParens(name), year: stripParens(year) }));
   const videoUrl = $('field-video-url').value.trim();
+  // Only meaningful when editing an existing row (its own current sha,
+  // the per-row concurrency token) — a brand-new ministry has no prior
+  // row to conflict with, so the server ignores this for POST.
+  const editingRow = state.editingId ? state.rows.find((r) => r.id === state.editingId) : null;
   const body = {
-    sha: state.sha,
+    sha: editingRow ? editingRow.sha : undefined,
     city: $('field-city').value.trim(),
     country: $('field-country').value.trim(),
     lat: $('field-lat').value.trim(),
@@ -1876,12 +1875,6 @@ async function saveMinistry() {
   }
 
   const { sha: _staleSha, ...rowFields } = body;
-  // Mirrors rowFromBody's server-side stamp (worker/lib/ministries.js) so
-  // the locally-patched state.rows entry (updated from this request body,
-  // not re-fetched) matches what the server actually wrote — otherwise
-  // the new/edited row has no updated_at until the next full reload, and
-  // silently drops out of the Recent filter until then.
-  rowFields.updated_at = new Date().toISOString();
 
   const closeBtn = $('dialog-close-btn');
   closeBtn.disabled = true;
@@ -1897,16 +1890,15 @@ async function saveMinistry() {
       const previousStaffNames = state.rows[index].staff.map((s) => s.name);
       const result = await apiFetch(`/ministries/${encodeURIComponent(state.editingId)}`, { method: 'PUT', body: JSON.stringify(body) });
       // Same read-after-write reasoning as deleteMinistry — update from the
-      // write response instead of re-fetching.
-      state.rows[index] = { id: state.editingId, ...rowFields };
-      state.sha = result.sha;
+      // write response (which carries the server's own authoritative
+      // updated_at, not a client-side guess) instead of re-fetching.
+      state.rows[index] = { id: state.editingId, ...rowFields, updated_at: result.updated_at, sha: result.updated_at };
       trackDeployVersion(result.deployVersion);
       const newStaffNames = new Set(rowFields.staff.map((s) => s.name));
       await sweepAssignments(previousStaffNames.filter((n) => !newStaffNames.has(n)));
     } else {
       const result = await apiFetch('/ministries', { method: 'POST', body: JSON.stringify(body) });
-      state.rows.push({ id: result.id, ...rowFields });
-      state.sha = result.sha;
+      state.rows.push({ id: result.id, ...rowFields, updated_at: result.updated_at, sha: result.updated_at });
       trackDeployVersion(result.deployVersion);
     }
     renderMinistriesTable();
@@ -2246,7 +2238,6 @@ async function loadMinistries() {
       state.divisionByCountry.size ? Promise.resolve(state.divisionByCountry) : loadDivisionsDirect(),
     ]);
     state.rows = data.rows;
-    state.sha = data.sha;
     state.divisionByCountry = divisions;
 
     const datalist = $('country-list');

@@ -8,9 +8,9 @@
 // duration of its one fetch either way, since the client can't know in
 // advance which path a given click will take.
 
-import { errorResponse, committerFromRequest } from '../lib/http.js';
-import { getFile, getFileBase64 } from '../lib/github.js';
-import { DEPLOY_VERSION_PATH } from '../lib/deployVersion.js';
+import { errorResponse } from '../lib/http.js';
+import { getObject } from '../lib/r2.js';
+import { getDataVersion } from '../lib/dataVersion.js';
 import { generateReportPdf, withTimeout, GENERATE_TIMEOUT_MS } from '../lib/reportCapture.js';
 import { captureAllMaps } from '../lib/mapCapture.js';
 import { isMapsCacheFreshFor, saveMapsNow } from '../lib/mapArchive.js';
@@ -21,19 +21,12 @@ import {
   PDF_PATH,
 } from '../lib/reportArchive.js';
 
-function base64ToBytes(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
 async function servableFromCache(env) {
   const { fresh, meta } = await getReportCacheStatus(env);
   if (!fresh) return null;
-  const cached = await getFileBase64(env, PDF_PATH);
-  if (!cached) return null;
-  return { bytes: base64ToBytes(cached.contentBase64), generatedAt: meta.generatedAt };
+  const object = await getObject(env, PDF_PATH);
+  if (!object) return null;
+  return { bytes: await object.arrayBuffer(), generatedAt: meta.generatedAt };
 }
 
 // Polls the cache (not the lock directly — the lock only says *someone*
@@ -41,9 +34,8 @@ async function servableFromCache(env) {
 // regeneration this request didn't start — almost always the background
 // job worker/lib/reportArchive.js's regenerateReportArchive kicked off
 // from the admin edit that just invalidated the cache — is presumably
-// still running. Same interval as reportArchive.js's own waitForDeploy;
-// same rough budget as GENERATE_TIMEOUT_MS, since that's genuinely how
-// long the other generation could still legitimately take.
+// still running. Same rough budget as GENERATE_TIMEOUT_MS, since that's
+// genuinely how long the other generation could still legitimately take.
 const POLL_INTERVAL_MS = 5000;
 async function pollForFreshCache(env, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
@@ -55,71 +47,23 @@ async function pollForFreshCache(env, timeoutMs) {
   return null;
 }
 
-function bytesEqual(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
-const MAPS_DEPLOY_WAIT_TIMEOUT_MS = 150000;
-const MAPS_DEPLOY_WAIT_INTERVAL_MS = 5000;
-
-// Confirms a just-committed maps capture has actually gone live —
-// generateReportPdf's Puppeteer page load fetches maps/*.png over real
-// HTTP from the deployed site, so committing new bytes to the repo isn't
-// enough on its own, the deploy that includes them has to have landed
-// too. Compares world.png's actual bytes rather than reusing
-// data/deploy-version.txt (that file is a shared signal report-meta.json
-// freshness already keys off of via `deployVersion` above — bumping it
-// again here just to get something waitable would make the report look
-// stale again immediately for no real data change).
-async function waitForMapsDeploy(request, expectedWorldBytes) {
-  const url = new URL('/maps/world.png', request.url).toString();
-  // Same reasoning as mapScreenshot.js's openMapPage: this route is itself
-  // an authenticated admin request, and /maps/*.png sits outside the
-  // temporary site-wide gate's exemption list — without forwarding this
-  // cookie, every check here would land on the login page instead of the
-  // real PNG and never match, wasting the full timeout on every single
-  // report generation.
-  const cookie = request.headers.get('Cookie') || '';
-  const deadline = Date.now() + MAPS_DEPLOY_WAIT_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(url, { cache: 'no-store', headers: cookie ? { Cookie: cookie } : {} });
-      if (res.ok) {
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        if (bytesEqual(bytes, expectedWorldBytes)) return true;
-      }
-    } catch {
-      // transient network hiccup — just retry until the deadline
-    }
-    await new Promise((resolve) => setTimeout(resolve, MAPS_DEPLOY_WAIT_INTERVAL_MS));
-  }
-  return false;
-}
-
 // maps/*.png are kept fresh by a completely separate background job
 // (worker/lib/mapArchive.js's regenerateMapArchive, triggered by the same
-// ministry edit as this report's own invalidation) — which depends on that
-// job's own waitForDeploy() call succeeding and actually running to
-// completion. Confirmed live it can silently fail to ever happen at all
-// (a fetch it makes got blocked by the site-gate redirect, or its own
-// deploy-confirmation raced a later deploy and never matched) — this used
-// to just poll isMapsCacheFreshFor and hope that job would eventually
-// catch up, which meant a stale map could stay stale forever with nothing
-// left to retry it. Since this request already holds the Browser
-// Rendering lock for its own report generation, it's simpler and far more
-// reliable to just capture fresh maps itself right here rather than wait
-// on a separate job that may never finish.
-async function ensureFreshMaps(env, request, deployVersion, commit) {
+// ministry edit as this report's own invalidation), which can still be
+// running (or have lost the shared Browser Rendering lock and skipped
+// itself) by the time this request needs them. Since this request
+// already holds that lock for its own report generation, it's simpler
+// and more reliable to just capture fresh maps itself right here when
+// they're stale, rather than wait on a separate job that may not finish
+// in time — no deploy-wait step needed either way: R2 has no read
+// replication, so the moment saveMapsNow() returns, the bytes it just
+// wrote are already what any subsequent fetch (including this report's
+// own Puppeteer page load) will see.
+async function ensureFreshMaps(env, request, deployVersion) {
   if (await isMapsCacheFreshFor(env, deployVersion)) return;
   try {
     const captured = await captureAllMaps(env, request);
-    await saveMapsNow(env, captured, commit, deployVersion);
-    const deployed = await waitForMapsDeploy(request, captured.world);
-    if (!deployed) {
-      console.error('Report generation: freshly-captured maps committed, but their deploy did not go live in time — the report may still embed the previous maps.');
-    }
+    await saveMapsNow(env, captured, deployVersion);
   } catch (err) {
     console.error('Report generation: failed to refresh stale maps before embedding — using whatever is currently cached.', err);
   }
@@ -180,13 +124,12 @@ export async function onRequestGet({ request, env, ctx }) {
     // recording the later value would mark this result "fresh" for data
     // it was never actually generated against; recording this earlier one
     // means the next request correctly sees it as stale again instead.
-    const currentDeployVersionFile = await getFile(env, DEPLOY_VERSION_PATH);
-    const currentDeployVersion = currentDeployVersionFile ? currentDeployVersionFile.content.trim() : null;
+    const currentDeployVersion = await getDataVersion(env);
 
     // See ensureFreshMaps's own comment above — captures fresh maps itself
     // (best-effort) when they're stale, rather than hoping a separate job
     // already has or eventually will.
-    await ensureFreshMaps(env, request, currentDeployVersion, committerFromRequest(request));
+    await ensureFreshMaps(env, request, currentDeployVersion);
 
     // Raced against the timeout below, not awaited directly — if the
     // timeout wins, generateReportPdf() (and its own finally-block
@@ -214,12 +157,11 @@ export async function onRequestGet({ request, env, ctx }) {
     // (reportArchive.js's regenerateReportArchive, triggered by an
     // unrelated admin write that shouldn't be held up by this), there's
     // no other request here to avoid blocking: the admin is already
-    // waiting through the generation itself, so a few more seconds to
-    // commit the cache is negligible, and it guarantees the very next
-    // click hits the fast cached path instead of regenerating all over
-    // again.
+    // waiting through the generation itself, so a moment more to commit
+    // the cache is negligible, and it guarantees the very next click hits
+    // the fast cached path instead of regenerating all over again.
     try {
-      await saveReportNow(env, pdfBytes, currentDeployVersion, committerFromRequest(request));
+      await saveReportNow(env, pdfBytes, currentDeployVersion);
     } catch (err) {
       console.error('Failed to save the freshly-generated report to the cache (still returning it to this request):', err);
     }

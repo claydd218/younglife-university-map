@@ -6,11 +6,12 @@
 
 const CONFIG = {
 
-  // Set this to your Google Sheet's "publish to web" CSV link once ready.
-  // Google Sheets: File > Share > Publish to web > select the Ministries
-  // sheet/tab > CSV > Publish, then paste the generated link below.
-  // Leave as-is to keep using the local sample data in /data.
-  MINISTRIES_CSV_URL: 'data/ministries.csv',
+  // Ministry data lives in Cloudflare D1 now (worker/lib/db/ministries.js),
+  // not a static file — this hits GET /api/ministries, which returns the
+  // same packed-string row shape data/ministries.csv always had (see
+  // worker/routes/public-ministries.js) so nothing downstream of the
+  // fetch in js/app.js needed to change.
+  MINISTRIES_API_URL: '/api/ministries',
 
   // Same idea, for the country -> division lookup table below. Most sites
   // will never need to change this from the bundled file, but it can also
