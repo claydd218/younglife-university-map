@@ -73,60 +73,26 @@ function hideBanner() {
 
 // --- Deploy status toast -----------------------------------------------
 
-// Confirms a save isn't just committed to git but actually live — polls a
-// small public marker file (worker/lib/deployVersion.js) on the deployed
-// site until it reflects the token the just-completed write's response
-// came back with. Only the *latest* token is ever tracked: a newer save
-// made while an older one is still publishing simply replaces the target,
-// since once the live site catches up to the newer token the earlier
-// change (committed first) is necessarily live too — no need to track
-// multiple in-flight saves separately.
-const DEPLOY_VERSION_URL = '../data/deploy-version.txt';
-const DEPLOY_POLL_MS = 3000;
-const DEPLOY_POLL_MAX_ATTEMPTS = 40; // ~2 minutes, then give up quietly
+// Used to confirm a save wasn't just committed to git but had actually
+// gone live — polling a small public marker file
+// (worker/lib/deployVersion.js) until it caught up, since a git commit
+// took real time (a Cloudflare rebuild+redeploy) to actually reach the
+// live site. Ministry/staff data lives in D1 now (worker/lib/dataVersion.js),
+// which has no such publishing delay at all — a write is visible to the
+// very next read, including from a different browser tab, the instant
+// the API response comes back. So `token` just confirms a version was
+// recorded (server-side bump succeeded); there's nothing left to wait
+// out. Kept as a `trackDeployVersion` no-op-if-null call at every write
+// site rather than removing those calls outright, so this can go back to
+// meaning something later if a slower-to-propagate write path ever
+// returns here.
+let deployToastHideTimer = null;
 
-let deployTarget = null;
-let deployPollTimer = null;
-let deployPollAttempts = 0;
-
-// token is null when the server-side bump itself failed (see
-// bumpDeployVersion's own comment) — the save still succeeded, there's
-// just nothing to poll for, so this is a no-op rather than showing a
-// toast that would never resolve.
 function trackDeployVersion(token) {
   if (!token) return;
-  deployTarget = token;
-  deployPollAttempts = 0;
-  showDeployToast('Publishing changes…', false);
-  if (!deployPollTimer) pollDeployVersion();
-}
-
-async function pollDeployVersion() {
-  deployPollTimer = null;
-  if (!deployTarget) return; // dismissed since this was scheduled
-  deployPollAttempts++;
-  try {
-    const res = await fetch(DEPLOY_VERSION_URL, { cache: 'no-store' });
-    if (res.ok) {
-      const live = (await res.text()).trim();
-      if (live === deployTarget) {
-        showDeployToast('Changes are live', true);
-        deployTarget = null;
-        setTimeout(hideDeployToast, 3000);
-        return;
-      }
-    }
-  } catch {
-    // Network hiccup — just retry on the next tick rather than surfacing
-    // it; this status check is a nicety, not something worth alarming
-    // over when the actual save already succeeded.
-  }
-  if (deployPollAttempts >= DEPLOY_POLL_MAX_ATTEMPTS) {
-    hideDeployToast();
-    deployTarget = null;
-    return;
-  }
-  deployPollTimer = setTimeout(pollDeployVersion, DEPLOY_POLL_MS);
+  showDeployToast('Changes saved', true);
+  clearTimeout(deployToastHideTimer);
+  deployToastHideTimer = setTimeout(hideDeployToast, 3000);
 }
 
 function showDeployToast(text, done) {
@@ -140,13 +106,9 @@ function hideDeployToast() {
   $('deploy-toast').hidden = true;
 }
 
-// Dismissing stops polling outright rather than just hiding the toast —
-// once the user's stopped watching for it, there's no value in silently
-// confirming a fact nobody's waiting on anymore.
 function wireDeployToast() {
   $('deploy-toast-dismiss').addEventListener('click', () => {
-    deployTarget = null;
-    if (deployPollTimer) { clearTimeout(deployPollTimer); deployPollTimer = null; }
+    clearTimeout(deployToastHideTimer);
     hideDeployToast();
   });
 }
