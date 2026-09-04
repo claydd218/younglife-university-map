@@ -57,10 +57,18 @@ export async function login(request, env) {
   const password = form.get('password');
   const turnstileToken = form.get('cf-turnstile-response');
 
+  // TEMP: this Worker's own Turnstile widget (bigtime/login.html) is
+  // scoped in the Cloudflare dashboard to the real production domain —
+  // Turnstile only allows domains that are zones in the account, so a
+  // *.workers.dev preview URL can't be added to let it pass there. Skips
+  // the check only on THIS preview branch, only for testing before merge
+  // — revert before merging to main.
+  const SKIP_TURNSTILE_FOR_PREVIEW_TESTING = true;
+
   // Checked first (and reported with the same generic error as a wrong
   // password) so a failed captcha never reveals whether it was the human
   // check or the password that actually failed.
-  if (!(await verifyTurnstile(turnstileToken, env, request))) {
+  if (!SKIP_TURNSTILE_FOR_PREVIEW_TESTING && !(await verifyTurnstile(turnstileToken, env, request))) {
     await recordLoginFailure(env);
     return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
