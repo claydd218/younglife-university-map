@@ -900,11 +900,14 @@ async function handleAddMinistryPhotos(files) {
 // Remove button, which only ever splices locally now). Both were
 // previously immediate actions; deferring them here is what makes Cancel
 // safe to click even after adding/removing/reordering photos.
+// Neither loop below tracks trackDeployVersion — both run as part of the
+// ministry dialog's own Save/Update, which already gives its own
+// feedback (the dialog closing) once the whole save completes; a toast
+// mid-save, before that happens, would just be noise on top of it.
 async function commitPendingMinistryPhotos(city, country) {
   const removed = originalMinistryPhotos.filter((filename) => !currentMinistryPhotos.includes(filename));
   for (const filename of removed) {
-    const result = await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
-    trackDeployVersion(result.deployVersion);
+    await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
   }
 
   for (let i = 0; i < currentMinistryPhotos.length; i++) {
@@ -912,7 +915,6 @@ async function commitPendingMinistryPhotos(city, country) {
     if (typeof entry === 'string') continue;
     const imageBase64 = await blobToBase64(entry.blob);
     const result = await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ kind: 'city', city, country, imageBase64 }) });
-    trackDeployVersion(result.deployVersion);
     delete ministryPhotoBlobUrls[entry.pendingId];
     ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(entry.blob);
     currentMinistryPhotos[i] = result.filename;
@@ -1874,8 +1876,11 @@ async function reconcilePhotoWidget(widget, parts) {
   const pendingBlob = widget.getPendingBlob && widget.getPendingBlob();
   if (pendingBlob) {
     const imageBase64 = await blobToBase64(pendingBlob);
-    const result = await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ ...parts, imageBase64 }) });
-    trackDeployVersion(result.deployVersion);
+    // Not tracked with trackDeployVersion — this is part of the ministry
+    // dialog's own Save/Update, which already gives its own feedback (the
+    // dialog closing) once the whole save completes; a toast mid-save,
+    // before that happens, would just be noise on top of it.
+    await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ ...parts, imageBase64 }) });
     widget.setPhotoSlug(slugFromParts(parts));
     widget.clearPendingBlob();
     return; // freshly uploaded under the current parts — nothing stale to reconcile
@@ -2010,12 +2015,13 @@ async function saveMinistry() {
       // between, recognizes them as an update rather than inserting a
       // duplicate — see worker/lib/db/staff.js's upsertHomeStaff).
       state.rows[index] = result.row;
-      trackDeployVersion(result.deployVersion);
+      // Not tracked with trackDeployVersion — the dialog closing right
+      // below is this save's own success feedback; a toast on top of that
+      // would just be noise.
       await reconcileStaffIdentityChanges(previousStaff, result.row.staff);
     } else {
       const result = await apiFetch('/ministries', { method: 'POST', body: JSON.stringify(body) });
       state.rows.push(result.row);
-      trackDeployVersion(result.deployVersion);
     }
     renderMinistriesTable();
     $('ministry-dialog').close();
