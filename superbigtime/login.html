@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>superbigtime</title>
+<link rel="icon" href="../images/favicon.svg" type="image/svg+xml">
+<meta name="robots" content="noindex, nofollow">
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    max-width: 360px;
+    margin: 18vh auto;
+    padding: 0 20px;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  h1 { font-size: 20px; margin-bottom: 18px; }
+  form {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+  }
+  input[type="password"] {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    padding: 9px 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+  }
+  button {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    padding: 9px 14px;
+    border: 1px solid #1a1a1a;
+    border-radius: 5px;
+    background: #1a1a1a;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #333; }
+  .error {
+    color: #a33;
+    font-size: 13.5px;
+    margin-bottom: 12px;
+  }
+  .error[hidden] { display: none; }
+</style>
+</head>
+<body>
+  <h1>superbigtime</h1>
+  <form method="POST" action="/superbigtime/api/login">
+    <div class="error" id="error" hidden>Wrong password — try again.</div>
+    <input type="password" name="password" placeholder="Password" autofocus required>
+    <button type="submit">Enter</button>
+  </form>
+  <script src="login.js"></script>
+</body>
+</html>

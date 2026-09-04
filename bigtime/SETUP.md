@@ -14,7 +14,6 @@ Cloudflare dashboard → **Workers & Pages** → **younglife-university-map** �
 | `GITHUB_OWNER` | `claydd218` | Plain text |
 | `GITHUB_REPO` | `younglife-university-map` | Plain text |
 | `GITHUB_BRANCH` | `main` | Plain text |
-| `ADMIN_SHARED_PASSWORD` | Whatever password you're sharing with editors | Secret (encrypted) |
 | `ADMIN_SESSION_SECRET` | A long random string (e.g. `openssl rand -hex 32`) — never shared with anyone, just used to sign login sessions | Secret (encrypted) |
 | `ADMIN_TURNSTILE_SECRET_KEY` | The **Secret Key** from the Cloudflare Turnstile widget (Turnstile → your site → Settings) | Secret (encrypted) |
 
@@ -24,9 +23,9 @@ Login fails closed if `ADMIN_TURNSTILE_SECRET_KEY` isn't set — same fail-safe 
 
 ## 2. Login
 
-No Cloudflare Access, no per-user accounts — just a single shared password, checked against `ADMIN_SHARED_PASSWORD` above, plus a Cloudflare Turnstile widget on the login form to keep bots/scanners out. Visiting `/bigtime/` while logged out redirects to `/bigtime/login.html`; a passed Turnstile check and correct password together set a signed, HttpOnly session cookie (30 days) and there's nothing else to configure. Share the password with whoever needs to edit; change it any time by updating `ADMIN_SHARED_PASSWORD` (existing logged-in sessions stay valid until they expire, since the cookie's signature only depends on `ADMIN_SESSION_SECRET` — rotate that too if you need to force everyone out immediately).
+No Cloudflare Access — per-user accounts instead, stored in D1's `admin_users` table (name, login, password hash) and managed at `/superbigtime/` (see section 5). A Cloudflare Turnstile widget on the login form keeps bots/scanners out. Visiting `/bigtime/` while logged out redirects to `/bigtime/login.html`; a passed Turnstile check and correct login+password together set a signed, HttpOnly session cookie (90 days, sliding) naming that user, and every ministry edit records their current name in the Log tab. Removing a user in superbigtime signs them out immediately, not just at cookie expiry — `worker/lib/session.js`'s `getSessionUser` re-checks `admin_users` on every request, not just the cookie's signature.
 
-One tradeoff worth knowing: since everyone shares one password, git commit history (`git log` on `data/ministries.csv`/`images/`) will show every admin edit as coming from the same generic committer identity — there's no per-editor attribution the way Cloudflare Access's per-email login would have given.
+Before this existed, admin login was a single password shared by every editor — every edit was attributed to a generic identity, with no way to know who actually made a given change. Per-user accounts (and the Log tab reading `ministry_edits.user_name`) are what replaced that.
 
 ## 3. Build settings (only matters because this branch adds `package.json`)
 
@@ -44,3 +43,14 @@ Requested to keep the whole public site private for a while before the real laun
 Until both are set, `hasValidSiteSession` fails closed (same fail-safe pattern as the admin secrets), so every visitor gets bounced to `/site-login` with no way to pass it — set both before this deploys, not after.
 
 **To remove it later** (real launch day): delete `worker/lib/siteSession.js`, `worker/routes/site-login.js`, `site-login.html`, and `site-login.js`; in `worker/index.js`, remove the `siteLogin`/`siteLogout`/`hasValidSiteSession`/`createSiteSessionCookie` imports, the `PUBLIC_SITE_PATHS` constant, the `hasAdminSession`/`needsSiteSession`/`siteSessionValid` block right after the admin session check, the two `/api/site-login`/`/api/site-logout` lines in `routeRequest`, and fold the cookie-renewal `if` back down to just `sessionValid`. Nothing else in the repo references any of it — including `worker/lib/reportCapture.js`'s Puppeteer navigation, which relies only on `hasAdminSession` exempting an already-logged-in admin from the site gate on every path, not on anything specific to the site gate's own implementation, so removing the gate entirely leaves report generation unaffected. The two secrets above can be left in the dashboard afterward (unused) or removed — either is safe.
+
+## 5. superbigtime — admin user management
+
+`/superbigtime/` is a separate, permanent, single-shared-password-gated area (its own password, not one of the per-user accounts it manages) where `admin_users` accounts are created/edited/removed — it's how the very first `/bigtime/` login gets created. Same **Variables and Secrets** screen as section 1, two more secrets:
+
+| Name | Value | Type |
+|---|---|---|
+| `SUPERADMIN_SHARED_PASSWORD` | A password separate from every `/bigtime/` user's own — share it only with whoever should be able to create/remove admin accounts | Secret (encrypted) |
+| `SUPERADMIN_SESSION_SECRET` | A long random string (e.g. `openssl rand -hex 32`) — never shared with anyone, just used to sign superbigtime's own session cookie | Secret (encrypted) |
+
+Until both are set, `hasValidSuperSession` fails closed (same fail-safe pattern as every other secret here), so every visitor to `/superbigtime/` gets bounced to `/superbigtime/login` with no way to pass it.

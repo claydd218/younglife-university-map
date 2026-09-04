@@ -25,11 +25,20 @@ import { onRequestGet as mapScreenshotGet } from './routes/map-screenshot.js';
 import { onRequestGet as reportPdfGet } from './routes/report-pdf.js';
 import { onRequestGet as imagesManifestGet } from './routes/images-manifest.js';
 import { onRequestGet as publicMinistriesGet } from './routes/public-ministries.js';
+import { onRequestGet as logsGet } from './routes/logs.js';
 import { serveMedia } from './routes/media.js';
 import { login, logout } from './routes/login.js';
-import { hasValidSession, createSessionCookie } from './lib/session.js';
+import { getSessionUser, createSessionCookie } from './lib/session.js';
 import { siteLogin, siteLogout } from './routes/site-login.js';
 import { hasValidSiteSession, createSiteSessionCookie } from './lib/siteSession.js';
+import { superLogin, superLogout } from './routes/super-login.js';
+import { hasValidSuperSession, createSuperSessionCookie } from './lib/superSession.js';
+import {
+  onRequestGet as superUsersGet,
+  onRequestPost as superUsersPost,
+  onRequestPut as superUsersPut,
+  onRequestDelete as superUsersDelete,
+} from './routes/super-users.js';
 import { MAINTENANCE_MODE } from './lib/maintenance.js';
 
 function jsonError(status, message) {
@@ -136,6 +145,14 @@ const PUBLIC_ADMIN_PATHS = new Set(['/bigtime/login.html', '/bigtime/login', '/b
 // just backed by D1/R2 now instead of static files.
 const PUBLIC_SITE_PATHS = new Set(['/site-login.html', '/site-login', '/site-login.js', '/api/site-login', '/api/site-logout']);
 
+// superbigtime: a separate, permanent, single-shared-password-gated area
+// where admin_users accounts (name/login/password) are created and
+// managed — see the admin-users plan. Independent of both gates above:
+// its own session cookie (worker/lib/superSession.js), its own login
+// route, never satisfied by an admin or site session and vice versa. Same
+// *.html/extensionless double-entry reasoning as PUBLIC_ADMIN_PATHS.
+const PUBLIC_SUPER_PATHS = new Set(['/superbigtime/login.html', '/superbigtime/login', '/superbigtime/login.js', '/superbigtime/api/login', '/superbigtime/api/logout']);
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -149,7 +166,12 @@ export default {
       // — treated as "no session is ever valid" so this blocks even an
       // already-logged-in admin, not just new logins from
       // routes/login.js's own check. Both flip together (same import).
-      const sessionValid = needsSession && !MAINTENANCE_MODE && (await hasValidSession(request, env));
+      // sessionUser (not just a boolean) is threaded into route handlers
+      // below so writes can attribute themselves in ministry_edits — see
+      // worker/lib/session.js's getSessionUser for why it does a real
+      // admin_users lookup, not just a signature check.
+      const sessionUser = needsSession && !MAINTENANCE_MODE ? await getSessionUser(request, env) : null;
+      const sessionValid = needsSession && !!sessionUser;
       if (needsSession && !sessionValid) {
         if (pathname.startsWith('/bigtime/api/')) {
           return withSecurityHeaders(jsonError(401, MAINTENANCE_MODE ? 'Admin temporarily closed for maintenance' : 'Not logged in'));
@@ -157,6 +179,16 @@ export default {
         // The extensionless path, not /bigtime/login.html directly — skips
         // the extra 307 hop from Cloudflare's own *.html canonicalization.
         return withSecurityHeaders(Response.redirect(new URL('/bigtime/login', request.url), 302));
+      }
+
+      const isSuperPath = pathname === '/superbigtime' || pathname.startsWith('/superbigtime/');
+      const needsSuperSession = isSuperPath && !PUBLIC_SUPER_PATHS.has(pathname);
+      const superSessionValid = needsSuperSession && (await hasValidSuperSession(request, env));
+      if (needsSuperSession && !superSessionValid) {
+        if (pathname.startsWith('/superbigtime/api/')) {
+          return withSecurityHeaders(jsonError(401, 'Not logged in'));
+        }
+        return withSecurityHeaders(Response.redirect(new URL('/superbigtime/login', request.url), 302));
       }
 
       // See PUBLIC_SITE_PATHS above — TEMPORARY, remove alongside it. An
@@ -171,8 +203,8 @@ export default {
       // content, which is what was actually causing report generation to
       // hang and eventually crash the browser session rather than a
       // simple, clean failure. Confirmed live.
-      const hasAdminSession = isAdminPath ? sessionValid : await hasValidSession(request, env);
-      const needsSiteSession = !isAdminPath && !PUBLIC_SITE_PATHS.has(pathname) && !hasAdminSession;
+      const hasAdminSession = isAdminPath ? sessionValid : !isSuperPath && !!(await getSessionUser(request, env));
+      const needsSiteSession = !isAdminPath && !isSuperPath && !PUBLIC_SITE_PATHS.has(pathname) && !hasAdminSession;
       const siteSessionValid = needsSiteSession && (await hasValidSiteSession(request, env));
       if (needsSiteSession && !siteSessionValid) {
         return withSecurityHeaders(Response.redirect(new URL('/site-login', request.url), 302));
@@ -183,23 +215,45 @@ export default {
         if (pathname === '/bigtime/api/logout' && method === 'POST') return await logout(request);
         if (pathname === '/api/site-login' && method === 'POST') return await siteLogin(request, env);
         if (pathname === '/api/site-logout' && method === 'POST') return await siteLogout(request);
+        if (pathname === '/superbigtime/api/login' && method === 'POST') return await superLogin(request, env);
+        if (pathname === '/superbigtime/api/logout' && method === 'POST') return await superLogout(request);
 
         if (pathname === '/bigtime/api/ministries') {
           if (method === 'GET') return await ministriesGet({ request, env, ctx });
-          if (method === 'POST') return await ministriesPost({ request, env, ctx });
+          if (method === 'POST') return await ministriesPost({ request, env, ctx, user: sessionUser });
         }
 
         const ministryMatch = pathname.match(/^\/bigtime\/api\/ministries\/([^/]+)$/);
         if (ministryMatch) {
           const params = { id: decodeURIComponent(ministryMatch[1]) };
-          if (method === 'PUT') return await ministryPut({ request, env, ctx, params });
-          if (method === 'DELETE') return await ministryDelete({ request, env, ctx, params });
+          if (method === 'PUT') return await ministryPut({ request, env, ctx, params, user: sessionUser });
+          if (method === 'DELETE') return await ministryDelete({ request, env, ctx, params, user: sessionUser });
         }
 
         const staffMoveMatch = pathname.match(/^\/bigtime\/api\/staff\/([^/]+)\/move$/);
         if (staffMoveMatch && method === 'POST') {
           const params = { id: decodeURIComponent(staffMoveMatch[1]) };
-          return await staffMovePost({ request, env, ctx, params });
+          return await staffMovePost({ request, env, ctx, params, user: sessionUser });
+        }
+
+        if (pathname === '/bigtime/api/logs' && method === 'GET') {
+          return await logsGet({ request, env });
+        }
+
+        if (pathname === '/superbigtime/api/users') {
+          if (method === 'GET') return await superUsersGet({ env });
+          if (method === 'POST') return await superUsersPost({ request, env });
+        }
+
+        const superUserMatch = pathname.match(/^\/superbigtime\/api\/users\/([^/]+)$/);
+        if (superUserMatch) {
+          const params = { id: decodeURIComponent(superUserMatch[1]) };
+          if (method === 'PUT') return await superUsersPut({ request, env, params });
+          if (method === 'DELETE') return await superUsersDelete({ request, env, params });
+        }
+
+        if (pathname.startsWith('/superbigtime/api/')) {
+          return jsonError(404, `No superbigtime API route for ${method} ${pathname}`);
         }
 
         if (pathname === '/bigtime/api/upload' && method === 'POST') {
@@ -262,15 +316,18 @@ export default {
       // cookie with a fresh SESSION_DAYS expiry (see session.js) from
       // *now*, rather than a fixed expiry set once at login — so staying
       // active keeps you logged in indefinitely, and only that many days
-      // of real inactivity signs you out. login()/siteLogin() already set
-      // their own first cookie on the response they return (those paths
-      // never reach here — they're in PUBLIC_ADMIN_PATHS/PUBLIC_SITE_PATHS,
-      // so sessionValid/siteSessionValid are always false for them), so
-      // this only needs to cover requests made with an existing session.
-      if (sessionValid || siteSessionValid) {
+      // of real inactivity signs you out. login()/siteLogin()/superLogin()
+      // already set their own first cookie on the response they return
+      // (those paths never reach here — they're in
+      // PUBLIC_ADMIN_PATHS/PUBLIC_SITE_PATHS/PUBLIC_SUPER_PATHS, so
+      // sessionValid/siteSessionValid/superSessionValid are always false
+      // for them), so this only needs to cover requests made with an
+      // existing session.
+      if (sessionValid || siteSessionValid || superSessionValid) {
         const renewed = new Response(response.body, response);
-        if (sessionValid) renewed.headers.append('Set-Cookie', await createSessionCookie(env));
+        if (sessionValid) renewed.headers.append('Set-Cookie', await createSessionCookie(env, sessionUser.id));
         if (siteSessionValid) renewed.headers.append('Set-Cookie', await createSiteSessionCookie(env));
+        if (superSessionValid) renewed.headers.append('Set-Cookie', await createSuperSessionCookie(env));
         return withSecurityHeaders(renewed);
       }
       return withSecurityHeaders(response);

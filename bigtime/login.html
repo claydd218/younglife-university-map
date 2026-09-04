@@ -21,7 +21,7 @@
     border-radius: 8px;
     padding: 20px;
   }
-  input[type="password"] {
+  input[type="text"], input[type="password"] {
     width: 100%;
     font: inherit;
     font-size: 15px;
@@ -72,8 +72,9 @@
     The admin tool is temporarily closed for maintenance. Please check back shortly.
   </div>
   <form method="POST" action="/bigtime/api/login">
-    <div class="error" id="error" hidden>Login failed — check your password and try again.</div>
-    <input type="password" name="password" placeholder="Password" autofocus required>
+    <div class="error" id="error" hidden>Login failed — check your login and password and try again.</div>
+    <input type="text" name="login" placeholder="Login" autocomplete="username" autofocus required>
+    <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
     <div class="cf-turnstile" data-sitekey="0x4AAAAAAEV3Hr6PnCCyLUxb"></div>
     <button type="submit">Log in</button>
   </form>

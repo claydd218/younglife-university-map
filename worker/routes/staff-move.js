@@ -10,7 +10,7 @@ import { getMinistry } from '../lib/db/ministries.js';
 import { bumpDataVersion } from '../lib/dataVersion.js';
 import { regenerateReportArchive } from '../lib/reportArchive.js';
 
-export async function onRequestPost({ request, env, ctx, params }) {
+export async function onRequestPost({ request, env, ctx, params, user }) {
   const staffId = Number(params.id);
   if (!Number.isFinite(staffId)) return errorResponse(400, 'Invalid staff id');
 
@@ -35,8 +35,8 @@ export async function onRequestPost({ request, env, ctx, params }) {
   // writes to — a move is a real change to the target ministry's roster,
   // so it should show up in the (planned) Log tab same as any other edit.
   await env.DB.prepare(
-    'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json) VALUES (?, ?, ?, NULL, ?)'
-  ).bind(targetMinistryId, new Date().toISOString(), 'staff-move', JSON.stringify({ staffId })).run();
+    'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json, user_name) VALUES (?, ?, ?, NULL, ?, ?)'
+  ).bind(targetMinistryId, new Date().toISOString(), 'staff-move', JSON.stringify({ staffId }), user ? user.name : null).run();
 
   const deployVersion = await bumpDataVersion(env);
   if (ctx) {

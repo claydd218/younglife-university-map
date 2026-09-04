@@ -3,15 +3,16 @@
 // routes use, since these are dispatched directly by worker/index.js's auth
 // gate rather than through the normal route table.
 
-import { createSessionCookie, clearSessionCookie, checkPassword } from '../lib/session.js';
+import { createSessionCookie, clearSessionCookie } from '../lib/session.js';
+import { verifyLogin } from '../lib/db/users.js';
 import { isLoginLockedOut, recordLoginFailure, resetLoginFailures } from '../lib/loginRateLimit.js';
 import { MAINTENANCE_MODE } from '../lib/maintenance.js';
 
 // Verifies the Turnstile widget's token server-side against Cloudflare's
 // siteverify endpoint. Fails closed like the rest of this file's secret
-// handling (see hasValidSession in session.js) — a missing/misconfigured
-// TURNSTILE_SECRET_KEY rejects the login rather than silently skipping the
-// bot check, so a botched deploy can't quietly turn Turnstile off.
+// handling — a missing/misconfigured TURNSTILE_SECRET_KEY rejects the
+// login rather than silently skipping the bot check, so a botched deploy
+// can't quietly turn Turnstile off.
 async function verifyTurnstile(token, env, request) {
   if (!env.ADMIN_TURNSTILE_SECRET_KEY || !token) return false;
   const body = new URLSearchParams({
@@ -46,14 +47,15 @@ export async function login(request, env) {
   // error=locked (not the generic error=1 below) so bigtime/login.js can
   // show a distinct message — otherwise the legitimate admin, having
   // tripped this themselves with a few genuine mistypes, sees "check your
-  // password", retypes the *correct* one, gets rejected again, and has no
-  // way to know they're waiting out a timer rather than still getting the
-  // password wrong.
+  // login and password", retypes the *correct* ones, gets rejected again,
+  // and has no way to know they're waiting out a timer rather than still
+  // getting it wrong.
   if (await isLoginLockedOut(env)) {
     return Response.redirect(new URL('/bigtime/login?error=locked', request.url), 302);
   }
 
   const form = await request.formData();
+  const loginName = (form.get('login') || '').trim();
   const password = form.get('password');
   const turnstileToken = form.get('cf-turnstile-response');
 
@@ -66,31 +68,32 @@ export async function login(request, env) {
   const SKIP_TURNSTILE_FOR_PREVIEW_TESTING = true;
 
   // Checked first (and reported with the same generic error as a wrong
-  // password) so a failed captcha never reveals whether it was the human
-  // check or the password that actually failed.
+  // login/password) so a failed captcha never reveals whether it was the
+  // human check or the credentials that actually failed.
   if (!SKIP_TURNSTILE_FOR_PREVIEW_TESTING && !(await verifyTurnstile(turnstileToken, env, request))) {
     await recordLoginFailure(env);
     return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
 
-  if (!checkPassword(password, env.ADMIN_SHARED_PASSWORD)) {
+  const user = loginName ? await verifyLogin(env, loginName, password) : null;
+  if (!user) {
     await recordLoginFailure(env);
     return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
 
   try {
-    const cookie = await createSessionCookie(env);
+    const cookie = await createSessionCookie(env, user.id);
     await resetLoginFailures(env);
     return new Response(null, {
       status: 302,
       headers: { Location: '/bigtime/', 'Set-Cookie': cookie },
     });
   } catch (err) {
-    // Same user-facing outcome as a wrong password (a clean redirect back
-    // to the login page) rather than a raw crypto/config error reaching the
-    // browser — covers the mid-deploy secrets-not-attached-yet case a
-    // retry a few seconds later resolves on its own.
-    console.error('Login failed after password check passed:', err);
+    // Same user-facing outcome as a wrong login/password (a clean redirect
+    // back to the login page) rather than a raw crypto/config error
+    // reaching the browser — covers the mid-deploy secrets-not-attached-yet
+    // case a retry a few seconds later resolves on its own.
+    console.error('Login failed after credential check passed:', err);
     return Response.redirect(new URL('/bigtime/login?error=1', request.url), 302);
   }
 }

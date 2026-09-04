@@ -164,7 +164,9 @@ function wireTabs() {
       const tab = btn.dataset.tab;
       $('tab-ministries').hidden = tab !== 'ministries';
       $('tab-images').hidden = tab !== 'images';
+      $('tab-log').hidden = tab !== 'log';
       if (tab === 'images') renderImagesTab();
+      if (tab === 'log') renderLogTab();
     });
   });
 }
@@ -2617,6 +2619,75 @@ function wireReportPdfButton() {
   });
 }
 
+// --- Log tab -------------------------------------------------------------
+// Reads worker/routes/logs.js's paginated view of ministry_edits (the
+// lightweight audit table added with the D1 migration, now with a
+// user_name column — see the admin-users plan). Reloaded fresh every time
+// the tab is opened, not cached, so it always reflects edits made
+// elsewhere (another tab, another admin) since it was last viewed.
+
+const LOG_ACTION_LABELS = {
+  create: 'Created',
+  update: 'Updated',
+  delete: 'Deleted',
+  'staff-move': 'Moved staff',
+};
+
+let logNextBefore = null;
+
+async function renderLogTab() {
+  logNextBefore = null;
+  $('log-tbody').innerHTML = '';
+  $('log-load-more-btn').hidden = true;
+  await loadLogPage();
+}
+
+async function loadLogPage() {
+  const status = $('log-status');
+  const loadMoreBtn = $('log-load-more-btn');
+  status.textContent = 'Loading…';
+  loadMoreBtn.hidden = true;
+  try {
+    const query = logNextBefore ? `?before=${encodeURIComponent(logNextBefore)}` : '';
+    const result = await apiFetch(`/logs${query}`);
+    appendLogRows(result.rows);
+    logNextBefore = result.nextBefore;
+    loadMoreBtn.hidden = !logNextBefore;
+    status.textContent = '';
+  } catch (err) {
+    status.textContent = err.message || String(err);
+  }
+}
+
+function appendLogRows(rows) {
+  const tbody = $('log-tbody');
+  if (!rows.length && !tbody.children.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="status-text">No changes logged yet.</td></tr>';
+    return;
+  }
+  const html = rows.map((row) => {
+    const label = LOG_ACTION_LABELS[row.action] || row.action;
+    const place = row.city ? `${row.city}${row.country ? `, ${row.country}` : ''}` : `ministry #${row.ministry_id}`;
+    const when = new Date(row.changed_at);
+    const whenText = Number.isNaN(when.getTime()) ? row.changed_at : when.toLocaleString();
+    // user_name is NULL for edits made before per-user accounts existed
+    // (or by the old shared login) — shown as "—", not blank, so it reads
+    // as "no author recorded" rather than looking like a rendering bug.
+    return `
+      <tr>
+        <td class="log-when">${escapeHtml(whenText)}</td>
+        <td>${escapeHtml(label)} — ${escapeHtml(place)}</td>
+        <td class="log-by">${escapeHtml(row.user_name || '—')}</td>
+      </tr>
+    `;
+  }).join('');
+  tbody.insertAdjacentHTML('beforeend', html);
+}
+
+function wireLogTab() {
+  $('log-load-more-btn').addEventListener('click', loadLogPage);
+}
+
 function wireSignOut() {
   $('sign-out-btn').addEventListener('click', async () => {
     if (!window.confirm('Sign out?')) return;
@@ -2641,5 +2712,6 @@ wireDeployToast();
 wireMoveStaffDialog();
 wireAssignStaffDialog();
 wireReportPdfButton();
+wireLogTab();
 wireSignOut();
 loadMinistries();

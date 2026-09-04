@@ -20,7 +20,7 @@ function validateFields(body) {
   }
 }
 
-export async function onRequestPut({ request, env, ctx, params }) {
+export async function onRequestPut({ request, env, ctx, params, user }) {
   let body;
   try {
     body = await request.json();
@@ -54,7 +54,7 @@ export async function onRequestPut({ request, env, ctx, params }) {
       video_url: body.video_url,
       video_label: body.video_label,
       assigned_staff: body.assigned_staff,
-    });
+    }, user ? user.name : null);
   } catch (err) {
     if (err instanceof ConflictError) return errorResponse(409, err.message, { error: 'conflict' });
     if (err instanceof NotFoundError) return errorResponse(404, err.message);
@@ -88,11 +88,11 @@ export async function onRequestPut({ request, env, ctx, params }) {
   return jsonResponse({ ok: true, id: result.id, sha: result.updated_at, updated_at: result.updated_at, deployVersion, row: result });
 }
 
-export async function onRequestDelete({ request, env, ctx, params }) {
+export async function onRequestDelete({ request, env, ctx, params, user }) {
   const id = Number(params.id);
   let result;
   try {
-    result = await deleteMinistry(env, id);
+    result = await deleteMinistry(env, id, user ? user.name : null);
   } catch (err) {
     if (err instanceof NotFoundError) return errorResponse(404, err.message);
     throw err;

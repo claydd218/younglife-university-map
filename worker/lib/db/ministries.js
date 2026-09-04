@@ -132,7 +132,11 @@ function ministryColumns(fields) {
 // staff:[{name,role}], blurb, photos:[...], video_url, video_label}.
 // assigned_staff is deliberately NOT accepted here — a brand-new ministry
 // can't have anyone assigned to it yet (nothing else references its id).
-export async function insertMinistry(env, fields) {
+// `userName`: the logged-in admin's current display name (worker/lib/
+// session.js's getSessionUser), written into ministry_edits.user_name for
+// the Log tab — null for requests made before per-user accounts existed,
+// which the Log tab renders as "—".
+export async function insertMinistry(env, fields, userName = null) {
   const cols = ministryColumns(fields);
   const now = new Date().toISOString();
   const result = await env.DB.prepare(
@@ -143,8 +147,8 @@ export async function insertMinistry(env, fields) {
 
   await upsertHomeStaff(env, id, fields.staff || []);
   await env.DB.prepare(
-    'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json) VALUES (?, ?, ?, NULL, ?)'
-  ).bind(id, now, 'create', JSON.stringify({ ...cols, staff: fields.staff || [] })).run();
+    'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json, user_name) VALUES (?, ?, ?, NULL, ?, ?)'
+  ).bind(id, now, 'create', JSON.stringify({ ...cols, staff: fields.staff || [] }), userName).run();
 
   // The full fresh row, not just {id, updated_at} — critically including
   // the real database id upsertHomeStaff just assigned each new staff
@@ -160,7 +164,7 @@ export async function insertMinistry(env, fields) {
 // (NotFoundError) or someone else's write already changed updated_at
 // (ConflictError) — a follow-up SELECT tells them apart, same "someone
 // else's edit landed first, reload" UX the admin already shows today.
-export async function updateMinistry(env, id, expectedUpdatedAt, fields) {
+export async function updateMinistry(env, id, expectedUpdatedAt, fields, userName = null) {
   const existing = await env.DB.prepare('SELECT updated_at FROM ministries WHERE id = ?').bind(id).first();
   if (!existing) throw new NotFoundError(`No ministry with id ${id}`);
 
@@ -204,15 +208,15 @@ export async function updateMinistry(env, id, expectedUpdatedAt, fields) {
   }
 
   await env.DB.prepare(
-    'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json) VALUES (?, ?, ?, ?, ?)'
-  ).bind(id, now, 'update', JSON.stringify({ staff: oldStaff }), JSON.stringify({ ...cols, staff: fields.staff || [] })).run();
+    'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json, user_name) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(id, now, 'update', JSON.stringify({ staff: oldStaff }), JSON.stringify({ ...cols, staff: fields.staff || [] }), userName).run();
 
   // See insertMinistry's own comment — same reason: a just-added staff
   // member's real id has to make it back to the client.
   return getMinistry(env, id);
 }
 
-export async function deleteMinistry(env, id) {
+export async function deleteMinistry(env, id, userName = null) {
   const row = await env.DB.prepare('SELECT * FROM ministries WHERE id = ?').bind(id).first();
   if (!row) throw new NotFoundError(`No ministry with id ${id}`);
   const staffRows = await staffRowsForMinistry(env, id);
@@ -224,8 +228,8 @@ export async function deleteMinistry(env, id) {
   await env.DB.prepare('DELETE FROM ministries WHERE id = ?').bind(id).run();
 
   await env.DB.prepare(
-    'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json) VALUES (?, ?, ?, ?, NULL)'
-  ).bind(id, new Date().toISOString(), 'delete', JSON.stringify({ ...row, staff: staffRows })).run();
+    'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json, user_name) VALUES (?, ?, ?, ?, NULL, ?)'
+  ).bind(id, new Date().toISOString(), 'delete', JSON.stringify({ ...row, staff: staffRows }), userName).run();
 
   return { city: row.city, country: row.country, removedStaffNames: staffRows.map((s) => s.name) };
 }

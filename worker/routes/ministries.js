@@ -36,7 +36,7 @@ export async function onRequestGet({ env, request }) {
   return jsonResponse({ rows, unmatchedCountries: Array.from(unmatchedCountries) });
 }
 
-export async function onRequestPost({ request, env, ctx }) {
+export async function onRequestPost({ request, env, ctx, user }) {
   let body;
   try {
     body = await request.json();
@@ -66,7 +66,7 @@ export async function onRequestPost({ request, env, ctx }) {
     photos: body.photos,
     video_url: body.video_url,
     video_label: body.video_label,
-  });
+  }, user ? user.name : null);
 
   const deployVersion = await bumpDataVersion(env);
   // Adding a ministry area can introduce a new pin/country — regenerate
