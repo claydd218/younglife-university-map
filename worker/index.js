@@ -34,6 +34,7 @@ import {
   onRequestDelete as usersDelete,
 } from './routes/users.js';
 import { serveMedia } from './routes/media.js';
+import { backupImages } from './lib/imageBackup.js';
 import { login, logout } from './routes/login.js';
 import { getSessionUser, createSessionCookie } from './lib/session.js';
 import { siteLogin, siteLogout } from './routes/site-login.js';
@@ -324,5 +325,15 @@ export default {
       console.error('Unhandled error in admin API:', err);
       return withSecurityHeaders(jsonError(500, err.message || 'Internal error'));
     }
+  },
+
+  // Fired daily by wrangler.toml's cron trigger — see imageBackup.js for
+  // what actually gets backed up and why.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      backupImages(env)
+        .then((result) => console.log('Image backup complete:', JSON.stringify(result)))
+        .catch((err) => console.error('Image backup failed:', err))
+    );
   },
 };

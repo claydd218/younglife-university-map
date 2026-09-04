@@ -65,3 +65,19 @@ database_id = "aa079f07-abaf-4501-a2ef-38c08304b145"
 [[r2_buckets]]
 binding = "MEDIA"
 bucket_name = "younglife-map-media"
+
+# Backup target for uploaded staff/ministry photos only (worker/lib/
+# imageBackup.js) — maps/*.png and reports/*.pdf are deliberately not
+# backed up here since both regenerate automatically from D1 data
+# whenever needed, so losing them costs nothing. Every distinct version
+# of a photo that's ever existed (by content, not just the latest one) is
+# kept — see imageBackup.js's own comment for why a bad crop/replace
+# needs the same protection as an outright deletion, and a plain mirror
+# wouldn't give either.
+[[r2_buckets]]
+binding = "MEDIA_BACKUP"
+bucket_name = "younglife-map-media-backup"
+
+# Runs worker/index.js's scheduled() handler once a day.
+[triggers]
+crons = ["0 8 * * *"]
