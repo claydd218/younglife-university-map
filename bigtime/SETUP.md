@@ -10,20 +10,16 @@ Cloudflare dashboard → **Workers & Pages** → **younglife-university-map** �
 
 | Name | Value | Type |
 |---|---|---|
-| `GITHUB_TOKEN` | A fine-grained GitHub PAT scoped to **only** `claydd218/younglife-university-map`, permission **Contents: Read and write** | Secret (encrypted) |
-| `GITHUB_OWNER` | `claydd218` | Plain text |
-| `GITHUB_REPO` | `younglife-university-map` | Plain text |
-| `GITHUB_BRANCH` | `main` | Plain text |
 | `ADMIN_SESSION_SECRET` | A long random string (e.g. `openssl rand -hex 32`) — never shared with anyone, just used to sign login sessions | Secret (encrypted) |
 | `ADMIN_TURNSTILE_SECRET_KEY` | The **Secret Key** from the Cloudflare Turnstile widget (Turnstile → your site → Settings) | Secret (encrypted) |
 
 Login fails closed if `ADMIN_TURNSTILE_SECRET_KEY` isn't set — same fail-safe pattern as the other secrets here — so this one isn't optional once the login page's Turnstile widget is live; without it, nobody (including a correct password) can log in.
 
-**Worth double-checking when you set this up:** confirm whether this dashboard's variables apply only to the production deployment or also to preview/branch builds (Workers' preview-environment model isn't identical to classic Pages, and this repo doesn't define named `[env.*]` sections in `wrangler.toml` to separate them explicitly). If preview builds get the same `GITHUB_TOKEN`, a pushed-but-unmerged branch could write real commits to `main` — if that's the case, avoid pushing admin-tool changes to branches other than `main` until that's resolved, rather than relying on the token being scoped away.
-
 ## 2. Login
 
-No Cloudflare Access — per-user accounts instead, stored in D1's `admin_users` table (name, login, password hash) and managed at `/superbigtime/` (see section 5). A Cloudflare Turnstile widget on the login form keeps bots/scanners out. Visiting `/bigtime/` while logged out redirects to `/bigtime/login.html`; a passed Turnstile check and correct login+password together set a signed, HttpOnly session cookie (90 days, sliding) naming that user, and every ministry edit records their current name in the Log tab. Removing a user in superbigtime signs them out immediately, not just at cookie expiry — `worker/lib/session.js`'s `getSessionUser` re-checks `admin_users` on every request, not just the cookie's signature.
+No Cloudflare Access — per-user accounts instead, stored in D1's `admin_users` table (name, login, password hash, is_admin) and managed by any admin at `/bigtime/`'s own Admin tab (see `worker/routes/users.js`). A Cloudflare Turnstile widget on the login form keeps bots/scanners out. Visiting `/bigtime/` while logged out redirects to `/bigtime/login.html`; a passed Turnstile check and correct login+password together set a signed, HttpOnly session cookie (90 days, sliding) naming that user, and every ministry edit records their current name in the Log tab. Removing a user (or someone's own admin status) takes effect immediately, not just at cookie expiry — `worker/lib/session.js`'s `getSessionUser` re-checks `admin_users` on every request, not just the cookie's signature.
+
+**Bootstrapping the very first account** (a fresh deployment with an empty `admin_users` table — there's no signup flow, and the Admin tab needs an existing admin to create anyone): insert one directly via `wrangler d1 execute`, hashing a password the same way `worker/lib/password.js`'s `hashPassword` does (PBKDF2-SHA256, 100000 iterations — the Workers runtime's own cap — 16-byte salt, stored as `{iterations}.{saltHex}.{hashHex}`), then set `is_admin = 1` on that row so they can create everyone else through the UI from there.
 
 Before this existed, admin login was a single password shared by every editor — every edit was attributed to a generic identity, with no way to know who actually made a given change. Per-user accounts (and the Log tab reading `ministry_edits.user_name`) are what replaced that.
 
@@ -43,14 +39,3 @@ Requested to keep the whole public site private for a while before the real laun
 Until both are set, `hasValidSiteSession` fails closed (same fail-safe pattern as the admin secrets), so every visitor gets bounced to `/site-login` with no way to pass it — set both before this deploys, not after.
 
 **To remove it later** (real launch day): delete `worker/lib/siteSession.js`, `worker/routes/site-login.js`, `site-login.html`, and `site-login.js`; in `worker/index.js`, remove the `siteLogin`/`siteLogout`/`hasValidSiteSession`/`createSiteSessionCookie` imports, the `PUBLIC_SITE_PATHS` constant, the `hasAdminSession`/`needsSiteSession`/`siteSessionValid` block right after the admin session check, the two `/api/site-login`/`/api/site-logout` lines in `routeRequest`, and fold the cookie-renewal `if` back down to just `sessionValid`. Nothing else in the repo references any of it — including `worker/lib/reportCapture.js`'s Puppeteer navigation, which relies only on `hasAdminSession` exempting an already-logged-in admin from the site gate on every path, not on anything specific to the site gate's own implementation, so removing the gate entirely leaves report generation unaffected. The two secrets above can be left in the dashboard afterward (unused) or removed — either is safe.
-
-## 5. superbigtime — admin user management
-
-`/superbigtime/` is a separate, permanent, single-shared-password-gated area (its own password, not one of the per-user accounts it manages) where `admin_users` accounts are created/edited/removed — it's how the very first `/bigtime/` login gets created. Same **Variables and Secrets** screen as section 1, two more secrets:
-
-| Name | Value | Type |
-|---|---|---|
-| `SUPERADMIN_SHARED_PASSWORD` | A password separate from every `/bigtime/` user's own — share it only with whoever should be able to create/remove admin accounts | Secret (encrypted) |
-| `SUPERADMIN_SESSION_SECRET` | A long random string (e.g. `openssl rand -hex 32`) — never shared with anyone, just used to sign superbigtime's own session cookie | Secret (encrypted) |
-
-Until both are set, `hasValidSuperSession` fails closed (same fail-safe pattern as every other secret here), so every visitor to `/superbigtime/` gets bounced to `/superbigtime/login` with no way to pass it.

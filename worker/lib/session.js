@@ -96,8 +96,8 @@ export async function getSessionUser(request, env) {
 }
 
 // Timing-safe password check — exported so route handlers (e.g. the
-// superbigtime shared-password gate) don't need their own copy of
-// timingSafeEqual.
+// site-wide shared-password gate, worker/routes/site-login.js) don't need
+// their own copy of timingSafeEqual.
 export function checkPassword(submitted, expected) {
   return timingSafeEqual(String(submitted || ''), String(expected || ''));
 }
