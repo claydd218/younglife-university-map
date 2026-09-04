@@ -3,4 +3,4 @@
 // (worker/routes/login.js) alike, including anyone with an already-valid
 // session cookie, not just new logins. Flip to false (or delete this file
 // and its two import sites) to reopen.
-export const MAINTENANCE_MODE = true;
+export const MAINTENANCE_MODE = false; // TEMP: off on this preview branch only, for testing before merge to main
