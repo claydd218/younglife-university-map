@@ -63,11 +63,11 @@
 </head>
 <body>
   <h1>Admin Login</h1>
-  <!-- TEMPORARY: admin closed for maintenance, per explicit request —
-       remove this notice and the form's `hidden` attribute below to
-       reopen. worker/routes/login.js also rejects POSTs to the login API
-       directly while this is in place (defense in depth against a
-       bookmarked/cached copy of this form). -->
+  <!-- Shown only if worker/lib/maintenance.js's MAINTENANCE_MODE is ever
+       flipped back to true for a future maintenance window — add
+       `hidden` to the form below and remove it here to close the form,
+       matching worker/routes/login.js's own MAINTENANCE_MODE check
+       (defense in depth against a bookmarked/cached copy of this form). -->
   <div class="maintenance-notice" id="maintenance-notice" hidden>
     The admin tool is temporarily closed for maintenance. Please check back shortly.
   </div>
