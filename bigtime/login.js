@@ -9,5 +9,11 @@ if (params.has('error')) {
   if (params.get('error') === 'locked') {
     errorEl.textContent = 'Too many failed attempts — try again in a few minutes.';
   }
+  // Reachable if a POST hit the login API directly (bookmarked/cached
+  // form) while the maintenance notice above has the form hidden — same
+  // message either way, not a real error worth alarming over.
+  if (params.get('error') === 'maintenance') {
+    errorEl.textContent = 'The admin tool is temporarily closed for maintenance.';
+  }
   errorEl.hidden = false;
 }

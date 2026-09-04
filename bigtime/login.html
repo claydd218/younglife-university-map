@@ -50,12 +50,28 @@
   }
   .error[hidden] { display: none; }
   .cf-turnstile { margin-bottom: 12px; }
+  .maintenance-notice {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
 </style>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <h1>Admin Login</h1>
-  <form method="POST" action="/bigtime/api/login">
+  <!-- TEMPORARY: admin closed for maintenance, per explicit request —
+       remove this notice and the form's `hidden` attribute below to
+       reopen. worker/routes/login.js also rejects POSTs to the login API
+       directly while this is in place (defense in depth against a
+       bookmarked/cached copy of this form). -->
+  <div class="maintenance-notice" id="maintenance-notice">
+    The admin tool is temporarily closed for maintenance. Please check back shortly.
+  </div>
+  <form method="POST" action="/bigtime/api/login" hidden>
     <div class="error" id="error" hidden>Login failed — check your password and try again.</div>
     <input type="password" name="password" placeholder="Password" autofocus required>
     <div class="cf-turnstile" data-sitekey="0x4AAAAAAEV3Hr6PnCCyLUxb"></div>

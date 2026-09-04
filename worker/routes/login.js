@@ -32,7 +32,18 @@ async function verifyTurnstile(token, env, request) {
   }
 }
 
+// TEMPORARY: admin closed for maintenance, per explicit request — flip
+// back to false (or delete this block) to reopen. bigtime/login.html's
+// form is also hidden behind its own maintenance notice while this is
+// on; this is the actual enforcement point (defense in depth against a
+// bookmarked/cached copy of that form posting directly here).
+const MAINTENANCE_MODE = true;
+
 export async function login(request, env) {
+  if (MAINTENANCE_MODE) {
+    return Response.redirect(new URL('/bigtime/login?error=maintenance', request.url), 302);
+  }
+
   // Checked before doing any other work — including reading the form body
   // — so a tripped lockout costs a tripped attacker nothing but a redirect,
   // not a Turnstile siteverify round trip. See loginRateLimit.js for why
