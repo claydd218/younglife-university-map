@@ -286,6 +286,19 @@ export default {
           return await publicMinistriesGet({ env });
         }
 
+        // favicon.svg and apple-touch-icon.png are real site branding, not
+        // admin-managed content — migrate-media.mjs only ever copied
+        // ministry/staff photos and generated maps/reports into R2, so
+        // these two never made it there and 404 if routed through
+        // serveMedia below like everything else under /images/. Still
+        // genuinely static files in the deployed asset bundle, so they go
+        // straight to ASSETS.fetch. Confirmed live: every page's favicon
+        // (and the hamburger menu's "World" icon, which reuses
+        // favicon.svg) was broken site-wide until this carve-out.
+        if (pathname === '/images/favicon.svg' || pathname === '/images/apple-touch-icon.png') {
+          return await env.ASSETS.fetch(request);
+        }
+
         // images/, maps/, and reports/ used to be plain static files
         // (git-committed) — now they're R2 objects, streamed back out by
         // worker/routes/media.js. Checked before the ASSETS fallthrough
