@@ -28,22 +28,30 @@ export async function getStaffIdByName(env, name) {
   return row ? row.id : null;
 }
 
-// Diffs `staffEntries` ([{name, role}], the ministry form's current Staff
-// section) against this ministry's existing home staff rows, by name —
-// same matching heuristic bigtime/admin.js already used, just scoped to
-// one ministry's own rows instead of a global scan (strictly narrower and
-// safer: a same-named person elsewhere is never touched by this).
+// Diffs `staffEntries` ([{id?, name, role}], the ministry form's current
+// Staff section) against this ministry's existing home staff rows, by
+// `id` when the entry has one (an existing row the form loaded, possibly
+// renamed) — matching by name instead would treat every rename as
+// "the old person was deleted, a brand-new person was added", which
+// silently loses their stable id *and* cascade-deletes their
+// staff_assignments elsewhere (confirmed live: renaming someone with an
+// active assignment made it vanish). A entry with no `id` is a genuinely
+// new row added in this same edit, always inserted.
 export async function upsertHomeStaff(env, ministryId, staffEntries) {
   const existing = await staffRowsForMinistry(env, ministryId);
-  const existingByName = new Map(existing.map((s) => [s.name, s]));
-  const wantedNames = new Set(staffEntries.map((s) => s.name));
+  const existingById = new Map(existing.map((s) => [s.id, s]));
+  const wantedIds = new Set(staffEntries.filter((s) => s.id != null).map((s) => Number(s.id)));
   const now = new Date().toISOString();
 
-  for (const { name, role } of staffEntries) {
-    const current = existingByName.get(name);
+  for (const { id, name, role } of staffEntries) {
+    const current = id != null ? existingById.get(Number(id)) : null;
     if (current) {
-      if (current.role !== role) {
-        await env.DB.prepare('UPDATE staff SET role = ?, updated_at = ? WHERE id = ?').bind(role, now, current.id).run();
+      if (current.name !== name || current.role !== role) {
+        // Re-slugified on every save, not just when the name changes —
+        // cheap, and guarantees it can never drift from the name even if
+        // some future path updates one without the other.
+        await env.DB.prepare('UPDATE staff SET name = ?, slug = ?, role = ?, updated_at = ? WHERE id = ?')
+          .bind(name, slugify(name), role, now, current.id).run();
       }
     } else {
       await env.DB.prepare(
@@ -55,7 +63,7 @@ export async function upsertHomeStaff(env, ministryId, staffEntries) {
   // ON DELETE CASCADE removes their assignments elsewhere too — the real
   // bug fix over the old sweepAssignments() workaround, see schema.sql.
   for (const row of existing) {
-    if (!wantedNames.has(row.name)) {
+    if (!wantedIds.has(row.id)) {
       await env.DB.prepare('DELETE FROM staff WHERE id = ?').bind(row.id).run();
     }
   }

@@ -85,7 +85,7 @@ export async function onRequestPut({ request, env, ctx, params }) {
       })
     );
   }
-  return jsonResponse({ ok: true, id: result.id, sha: result.updated_at, updated_at: result.updated_at, deployVersion });
+  return jsonResponse({ ok: true, id: result.id, sha: result.updated_at, updated_at: result.updated_at, deployVersion, row: result });
 }
 
 export async function onRequestDelete({ request, env, ctx, params }) {

@@ -88,5 +88,5 @@ export async function onRequestPost({ request, env, ctx }) {
       })
     );
   }
-  return jsonResponse({ ok: true, id: result.id, sha: result.updated_at, updated_at: result.updated_at, deployVersion });
+  return jsonResponse({ ok: true, id: result.id, sha: result.updated_at, updated_at: result.updated_at, deployVersion, row: result });
 }

@@ -1199,6 +1199,11 @@ function addStaffRow(prefill = {}) {
     nameLabel: 'Name', metaLabel: 'Role', metaPlaceholder: 'e.g. College Coordinator',
     name: prefill.name, meta: prefill.role,
   });
+  // Lets the server (worker/lib/db/staff.js's upsertHomeStaff) match this
+  // row back to its real staff record even after a rename — a brand-new
+  // row (no prefill.id) is left unset, correctly telling it to insert
+  // rather than update.
+  if (prefill.id != null) item.dataset.staffId = prefill.id;
   const nameInput = item.querySelector('.row-name');
   const metaInput = item.querySelector('.row-meta');
   const photoWidget = document.createElement('div');
@@ -1336,7 +1341,10 @@ async function confirmMoveStaff(targetId) {
     const result = await apiFetch(`/ministries/${encodeURIComponent(targetId)}`, { method: 'PUT', body: JSON.stringify(body) });
     trackDeployVersion(result.deployVersion);
     const targetIndex = state.rows.findIndex((r) => r.id === targetId);
-    state.rows[targetIndex] = { ...target, staff: newStaff, sha: result.sha, updated_at: result.updated_at };
+    // The response's own row, not a local reconstruction — includes the
+    // moved staffer's real new database id (see saveMinistry's identical
+    // reasoning on why that matters for a same-session re-save).
+    state.rows[targetIndex] = result.row;
     item.remove();
     markDialogDirty();
   } catch (err) {
@@ -1672,6 +1680,18 @@ function collectRepeatable(group, nameField, metaField) {
   })).filter((entry) => entry[nameField]);
 }
 
+// Same as collectRepeatable, plus each row's staffId (addStaffRow's own
+// dataset.staffId, set only for a row that started from an existing
+// record) — server-side, worker/lib/db/staff.js's upsertHomeStaff needs
+// this to tell a rename apart from a delete-and-recreate.
+function collectStaffRows(group) {
+  return Array.from(group.querySelectorAll('.repeatable-item')).map((item) => ({
+    id: item.dataset.staffId ? Number(item.dataset.staffId) : undefined,
+    name: item.querySelector('.row-name').value.trim(),
+    role: item.querySelector('.row-meta').value.trim(),
+  })).filter((entry) => entry.name);
+}
+
 // There's no standalone "date opened" field anymore — it's derived from
 // the ministry's own data instead of asking for it twice. A university's
 // Year field isn't always a year (it's whatever's in that entry's last
@@ -1815,7 +1835,7 @@ async function saveMinistry() {
     // from this body after save, not re-fetched) matches what actually
     // got written, same reasoning as stripParens above.
     video_label: videoUrl ? ($('field-video-label').value.trim() || defaultVideoLabel()) : '',
-    staff: collectRepeatable($('staff-group'), 'name', 'role'),
+    staff: collectStaffRows($('staff-group')),
     universities,
     // Reference, not a copy — reconcileAllPhotos() (called below, before
     // this body is stringified) may rewrite entries in place if the
@@ -1851,16 +1871,19 @@ async function saveMinistry() {
       // here (removed, or renamed away) and needs sweepAssignments.
       const previousStaffNames = state.rows[index].staff.map((s) => s.name);
       const result = await apiFetch(`/ministries/${encodeURIComponent(state.editingId)}`, { method: 'PUT', body: JSON.stringify(body) });
-      // Same read-after-write reasoning as deleteMinistry — update from the
-      // write response (which carries the server's own authoritative
-      // updated_at, not a client-side guess) instead of re-fetching.
-      state.rows[index] = { id: state.editingId, ...rowFields, updated_at: result.updated_at, sha: result.updated_at };
+      // The write response's own `row` — the server's authoritative state,
+      // not this request's echoed-back body — critically including the
+      // real database id for any staff member added in this same save
+      // (needed so a second save of this same dialog, no reload in
+      // between, recognizes them as an update rather than inserting a
+      // duplicate — see worker/lib/db/staff.js's upsertHomeStaff).
+      state.rows[index] = result.row;
       trackDeployVersion(result.deployVersion);
       const newStaffNames = new Set(rowFields.staff.map((s) => s.name));
       await sweepAssignments(previousStaffNames.filter((n) => !newStaffNames.has(n)));
     } else {
       const result = await apiFetch('/ministries', { method: 'POST', body: JSON.stringify(body) });
-      state.rows.push({ id: result.id, ...rowFields, updated_at: result.updated_at, sha: result.updated_at });
+      state.rows.push(result.row);
       trackDeployVersion(result.deployVersion);
     }
     renderMinistriesTable();

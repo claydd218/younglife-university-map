@@ -32,7 +32,11 @@ function toAdminShape(row, staffRows, assignedNames) {
     lng: row.lng,
     date_opened: row.date_opened,
     is_developing: !!row.is_developing,
-    staff: staffRows.map((s) => ({ name: s.name, role: s.role })),
+    // `id` lets upsertHomeStaff match an edited row back to its real
+    // staff record even when the name itself changed — see that
+    // function's own comment for why matching by name alone silently
+    // corrupted a rename into a delete-and-recreate.
+    staff: staffRows.map((s) => ({ id: s.id, name: s.name, role: s.role })),
     assigned_staff: assignedNames,
     universities: JSON.parse(row.universities),
     blurb: row.blurb,
@@ -142,7 +146,12 @@ export async function insertMinistry(env, fields) {
     'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json) VALUES (?, ?, ?, NULL, ?)'
   ).bind(id, now, 'create', JSON.stringify({ ...cols, staff: fields.staff || [] })).run();
 
-  return { id: String(id), updated_at: now };
+  // The full fresh row, not just {id, updated_at} — critically including
+  // the real database id upsertHomeStaff just assigned each new staff
+  // member, which bigtime/admin.js needs in its own local state so a
+  // second save (of a just-created staffer, no reload in between) is
+  // recognized as an update, not another insert of the same person.
+  return getMinistry(env, id);
 }
 
 // expectedUpdatedAt: the row's own `updated_at`/`sha` value the client
@@ -198,7 +207,9 @@ export async function updateMinistry(env, id, expectedUpdatedAt, fields) {
     'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json) VALUES (?, ?, ?, ?, ?)'
   ).bind(id, now, 'update', JSON.stringify({ staff: oldStaff }), JSON.stringify({ ...cols, staff: fields.staff || [] })).run();
 
-  return { id: String(id), updated_at: now };
+  // See insertMinistry's own comment — same reason: a just-added staff
+  // member's real id has to make it back to the client.
+  return getMinistry(env, id);
 }
 
 export async function deleteMinistry(env, id) {
