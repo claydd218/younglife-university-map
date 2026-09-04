@@ -26,6 +26,13 @@ import { onRequestGet as reportPdfGet } from './routes/report-pdf.js';
 import { onRequestGet as imagesManifestGet } from './routes/images-manifest.js';
 import { onRequestGet as publicMinistriesGet } from './routes/public-ministries.js';
 import { onRequestGet as logsGet } from './routes/logs.js';
+import { onRequestGet as meGet } from './routes/me.js';
+import {
+  onRequestGet as usersGet,
+  onRequestPost as usersPost,
+  onRequestPut as usersPut,
+  onRequestDelete as usersDelete,
+} from './routes/users.js';
 import { serveMedia } from './routes/media.js';
 import { login, logout } from './routes/login.js';
 import { getSessionUser, createSessionCookie } from './lib/session.js';
@@ -238,6 +245,22 @@ export default {
 
         if (pathname === '/bigtime/api/logs' && method === 'GET') {
           return await logsGet({ request, env });
+        }
+
+        if (pathname === '/bigtime/api/me' && method === 'GET') {
+          return await meGet({ user: sessionUser });
+        }
+
+        if (pathname === '/bigtime/api/users') {
+          if (method === 'GET') return await usersGet({ env, user: sessionUser });
+          if (method === 'POST') return await usersPost({ request, env, user: sessionUser });
+        }
+
+        const bigtimeUserMatch = pathname.match(/^\/bigtime\/api\/users\/([^/]+)$/);
+        if (bigtimeUserMatch) {
+          const params = { id: decodeURIComponent(bigtimeUserMatch[1]) };
+          if (method === 'PUT') return await usersPut({ request, env, params, user: sessionUser });
+          if (method === 'DELETE') return await usersDelete({ env, params, user: sessionUser });
         }
 
         if (pathname === '/superbigtime/api/users') {

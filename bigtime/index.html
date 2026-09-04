@@ -260,6 +260,17 @@
   }
   dialog#assign-staff-dialog[open] { display: flex; flex-direction: column; }
   dialog#assign-staff-dialog::backdrop { background: rgba(0,0,0,0.4); }
+
+  dialog#admin-user-dialog {
+    width: min(420px, 92vw);
+    max-height: 80vh;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+  dialog#admin-user-dialog[open] { display: flex; flex-direction: column; }
+  dialog#admin-user-dialog::backdrop { background: rgba(0,0,0,0.4); }
   .assign-staff-scope-row { margin-bottom: 10px; }
   .assign-staff-country-group { margin-bottom: 12px; }
   .assign-staff-country-heading { font-size: 13px; font-weight: 600; color: #555; margin: 0 0 6px; }
@@ -347,7 +358,7 @@
   .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
   .field-checkbox label { display: flex; align-items: center; gap: 8px; font-weight: 400; margin-bottom: 0; }
   .field-checkbox input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: #1a1a1a; }
-  .field input[type="text"], .field input[type="number"], .field textarea, .field input[list] {
+  .field input[type="text"], .field input[type="number"], .field input[type="password"], .field textarea, .field input[list] {
     width: 100%;
     font: inherit;
     font-size: 14px;
@@ -607,6 +618,9 @@
          is intentionally left in place in case this comes back later. -->
     <button type="button" class="tab-btn" data-tab="images" hidden>Images</button>
     <button type="button" class="tab-btn" data-tab="log">Log</button>
+    <!-- Shown by admin.js only for a logged-in user whose /bigtime/api/me
+         response says is_admin — see wireAdminTabVisibility. -->
+    <button type="button" class="tab-btn" data-tab="admin" id="admin-tab-btn" hidden>Admin</button>
   </div>
 
   <section id="tab-ministries" class="tab-panel">
@@ -645,6 +659,50 @@
       <button type="button" class="btn secondary btn-small" id="log-load-more-btn" hidden>Load more</button>
     </div>
   </section>
+
+  <section id="tab-admin" class="tab-panel" hidden>
+    <div class="toolbar">
+      <span id="admin-users-count" class="status-text"></span>
+      <button type="button" class="btn" id="add-admin-user-btn">+ Add User</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Login</th><th>Admin</th><th>Last login</th><th></th></tr>
+      </thead>
+      <tbody id="admin-users-tbody"></tbody>
+    </table>
+  </section>
+
+  <dialog id="admin-user-dialog">
+    <form id="admin-user-form" method="dialog">
+      <div class="dialog-header">
+        <h2 id="admin-user-dialog-title">Add User</h2>
+        <div class="dialog-header-actions">
+          <button type="button" class="btn secondary" id="admin-user-cancel-btn">Cancel</button>
+          <button type="submit" class="btn" id="admin-user-save-btn">Save</button>
+        </div>
+      </div>
+      <div id="admin-user-dialog-banner" class="banner error" hidden></div>
+      <div class="dialog-body">
+        <div class="field">
+          <label for="admin-user-name">Name</label>
+          <input type="text" id="admin-user-name" required>
+        </div>
+        <div class="field">
+          <label for="admin-user-login">Login</label>
+          <input type="text" id="admin-user-login" autocomplete="off" required>
+        </div>
+        <div class="field">
+          <label for="admin-user-password">Password</label>
+          <input type="password" id="admin-user-password" autocomplete="new-password">
+          <div class="field-note" id="admin-user-password-hint"></div>
+        </div>
+        <div class="field field-checkbox">
+          <label><input type="checkbox" id="admin-user-is-admin"> Admin — can manage user accounts</label>
+        </div>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="ministry-dialog">
     <form id="ministry-form" method="dialog">

@@ -164,8 +164,10 @@ function wireTabs() {
       $('tab-ministries').hidden = tab !== 'ministries';
       $('tab-images').hidden = tab !== 'images';
       $('tab-log').hidden = tab !== 'log';
+      $('tab-admin').hidden = tab !== 'admin';
       if (tab === 'images') renderImagesTab();
       if (tab === 'log') renderLogTab();
+      if (tab === 'admin') renderAdminUsersTab();
     });
   });
 }
@@ -2804,6 +2806,155 @@ function wireLogTab() {
   $('log-load-more-btn').addEventListener('click', loadLogPage);
 }
 
+// --- Admin tab (user management) ----------------------------------------
+// Replaces superbigtime's separate shared-password area — any admin
+// (env: worker/lib/db/users.js's is_admin) manages accounts right here,
+// gated by the same per-user session everything else in this app already
+// uses. checkAdminAccess (called once at init) is what decides whether
+// this tab is even visible; the server independently re-checks is_admin
+// on every /bigtime/api/users request regardless, so a stale client-side
+// view (e.g. after self-demoting) can't grant access it isn't allowed.
+
+async function checkAdminAccess() {
+  try {
+    const me = await apiFetch('/me');
+    $('admin-tab-btn').hidden = !me.is_admin;
+  } catch {
+    // Not fatal — worst case the tab stays hidden, which is the safe
+    // default anyway.
+  }
+}
+
+function showAdminUserDialogBanner(message) {
+  const el = $('admin-user-dialog-banner');
+  el.textContent = message;
+  el.hidden = false;
+}
+
+function hideAdminUserDialogBanner() {
+  $('admin-user-dialog-banner').hidden = true;
+}
+
+let adminUsers = [];
+let editingAdminUserId = null;
+
+async function renderAdminUsersTab() {
+  const tbody = $('admin-users-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="status-text">Loading…</td></tr>';
+  try {
+    const result = await apiFetch('/users');
+    adminUsers = result.rows;
+    renderAdminUsersList();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="status-text">${escapeHtml(err.message || String(err))}</td></tr>`;
+  }
+}
+
+function formatLastLogin(iso) {
+  if (!iso) return 'Never';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+
+function renderAdminUsersList() {
+  $('admin-users-count').textContent = `${adminUsers.length} user${adminUsers.length === 1 ? '' : 's'}`;
+  const tbody = $('admin-users-tbody');
+  if (!adminUsers.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="status-text">No users yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = adminUsers.map((u) => `
+    <tr data-id="${escapeHtml(u.id)}">
+      <td>${escapeHtml(u.name)}</td>
+      <td>${escapeHtml(u.login)}</td>
+      <td>${u.is_admin ? 'Yes' : ''}</td>
+      <td>${escapeHtml(formatLastLogin(u.last_login_at))}</td>
+      <td class="actions">
+        <button type="button" class="btn secondary btn-small" data-action="edit">Edit</button>
+        <button type="button" class="btn danger btn-small" data-action="delete">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('tr[data-id]').forEach((tr) => {
+    const id = Number(tr.dataset.id);
+    const user = adminUsers.find((u) => u.id === id);
+    tr.querySelector('[data-action="edit"]').addEventListener('click', () => openAdminUserDialog(user));
+    tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteAdminUser(user));
+  });
+}
+
+function openAdminUserDialog(user) {
+  hideAdminUserDialogBanner();
+  editingAdminUserId = user ? user.id : null;
+  $('admin-user-dialog-title').textContent = user ? 'Edit User' : 'Add User';
+  $('admin-user-name').value = user ? user.name : '';
+  $('admin-user-login').value = user ? user.login : '';
+  $('admin-user-password').value = '';
+  $('admin-user-password-hint').textContent = user ? 'Leave blank to keep the current password.' : '';
+  $('admin-user-is-admin').checked = user ? user.is_admin : false;
+  $('admin-user-dialog').showModal();
+  $('admin-user-name').focus();
+}
+
+function closeAdminUserDialog() {
+  $('admin-user-dialog').close();
+  editingAdminUserId = null;
+}
+
+async function saveAdminUser(e) {
+  e.preventDefault();
+  hideAdminUserDialogBanner();
+  const name = $('admin-user-name').value.trim();
+  const login = $('admin-user-login').value.trim();
+  const password = $('admin-user-password').value;
+  const isAdmin = $('admin-user-is-admin').checked;
+
+  if (!name || !login) {
+    showAdminUserDialogBanner('Name and login are required.');
+    return;
+  }
+  if (!editingAdminUserId && !password) {
+    showAdminUserDialogBanner('Password is required for a new user.');
+    return;
+  }
+
+  const body = { name, login, is_admin: isAdmin };
+  if (password) body.password = password;
+
+  try {
+    if (editingAdminUserId) {
+      await apiFetch(`/users/${encodeURIComponent(editingAdminUserId)}`, { method: 'PUT', body: JSON.stringify(body) });
+    } else {
+      await apiFetch('/users', { method: 'POST', body: JSON.stringify(body) });
+    }
+    closeAdminUserDialog();
+    await renderAdminUsersTab();
+    // The checkbox just changed may have been for this very session —
+    // refresh the tab's own visibility to match rather than waiting for a
+    // reload.
+    await checkAdminAccess();
+  } catch (err) {
+    showAdminUserDialogBanner(err.message || String(err));
+  }
+}
+
+async function deleteAdminUser(user) {
+  if (!window.confirm(`Delete ${user.name} (${user.login})? They'll be signed out immediately and can no longer log in.`)) return;
+  try {
+    await apiFetch(`/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' });
+    await renderAdminUsersTab();
+  } catch (err) {
+    showBanner('error', err.message || String(err));
+  }
+}
+
+function wireAdminUsersTab() {
+  $('add-admin-user-btn').addEventListener('click', () => openAdminUserDialog(null));
+  $('admin-user-cancel-btn').addEventListener('click', closeAdminUserDialog);
+  $('admin-user-form').addEventListener('submit', saveAdminUser);
+}
+
 function wireSignOut() {
   $('sign-out-btn').addEventListener('click', async () => {
     if (!window.confirm('Sign out?')) return;
@@ -2829,5 +2980,7 @@ wireMoveStaffDialog();
 wireAssignStaffDialog();
 wireReportPdfButton();
 wireLogTab();
+wireAdminUsersTab();
 wireSignOut();
+checkAdminAccess();
 loadMinistries();

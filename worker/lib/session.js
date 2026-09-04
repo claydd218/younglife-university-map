@@ -84,14 +84,15 @@ async function readSessionCookie(request, env) {
   return Number.isFinite(userId) ? userId : null;
 }
 
-// Request -> {id, name} | null. Verifies the cookie, then confirms the
-// user it names still exists — see this module's own header comment for
-// why that second check matters (instant revocation, always-current name).
+// Request -> {id, name, is_admin} | null. Verifies the cookie, then
+// confirms the user it names still exists — see this module's own header
+// comment for why that second check matters (instant revocation,
+// always-current name/role).
 export async function getSessionUser(request, env) {
   const userId = await readSessionCookie(request, env);
   if (userId == null) return null;
-  const row = await env.DB.prepare('SELECT id, name FROM admin_users WHERE id = ?').bind(userId).first();
-  return row ? { id: row.id, name: row.name } : null;
+  const row = await env.DB.prepare('SELECT id, name, is_admin FROM admin_users WHERE id = ?').bind(userId).first();
+  return row ? { id: row.id, name: row.name, is_admin: !!row.is_admin } : null;
 }
 
 // Timing-safe password check — exported so route handlers (e.g. the
