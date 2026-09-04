@@ -1658,12 +1658,21 @@ function updateDialogButtons() {
     $('dialog-close-btn').hidden = false;
     $('dialog-close-btn').textContent = 'Save';
     $('dialog-cancel-btn').hidden = false;
+    $('dialog-cancel-btn').textContent = 'Cancel'; // always something to discard: the whole new row
     return;
   }
   const dirty = state.dialogDirty;
   $('dialog-close-btn').hidden = !dirty;
   $('dialog-close-btn').textContent = 'Update';
   $('dialog-cancel-btn').hidden = dirty;
+  // Not-dirty means nothing about THIS ministry's own draft would be lost
+  // by leaving — "Cancel" implies discarding something, which is
+  // misleading when there's nothing to discard (e.g. right after only
+  // making a cross-ministry staff assignment, which already saved
+  // elsewhere and never dirties this dialog). Once dirty, the button is
+  // hidden anyway (Update takes over), so this only ever shows in the
+  // not-dirty state — hence always "Close" here, never "Cancel".
+  $('dialog-cancel-btn').textContent = 'Close';
 }
 
 function markDialogDirty() {
