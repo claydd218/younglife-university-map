@@ -1449,6 +1449,49 @@ async function sweepAssignments(names) {
   }
 }
 
+// Like sweepAssignments, but for an actual rename (the person's id is
+// still there — see reconcileStaffIdentityChanges) rather than a real
+// removal: every other ministry's assigned_staff list gets their OLD name
+// swapped for their NEW one in place, instead of dropped. Confirmed live
+// as a real bug: a home-ministry rename used to call sweepAssignments
+// with the old name (since it had simply "disappeared" from the new name
+// list), silently unassigning someone from every ministry they were
+// assigned to elsewhere, with nothing put back in its place.
+async function renameAssignments(oldName, newName) {
+  const affected = state.rows.filter((r) => r.assigned_staff.includes(oldName));
+  for (const row of affected) {
+    try {
+      await putMinistryField(row, { assigned_staff: row.assigned_staff.map((n) => (n === oldName ? newName : n)) });
+    } catch (err) {
+      console.error('Failed to carry over a staff assignment through a rename:', err);
+    }
+  }
+}
+
+// previousStaff/newStaff: [{id, name}] from a home ministry's Staff list
+// before/after a save. Now that staff have stable ids (see
+// worker/lib/db/staff.js's upsertHomeStaff), a rename and a real removal
+// are distinguishable — someone whose id is still present just got
+// renamed and needs their assignments elsewhere carried over to the new
+// name (renameAssignments), not swept away like an actual removal
+// (sweepAssignments) would. A staffer with no id (a row added and removed
+// again within the same unsaved draft, never persisted) can't have any
+// assignment elsewhere to begin with, so it's safe to skip entirely.
+async function reconcileStaffIdentityChanges(previousStaff, newStaff) {
+  const newById = new Map(newStaff.filter((s) => s.id != null).map((s) => [s.id, s]));
+  const removedNames = [];
+  for (const prev of previousStaff) {
+    if (prev.id == null) continue;
+    const current = newById.get(prev.id);
+    if (!current) {
+      removedNames.push(prev.name);
+    } else if (current.name !== prev.name) {
+      await renameAssignments(prev.name, current.name);
+    }
+  }
+  await sweepAssignments(removedNames);
+}
+
 // { name } for whichever staff row's "Assign to Multiple Ministries…" was
 // clicked.
 let assignStaffContext = null;
@@ -1877,10 +1920,10 @@ async function saveMinistry() {
     await reconcileAllPhotos();
     if (state.editingId) {
       const index = state.rows.findIndex((r) => r.id === state.editingId);
-      // Captured before state.rows[index] is overwritten below — anyone
-      // in the old list but not the new one just lost their home entry
-      // here (removed, or renamed away) and needs sweepAssignments.
-      const previousStaffNames = state.rows[index].staff.map((s) => s.name);
+      // Captured before state.rows[index] is overwritten below — id+name
+      // pairs, not just names, so a rename can be told apart from a real
+      // removal (see reconcileStaffIdentityChanges).
+      const previousStaff = state.rows[index].staff.map((s) => ({ id: s.id, name: s.name }));
       const result = await apiFetch(`/ministries/${encodeURIComponent(state.editingId)}`, { method: 'PUT', body: JSON.stringify(body) });
       // The write response's own `row` — the server's authoritative state,
       // not this request's echoed-back body — critically including the
@@ -1890,8 +1933,7 @@ async function saveMinistry() {
       // duplicate — see worker/lib/db/staff.js's upsertHomeStaff).
       state.rows[index] = result.row;
       trackDeployVersion(result.deployVersion);
-      const newStaffNames = new Set(rowFields.staff.map((s) => s.name));
-      await sweepAssignments(previousStaffNames.filter((n) => !newStaffNames.has(n)));
+      await reconcileStaffIdentityChanges(previousStaff, result.row.staff);
     } else {
       const result = await apiFetch('/ministries', { method: 'POST', body: JSON.stringify(body) });
       state.rows.push(result.row);
