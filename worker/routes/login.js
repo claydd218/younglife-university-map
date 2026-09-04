@@ -5,6 +5,7 @@
 
 import { createSessionCookie, clearSessionCookie, checkPassword } from '../lib/session.js';
 import { isLoginLockedOut, recordLoginFailure, resetLoginFailures } from '../lib/loginRateLimit.js';
+import { MAINTENANCE_MODE } from '../lib/maintenance.js';
 
 // Verifies the Turnstile widget's token server-side against Cloudflare's
 // siteverify endpoint. Fails closed like the rest of this file's secret
@@ -31,13 +32,6 @@ async function verifyTurnstile(token, env, request) {
     return false;
   }
 }
-
-// TEMPORARY: admin closed for maintenance, per explicit request — flip
-// back to false (or delete this block) to reopen. bigtime/login.html's
-// form is also hidden behind its own maintenance notice while this is
-// on; this is the actual enforcement point (defense in depth against a
-// bookmarked/cached copy of that form posting directly here).
-const MAINTENANCE_MODE = true;
 
 export async function login(request, env) {
   if (MAINTENANCE_MODE) {

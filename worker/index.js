@@ -27,6 +27,7 @@ import { login, logout } from './routes/login.js';
 import { hasValidSession, createSessionCookie } from './lib/session.js';
 import { siteLogin, siteLogout } from './routes/site-login.js';
 import { hasValidSiteSession, createSiteSessionCookie } from './lib/siteSession.js';
+import { MAINTENANCE_MODE } from './lib/maintenance.js';
 
 function jsonError(status, message) {
   return new Response(JSON.stringify({ error: 'error', message }), {
@@ -144,9 +145,15 @@ export default {
     try {
       const isAdminPath = pathname === '/bigtime' || pathname.startsWith('/bigtime/');
       const needsSession = isAdminPath && !PUBLIC_ADMIN_PATHS.has(pathname);
-      const sessionValid = needsSession && (await hasValidSession(request, env));
+      // TEMPORARY: admin closed for maintenance (worker/lib/maintenance.js)
+      // — treated as "no session is ever valid" so this blocks even an
+      // already-logged-in admin, not just new logins from
+      // routes/login.js's own check. Both flip together (same import).
+      const sessionValid = needsSession && !MAINTENANCE_MODE && (await hasValidSession(request, env));
       if (needsSession && !sessionValid) {
-        if (pathname.startsWith('/bigtime/api/')) return withSecurityHeaders(jsonError(401, 'Not logged in'));
+        if (pathname.startsWith('/bigtime/api/')) {
+          return withSecurityHeaders(jsonError(401, MAINTENANCE_MODE ? 'Admin temporarily closed for maintenance' : 'Not logged in'));
+        }
         // The extensionless path, not /bigtime/login.html directly — skips
         // the extra 307 hop from Cloudflare's own *.html canonicalization.
         return withSecurityHeaders(Response.redirect(new URL('/bigtime/login', request.url), 302));
