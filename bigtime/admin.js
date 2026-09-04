@@ -663,7 +663,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
         // like any other unsaved field. No deployVersion to track and no
         // server `path` to hand back yet.
         pendingBlob = jpeg;
-        setReplaceStatus('Will upload when you save', 'pending');
+        setReplaceStatus('');
         if (onUploaded) onUploaded(null, measured);
         return;
       }
@@ -802,13 +802,6 @@ function renderMinistryPhotos() {
       badge.textContent = 'Main photo';
       infoCol.appendChild(badge);
     }
-    if (typeof entry !== 'string') {
-      const badge = document.createElement('span');
-      badge.className = 'ministry-photo-pending-badge';
-      badge.textContent = 'Will upload when you save';
-      infoCol.appendChild(badge);
-    }
-
     const upBtn = document.createElement('button');
     upBtn.type = 'button';
     upBtn.className = 'btn secondary btn-small';
