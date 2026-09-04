@@ -12,6 +12,11 @@ export async function superLogin(request, env) {
   const password = (form.get('password') || '').trim();
   const expected = (env.SUPERADMIN_SHARED_PASSWORD || '').trim();
 
+  // TEMP diagnostic — logs only string lengths and whether the secret is
+  // bound at all, never either value, to debug a reported "wrong password"
+  // that the account owner is confident is correct. Remove once resolved.
+  console.log(`[superbigtime login diag] secret bound=${env.SUPERADMIN_SHARED_PASSWORD != null} submitted length=${password.length} expected length=${expected.length}`);
+
   if (!checkPassword(password, expected)) {
     return Response.redirect(new URL('/superbigtime/login?error=1', request.url), 302);
   }
