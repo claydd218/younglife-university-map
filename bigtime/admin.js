@@ -2677,13 +2677,6 @@ function wireReportPdfButton() {
 // the tab is opened, not cached, so it always reflects edits made
 // elsewhere (another tab, another admin) since it was last viewed.
 
-const LOG_ACTION_LABELS = {
-  create: 'Created',
-  update: 'Updated',
-  delete: 'Deleted',
-  'staff-move': 'Moved staff',
-};
-
 let logNextBefore = null;
 
 async function renderLogTab() {
@@ -2717,17 +2710,21 @@ function appendLogRows(rows) {
     return;
   }
   const html = rows.map((row) => {
-    const label = LOG_ACTION_LABELS[row.action] || row.action;
     const place = row.city ? `${row.city}${row.country ? `, ${row.country}` : ''}` : `ministry #${row.ministry_id}`;
     const when = new Date(row.changed_at);
     const whenText = Number.isNaN(when.getTime()) ? row.changed_at : when.toLocaleString();
     // user_name is NULL for edits made before per-user accounts existed
     // (or by the old shared login) — shown as "—", not blank, so it reads
     // as "no author recorded" rather than looking like a rendering bug.
+    // summary is server-computed (worker/routes/logs.js's buildSummary) —
+    // a real diff of what changed on this specific write, not just a
+    // generic action label, so a side-effect write (e.g. one ministry's
+    // rename cascading an assignment update onto another) reads as its
+    // own distinct, legible event instead of looking like log noise.
     return `
       <tr>
         <td class="log-when">${escapeHtml(whenText)}</td>
-        <td>${escapeHtml(label)} — ${escapeHtml(place)}</td>
+        <td><strong>${escapeHtml(place)}</strong> — ${escapeHtml(row.summary || row.action)}</td>
         <td class="log-by">${escapeHtml(row.user_name || '—')}</td>
       </tr>
     `;

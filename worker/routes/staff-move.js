@@ -29,14 +29,32 @@ export async function onRequestPost({ request, env, ctx, params, user }) {
   const target = await getMinistry(env, targetMinistryId);
   if (!target) return errorResponse(404, `No ministry with id ${targetMinistryId}`);
 
+  // Captured before the move so the log can name the staffer and where
+  // they came from — worker/routes/logs.js reads this to build a summary
+  // like "Moved Anna Turchynska here from Zhytomyr, Ukraine" instead of
+  // just a bare staff id.
+  const staffRow = await env.DB.prepare('SELECT name, home_ministry_id FROM staff WHERE id = ?').bind(staffId).first();
+  const sourceMinistry = staffRow ? await getMinistry(env, staffRow.home_ministry_id) : null;
+
   await moveStaffHome(env, staffId, targetMinistryId);
 
   // Same ministry_edits audit trail every other mutation in this module
   // writes to — a move is a real change to the target ministry's roster,
-  // so it should show up in the (planned) Log tab same as any other edit.
+  // so it should show up in the Log tab same as any other edit.
   await env.DB.prepare(
     'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json, user_name) VALUES (?, ?, ?, NULL, ?, ?)'
-  ).bind(targetMinistryId, new Date().toISOString(), 'staff-move', JSON.stringify({ staffId }), user ? user.name : null).run();
+  ).bind(
+    targetMinistryId,
+    new Date().toISOString(),
+    'staff-move',
+    JSON.stringify({
+      staffId,
+      staffName: staffRow ? staffRow.name : null,
+      fromCity: sourceMinistry ? sourceMinistry.city : null,
+      fromCountry: sourceMinistry ? sourceMinistry.country : null,
+    }),
+    user ? user.name : null
+  ).run();
 
   const deployVersion = await bumpDataVersion(env);
   if (ctx) {

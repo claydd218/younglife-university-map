@@ -165,7 +165,7 @@ export async function insertMinistry(env, fields, userName = null) {
 // (ConflictError) — a follow-up SELECT tells them apart, same "someone
 // else's edit landed first, reload" UX the admin already shows today.
 export async function updateMinistry(env, id, expectedUpdatedAt, fields, userName = null) {
-  const existing = await env.DB.prepare('SELECT updated_at FROM ministries WHERE id = ?').bind(id).first();
+  const existing = await env.DB.prepare('SELECT * FROM ministries WHERE id = ?').bind(id).first();
   if (!existing) throw new NotFoundError(`No ministry with id ${id}`);
 
   const cols = ministryColumns(fields);
@@ -180,6 +180,7 @@ export async function updateMinistry(env, id, expectedUpdatedAt, fields, userNam
   }
 
   const oldStaff = await staffRowsForMinistry(env, id);
+  const oldAssignedNames = await assignedStaffNamesForMinistry(env, id);
   await upsertHomeStaff(env, id, fields.staff || []);
 
   // Reconciles who's assigned TO this ministry (fields.assigned_staff —
@@ -191,7 +192,7 @@ export async function updateMinistry(env, id, expectedUpdatedAt, fields, userNam
   // path from this one, which only ever reconciles the currently-open
   // ministry's own incoming list.
   if (fields.assigned_staff) {
-    const current = new Set(await assignedStaffNamesForMinistry(env, id));
+    const current = new Set(oldAssignedNames);
     const wanted = new Set(fields.assigned_staff);
     for (const name of wanted) {
       if (!current.has(name)) {
@@ -207,9 +208,23 @@ export async function updateMinistry(env, id, expectedUpdatedAt, fields, userNam
     }
   }
 
+  // Full before/after column snapshots (not just staff, like this used to
+  // capture) — worker/routes/logs.js diffs these to build the Log tab's
+  // human-readable summary of what actually changed on this save, instead
+  // of just a generic "Updated — City, Country" for every edit regardless
+  // of size.
+  const oldSnapshot = {
+    city: existing.city, country: existing.country, lat: existing.lat, lng: existing.lng,
+    date_opened: existing.date_opened, is_developing: existing.is_developing,
+    universities: existing.universities, blurb: existing.blurb, photos: existing.photos,
+    video_url: existing.video_url, video_label: existing.video_label,
+    staff: oldStaff, assigned_staff: oldAssignedNames,
+  };
+  const newSnapshot = { ...cols, staff: fields.staff || [], assigned_staff: fields.assigned_staff || oldAssignedNames };
+
   await env.DB.prepare(
     'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json, user_name) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(id, now, 'update', JSON.stringify({ staff: oldStaff }), JSON.stringify({ ...cols, staff: fields.staff || [] }), userName).run();
+  ).bind(id, now, 'update', JSON.stringify(oldSnapshot), JSON.stringify(newSnapshot), userName).run();
 
   // See insertMinistry's own comment — same reason: a just-added staff
   // member's real id has to make it back to the client.
