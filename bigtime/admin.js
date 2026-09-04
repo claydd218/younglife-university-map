@@ -22,7 +22,6 @@ const state = {
   rows: [], // each row carries its own `sha` (an alias for its D1 updated_at) — the per-row optimistic-concurrency token, no single global one anymore
   divisionByCountry: new Map(),
   editingId: null, // null while adding, otherwise the id being edited
-  dialogDirty: false, // edit mode only — see markDialogDirty/updateDialogButtons
 };
 
 // --- small DOM/text helpers -------------------------------------------------
@@ -459,9 +458,17 @@ function missingFieldsMessage(kind) {
     : 'Fill in the Name first, then add a photo.';
 }
 
-function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialSlug, onUploaded, watchInputs = [] }) {
+// `stageUpload`: true for the Ministries dialog's staff rows — holds the
+// re-encoded file locally instead of uploading it, so it becomes part of
+// the dialog's discardable draft like every other field (see
+// reconcilePhotoWidget, which does the actual deferred upload at Save
+// time). false (the default) for the Images tab's own replace-photo
+// widget, which has no draft/Cancel concept of its own and should keep
+// uploading immediately, same as it always has.
+function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialSlug, onUploaded, watchInputs = [], stageUpload = false }) {
   container.innerHTML = '';
   let photoSlug = initialUrl ? (initialSlug || null) : null;
+  let pendingBlob = null;
 
   // Column 1: the photo itself. Reassigned (not const) the first time a
   // placeholder becomes a real photo — see uploadSourceFile below, which
@@ -568,6 +575,8 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
     getPhotoSlug: () => photoSlug,
     setPhotoSlug: (s) => { photoSlug = s; },
     hasPhoto: () => thumb.tagName === 'IMG',
+    getPendingBlob: () => pendingBlob,
+    clearPendingBlob: () => { pendingBlob = null; },
   };
 
   chooseBtn.addEventListener('click', () => input.click());
@@ -624,15 +633,9 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
   // uploaded) — everything past "we have a source image and know where
   // it goes" is identical either way.
   async function uploadSourceFile(sourceFile, parts) {
-    setReplaceStatus('Uploading…', 'uploading');
+    setReplaceStatus(stageUpload ? 'Processing…' : 'Uploading…', 'uploading');
     try {
       const jpeg = await reencodeImage(sourceFile, kind);
-      const imageBase64 = await blobToBase64(jpeg);
-      const result = await apiFetch('/upload', {
-        method: 'POST',
-        body: JSON.stringify({ ...parts, imageBase64 }),
-      });
-      trackDeployVersion(result.deployVersion);
       const objectUrl = URL.createObjectURL(jpeg);
       thumb.src = objectUrl;
       if (thumb.tagName !== 'IMG') {
@@ -643,10 +646,28 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
         thumb.replaceWith(img);
         thumb = img;
       }
-      setReplaceStatus('');
       zoomRow.hidden = true;
       photoSlug = slugFromParts(parts);
       const measured = await refreshInfo(objectUrl);
+
+      if (stageUpload) {
+        // Held locally, not sent anywhere yet — reconcilePhotoWidget does
+        // the actual upload at Save time, so Cancel can still discard this
+        // like any other unsaved field. No deployVersion to track and no
+        // server `path` to hand back yet.
+        pendingBlob = jpeg;
+        setReplaceStatus('Will upload when you save', 'pending');
+        if (onUploaded) onUploaded(null, measured);
+        return;
+      }
+
+      const imageBase64 = await blobToBase64(jpeg);
+      const result = await apiFetch('/upload', {
+        method: 'POST',
+        body: JSON.stringify({ ...parts, imageBase64 }),
+      });
+      trackDeployVersion(result.deployVersion);
+      setReplaceStatus('');
       // Pass the just-measured local blob, not a URL the caller would have
       // to re-fetch from the repo — GitHub's Contents API has a brief
       // read-after-write lag, so an immediate re-fetch can still 404.
@@ -689,28 +710,65 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
 // A ministry can have several photos; unlike the single-photo staff/legacy
 // widget above, each upload here adds a new file rather than replacing one
 // (see worker/routes/upload.js's kind==='city' branch). currentMinistryPhotos
-// is the ordered list of filenames for whichever ministry the dialog is
-// currently open on — first entry is the "main" photo shown on the public
-// map popup; the rest are only visible in that popup's photo carousel.
-
+// is the ordered list for whichever ministry the dialog is currently open
+// on — first entry is the "main" photo shown on the public map popup, the
+// rest only visible in that popup's photo carousel. Each entry is either a
+// plain filename string (an existing, already-uploaded photo) or a
+// `{pendingId, blob}` object (added this session, not uploaded yet) —
+// commitPendingMinistryPhotos (called from saveMinistry) uploads every
+// pending entry and turns it into a real filename; until Save, nothing
+// here has touched the server, so Cancel is always safe.
 let currentMinistryPhotos = [];
+// Snapshot of currentMinistryPhotos as loaded, before any edits this
+// session — commitPendingMinistryPhotos diffs against this to find which
+// existing filenames were actually removed (they're just gone from
+// currentMinistryPhotos, same as a plain array splice always did) and
+// need a real DELETE at Save time.
+let originalMinistryPhotos = [];
 // Draft list of staff *names* assigned here from elsewhere (their home
 // entry is a different ministry — see the "Assign to Multiple Ministries"
 // section below). Same draft-until-Save treatment as currentMinistryPhotos,
 // for the same reason: this ministry's own row is the one currently open
 // for edit, so removing one here shouldn't fire its own out-of-band write.
 let currentAssignedStaff = [];
-// filename -> local blob URL, for photos uploaded earlier in this same
-// dialog session. GitHub's Contents API has a brief read-after-write lag,
-// so fetching a just-uploaded file straight from its repo URL can 404 for
-// a few seconds — showing the blob we already have instead avoids that
-// broken-thumbnail flash. Existing photos loaded from a saved ministry
-// have no blob here and fall back to the repo URL, which is fine since
-// they've been committed for a while.
+// filename (existing) or pendingId (staged) -> local blob URL. GitHub's
+// Contents API has a brief read-after-write lag, so fetching a
+// just-uploaded file straight from its repo URL can 404 for a few
+// seconds — showing the blob we already have instead avoids that broken-
+// thumbnail flash. Existing photos loaded from a saved ministry have no
+// blob here and fall back to the repo URL, which is fine since they've
+// been committed for a while.
 let ministryPhotoBlobUrls = {};
 
 function ministryPhotoUrl(filename) {
   return `../${CONFIG.IMAGES_DIR}${filename}`;
+}
+
+function ministryPhotoKey(entry) {
+  return typeof entry === 'string' ? entry : entry.pendingId;
+}
+
+function ministryPhotoSrc(entry) {
+  const key = ministryPhotoKey(entry);
+  if (ministryPhotoBlobUrls[key]) return ministryPhotoBlobUrls[key];
+  return typeof entry === 'string' ? ministryPhotoUrl(entry) : '';
+}
+
+// Revokes any blob URL for a still-pending (never uploaded) entry —
+// called when the dialog closes without saving, so a cancelled photo add
+// doesn't leak its blob URL for the rest of the session. A no-op for
+// entries already committed by a successful save (they're plain filename
+// strings by then, not pending objects) and for existing photos (their
+// blob, if any, is the intentionally session-lifetime upload-lag cache
+// described above, not something this add discarded).
+function discardPendingMinistryPhotoUploads() {
+  for (const entry of currentMinistryPhotos) {
+    if (typeof entry === 'string') continue;
+    if (ministryPhotoBlobUrls[entry.pendingId]) {
+      URL.revokeObjectURL(ministryPhotoBlobUrls[entry.pendingId]);
+      delete ministryPhotoBlobUrls[entry.pendingId];
+    }
+  }
 }
 
 function renderMinistryPhotos() {
@@ -721,12 +779,12 @@ function renderMinistryPhotos() {
     return;
   }
 
-  currentMinistryPhotos.forEach((filename, index) => {
+  currentMinistryPhotos.forEach((entry, index) => {
     const item = document.createElement('div');
     item.className = 'ministry-photo-item';
 
     const img = document.createElement('img');
-    img.src = ministryPhotoBlobUrls[filename] || ministryPhotoUrl(filename);
+    img.src = ministryPhotoSrc(entry);
     img.alt = '';
 
     const infoCol = document.createElement('div');
@@ -735,6 +793,12 @@ function renderMinistryPhotos() {
       const badge = document.createElement('span');
       badge.className = 'ministry-photo-main-badge';
       badge.textContent = 'Main photo';
+      infoCol.appendChild(badge);
+    }
+    if (typeof entry !== 'string') {
+      const badge = document.createElement('span');
+      badge.className = 'ministry-photo-pending-badge';
+      badge.textContent = 'Will upload when you save';
       infoCol.appendChild(badge);
     }
 
@@ -748,7 +812,6 @@ function renderMinistryPhotos() {
       [currentMinistryPhotos[index - 1], currentMinistryPhotos[index]] =
         [currentMinistryPhotos[index], currentMinistryPhotos[index - 1]];
       renderMinistryPhotos();
-      markDialogDirty();
     });
 
     const downBtn = document.createElement('button');
@@ -761,7 +824,6 @@ function renderMinistryPhotos() {
       [currentMinistryPhotos[index + 1], currentMinistryPhotos[index]] =
         [currentMinistryPhotos[index], currentMinistryPhotos[index + 1]];
       renderMinistryPhotos();
-      markDialogDirty();
     });
 
     const reorderRow = document.createElement('div');
@@ -771,26 +833,15 @@ function renderMinistryPhotos() {
     const actionsCol = document.createElement('div');
     actionsCol.className = 'ministry-photo-actions';
     actionsCol.appendChild(reorderRow);
-    // Removal happens immediately (unlike a staff/university row) because
-    // the photo is already a committed file on disk the moment it's
-    // uploaded — there's no pending/discardable draft state for it, same
-    // as the Images tab's Remove action.
+    // Deferred to Save, same as a staff/university row — nothing's
+    // written (or, for an existing photo, deleted) until then, so this is
+    // always safe to back out of via Cancel.
     actionsCol.appendChild(makeRemoveButton({
       danger: true,
-      confirmMessage: 'Remove this photo? This deletes it from the live site.',
-      onRemove: async () => {
-        try {
-          const result = await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
-          trackDeployVersion(result.deployVersion);
-          if (ministryPhotoBlobUrls[filename]) {
-            URL.revokeObjectURL(ministryPhotoBlobUrls[filename]);
-            delete ministryPhotoBlobUrls[filename];
-          }
-          currentMinistryPhotos.splice(index, 1);
-          renderMinistryPhotos();
-        } catch (err) {
-          handleWriteError(err, loadMinistries);
-        }
+      confirmMessage: 'Remove this photo? This can’t be undone after you save the ministry.',
+      onRemove: () => {
+        currentMinistryPhotos.splice(index, 1);
+        renderMinistryPhotos();
       },
     }));
 
@@ -799,12 +850,11 @@ function renderMinistryPhotos() {
   });
 }
 
-// Uploads are sequential (awaited one at a time), not parallel — each
-// upload adds a new numbered file (slug-1, slug-2, ...) computed
-// server-side from what's already on disk at request time, so firing them
-// concurrently risks two uploads racing to the same number. A failure
-// partway through still keeps whatever uploaded before it rather than
-// losing the whole batch.
+// Re-encoded and previewed immediately, but not actually uploaded until
+// Save — commitPendingMinistryPhotos does the real, sequential (not
+// parallel: see its own comment) uploads at that point. Processed one at
+// a time here too, just so a failure partway through a multi-file drop
+// still keeps whichever ones were successfully re-encoded before it.
 async function handleAddMinistryPhotos(files) {
   if (!files || !files.length) return;
   const city = $('field-city').value.trim();
@@ -817,27 +867,48 @@ async function handleAddMinistryPhotos(files) {
   addBtn.disabled = true;
   try {
     for (let i = 0; i < files.length; i++) {
-      addBtn.textContent = files.length > 1 ? `Uploading ${i + 1} of ${files.length}…` : 'Uploading…';
+      addBtn.textContent = files.length > 1 ? `Processing ${i + 1} of ${files.length}…` : 'Processing…';
       try {
         const jpeg = await reencodeImage(files[i], 'city');
-        const imageBase64 = await blobToBase64(jpeg);
-        const result = await apiFetch('/upload', {
-          method: 'POST',
-          body: JSON.stringify({ kind: 'city', city, country, imageBase64 }),
-        });
-        trackDeployVersion(result.deployVersion);
-        ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(jpeg);
-        currentMinistryPhotos.push(result.filename);
+        const pendingId = `pending-${Date.now()}-${i}`;
+        ministryPhotoBlobUrls[pendingId] = URL.createObjectURL(jpeg);
+        currentMinistryPhotos.push({ pendingId, blob: jpeg });
         renderMinistryPhotos();
-        markDialogDirty();
       } catch (err) {
-        showBanner('error', `Upload failed (${files[i].name}): ${err.message || err}`);
+        showBanner('error', `Couldn't process ${files[i].name}: ${err.message || err}`);
       }
     }
   } finally {
     addBtn.disabled = false;
     addBtn.textContent = '+ Add Photo(s)';
     $('ministry-photo-input').value = '';
+  }
+}
+
+// Called from saveMinistry, before the main PUT/POST: uploads every
+// staged photo (currentMinistryPhotos entries that are still
+// {pendingId, blob} objects, not yet a real filename) under the final
+// city/country, and deletes whichever originally-loaded photos are no
+// longer in the list (removed this session — see renderMinistryPhotos'
+// Remove button, which only ever splices locally now). Both were
+// previously immediate actions; deferring them here is what makes Cancel
+// safe to click even after adding/removing/reordering photos.
+async function commitPendingMinistryPhotos(city, country) {
+  const removed = originalMinistryPhotos.filter((filename) => !currentMinistryPhotos.includes(filename));
+  for (const filename of removed) {
+    const result = await apiFetch(`/photos/${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}`, { method: 'DELETE' });
+    trackDeployVersion(result.deployVersion);
+  }
+
+  for (let i = 0; i < currentMinistryPhotos.length; i++) {
+    const entry = currentMinistryPhotos[i];
+    if (typeof entry === 'string') continue;
+    const imageBase64 = await blobToBase64(entry.blob);
+    const result = await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ kind: 'city', city, country, imageBase64 }) });
+    trackDeployVersion(result.deployVersion);
+    delete ministryPhotoBlobUrls[entry.pendingId];
+    ministryPhotoBlobUrls[result.filename] = URL.createObjectURL(entry.blob);
+    currentMinistryPhotos[i] = result.filename;
   }
 }
 
@@ -1146,7 +1217,6 @@ function makeReorderButtons(group, item) {
     if (!prev) return;
     group.insertBefore(item, prev);
     updateReorderButtonStates(group);
-    markDialogDirty();
   });
 
   const downBtn = document.createElement('button');
@@ -1159,7 +1229,6 @@ function makeReorderButtons(group, item) {
     if (!next) return;
     group.insertBefore(next, item);
     updateReorderButtonStates(group);
-    markDialogDirty();
   });
 
   const row = document.createElement('div');
@@ -1191,7 +1260,6 @@ function makeRemoveButton({ danger = false, confirmMessage = null, onRemove }) {
   btn.addEventListener('click', () => {
     if (confirmMessage && !window.confirm(confirmMessage)) return;
     onRemove();
-    markDialogDirty();
   });
   return btn;
 }
@@ -1268,7 +1336,7 @@ function addStaffRow(prefill = {}) {
     getSlugParts: () => (nameInput.value.trim() ? { kind: 'staff', name: nameInput.value.trim() } : null),
     initialUrl,
     initialSlug: slug,
-    onUploaded: markDialogDirty,
+    stageUpload: true,
     watchInputs: [nameInput],
   });
   if (slug) {
@@ -1357,7 +1425,6 @@ async function confirmMoveStaff(targetId) {
       }
     }
     item.remove();
-    markDialogDirty();
   } catch (err) {
     handleWriteError(err, loadMinistries);
   } finally {
@@ -1640,45 +1707,19 @@ function clearFieldErrors() {
   $('country-error').hidden = true;
 }
 
-// Adding a new ministry keeps its unconditional Save/Cancel choice — there's
-// no prior saved state to fall back to either way, so a single
-// always-saving button would be ambiguous, and Cancel is always safe since
-// nothing about a not-yet-created ministry has been saved.
-// Editing an existing ministry instead starts on Cancel (untouched, so
-// there's nothing to save) and switches to Update — permanently, for the
-// rest of this dialog session — the moment anything changes. This also
-// covers photo add/remove/reorder: those already commit to the repo the
-// instant they happen (see the photo manager below), so once one has
-// happened Cancel would otherwise leave the saved ministry row's photos
-// list out of sync with what's actually on disk — flipping to Update
-// closes that gap by making a save (which is what a photo action needs
-// anyway) the only remaining way to leave the dialog.
+// Both buttons are always available now, in both Add and Edit mode:
+// nothing in this dialog writes anywhere until Save/Update is clicked —
+// photo uploads/crops/removals are staged (see the photo manager below
+// and reconcileAllPhotos) exactly like every text field already was, so
+// Cancel discarding the whole draft is always accurate. Cross-ministry
+// actions (Move…, Assign to Multiple Ministries…) are the one deliberate
+// exception — those write immediately to a *different* ministry's row,
+// which Cancel here was never going to undo anyway.
 function updateDialogButtons() {
-  if (!state.editingId) {
-    $('dialog-close-btn').hidden = false;
-    $('dialog-close-btn').textContent = 'Save';
-    $('dialog-cancel-btn').hidden = false;
-    $('dialog-cancel-btn').textContent = 'Cancel'; // always something to discard: the whole new row
-    return;
-  }
-  const dirty = state.dialogDirty;
-  $('dialog-close-btn').hidden = !dirty;
-  $('dialog-close-btn').textContent = 'Update';
-  $('dialog-cancel-btn').hidden = dirty;
-  // Not-dirty means nothing about THIS ministry's own draft would be lost
-  // by leaving — "Cancel" implies discarding something, which is
-  // misleading when there's nothing to discard (e.g. right after only
-  // making a cross-ministry staff assignment, which already saved
-  // elsewhere and never dirties this dialog). Once dirty, the button is
-  // hidden anyway (Update takes over), so this only ever shows in the
-  // not-dirty state — hence always "Close" here, never "Cancel".
-  $('dialog-cancel-btn').textContent = 'Close';
-}
-
-function markDialogDirty() {
-  if (state.dialogDirty) return;
-  state.dialogDirty = true;
-  updateDialogButtons();
+  $('dialog-close-btn').hidden = false;
+  $('dialog-close-btn').textContent = state.editingId ? 'Update' : 'Save';
+  $('dialog-cancel-btn').hidden = false;
+  $('dialog-cancel-btn').textContent = 'Cancel';
 }
 
 function openDialog(row) {
@@ -1707,7 +1748,6 @@ function openDialog(row) {
   closePinPlacementMap();
   updatePinPlacementVisibility();
 
-  state.dialogDirty = false;
   updateDialogButtons();
   updateSaveButtonState();
 
@@ -1725,6 +1765,7 @@ function openDialog(row) {
   }
 
   currentMinistryPhotos = row ? row.photos.slice() : [];
+  originalMinistryPhotos = currentMinistryPhotos.slice();
   // Deliberately not reset here (unlike currentMinistryPhotos) — it's a
   // session-lifetime cache keyed by filename, not per-dialog state. A photo
   // uploaded earlier this session still renders from its local blob
@@ -1811,15 +1852,27 @@ function validateVideoUrlInForm() {
   return !bad;
 }
 
-// If a photo was uploaded under a name that's since been edited — or the
-// dialog was opened on an existing photo and the row got renamed — the
-// file on disk drifts from what the fields now say. Editing has no Cancel
-// to escape that mismatch through, so Update reconciles each photo to the
-// current fields as part of saving: read the old file's bytes,
-// re-upload them under the new slug, then remove the old one. Instant
-// no-op (no network calls) when nothing's changed, which is the common case.
+// Two jobs, run in this order: first, upload whatever's staged (a brand
+// new photo, or a re-crop of an existing one — createPhotoWidget's
+// stageUpload holds the bytes locally instead of writing them anywhere)
+// under the *current* fields, so it never needs a separate rename pass.
+// Second — for a photo that was already on disk before this dialog
+// session and never touched — if the name/city/country it was filed
+// under has since changed, the file on disk now drifts from what the
+// fields say; Save reconciles that by re-uploading under the new slug
+// and removing the old one. Both are instant no-ops when there's nothing
+// to do, which is the common case.
 async function reconcilePhotoWidget(widget, parts) {
   if (!widget || !widget.hasPhoto()) return;
+  const pendingBlob = widget.getPendingBlob && widget.getPendingBlob();
+  if (pendingBlob) {
+    const imageBase64 = await blobToBase64(pendingBlob);
+    const result = await apiFetch('/upload', { method: 'POST', body: JSON.stringify({ ...parts, imageBase64 }) });
+    trackDeployVersion(result.deployVersion);
+    widget.setPhotoSlug(slugFromParts(parts));
+    widget.clearPendingBlob();
+    return; // freshly uploaded under the current parts — nothing stale to reconcile
+  }
   const oldSlug = widget.getPhotoSlug();
   const newSlug = slugFromParts(parts);
   if (!oldSlug || !newSlug || oldSlug === newSlug) return;
@@ -1867,8 +1920,15 @@ async function reconcileAllPhotos() {
   }
   const city = $('field-city').value.trim();
   const country = $('field-country').value.trim();
-  if (city && country && currentMinistryPhotos.length) {
-    await reconcileMinistryPhotos(city, country);
+  if (city && country) {
+    // Staged additions/removals first (not gated on currentMinistryPhotos
+    // still having entries — removing every photo this session means it's
+    // now empty, and those removals still need to actually happen). By
+    // the time reconcileMinistryPhotos runs, every remaining entry is a
+    // real filename already uploaded under the current city/country, so
+    // there's nothing left for it to move.
+    await commitPendingMinistryPhotos(city, country);
+    if (currentMinistryPhotos.length) await reconcileMinistryPhotos(city, country);
   }
 }
 
@@ -1901,8 +1961,10 @@ async function saveMinistry() {
     staff: collectStaffRows($('staff-group')),
     universities,
     // Reference, not a copy — reconcileAllPhotos() (called below, before
-    // this body is stringified) may rewrite entries in place if the
-    // city/country changed, and this needs to pick up that final state.
+    // this body is stringified) rewrites entries in place: staged
+    // {pendingId, blob} additions become real filenames once uploaded,
+    // and any surviving entry gets re-slugged if city/country changed —
+    // this needs to pick up that final all-strings state.
     photos: currentMinistryPhotos,
     // Checking/unchecking someone else's assignment to THIS ministry (the
     // "Assigned from..." rows above the regular staff list) only updates
@@ -2035,7 +2097,6 @@ async function lookupLatLng() {
     );
     updateSaveButtonState();
     updatePinPlacementVisibility();
-    markDialogDirty();
   } catch (err) {
     setLatLngLookupStatus(`Lookup failed: ${err.message || err}`, 'error');
   }
@@ -2181,7 +2242,6 @@ function openPinPlacementMap() {
     $('field-lat').value = latlng.lat.toFixed(4);
     $('field-lng').value = latlng.lng.toFixed(4);
     updateSaveButtonState();
-    markDialogDirty();
   };
   pinPlacementMarker.on('dragend', () => applyPosition(pinPlacementMarker.getLatLng()));
   pinPlacementMap.on('click', (e) => {
@@ -2210,8 +2270,8 @@ function updateCityCountryMatchNote() {
 
 function wireDialog() {
   $('add-ministry-btn').addEventListener('click', () => openDialog(null));
-  $('add-staff-btn').addEventListener('click', () => { addStaffRow(); markDialogDirty(); });
-  $('add-university-btn').addEventListener('click', () => { addUniversityRow(); markDialogDirty(); });
+  $('add-staff-btn').addEventListener('click', () => addStaffRow());
+  $('add-university-btn').addEventListener('click', () => addUniversityRow());
   wireMinistryPhotoAdd();
   wireVideoLinkFields();
   $('field-city').addEventListener('blur', autoLookupLatLngOnBlur);
@@ -2224,11 +2284,13 @@ function wireDialog() {
   $('pin-placement-btn').addEventListener('click', togglePinPlacementMap);
   $('dialog-close-btn').addEventListener('click', saveMinistry);
   $('dialog-cancel-btn').addEventListener('click', () => $('ministry-dialog').close());
-  // Delegated rather than wired per-field: covers every text/number/
-  // checkbox input, including staff/university rows added after the
-  // dialog opened, without needing its own listener on each one.
-  $('ministry-form').addEventListener('input', markDialogDirty);
-  $('ministry-form').addEventListener('change', markDialogDirty);
+  // Fires on every path out of the dialog — Cancel, Escape, and a
+  // successful Save alike (saveMinistry calls .close() itself on
+  // success) — so pending-photo cleanup runs uniformly regardless of how
+  // it closed. A no-op after a successful save: reconcileAllPhotos has
+  // already turned every pending entry into a real filename by then, so
+  // there's nothing left to discard.
+  $('ministry-dialog').addEventListener('close', discardPendingMinistryPhotoUploads);
   ['field-city', 'field-country', 'field-lat', 'field-lng'].forEach((id) => {
     $(id).addEventListener('input', updateSaveButtonState);
   });
