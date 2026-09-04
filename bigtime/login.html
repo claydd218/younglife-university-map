@@ -68,10 +68,10 @@
        reopen. worker/routes/login.js also rejects POSTs to the login API
        directly while this is in place (defense in depth against a
        bookmarked/cached copy of this form). -->
-  <div class="maintenance-notice" id="maintenance-notice">
+  <div class="maintenance-notice" id="maintenance-notice" hidden>
     The admin tool is temporarily closed for maintenance. Please check back shortly.
   </div>
-  <form method="POST" action="/bigtime/api/login" hidden>
+  <form method="POST" action="/bigtime/api/login">
     <div class="error" id="error" hidden>Login failed — check your password and try again.</div>
     <input type="password" name="password" placeholder="Password" autofocus required>
     <div class="cf-turnstile" data-sitekey="0x4AAAAAAEV3Hr6PnCCyLUxb"></div>
