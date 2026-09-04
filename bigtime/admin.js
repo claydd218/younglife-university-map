@@ -268,7 +268,13 @@ async function reencodeImage(file, kind) {
 // handler for both). Zoom is the slider only, not pinch-gesture or scroll
 // — a second input method would duplicate what the slider already covers
 // for a single-image crop, not add real capability.
-function openCropDialog(file) {
+// `isAdd`: true when there's no photo here yet (a brand-new staff row, or
+// "Choose File" on an empty widget) — the confirm button reads "Add"
+// instead of "Save" so it doesn't imply something's being overwritten
+// when nothing's there to overwrite. False (the default) covers both
+// replacing via "Choose File" and the click-to-recrop-what's-already-here
+// flow, where "Save" is accurate.
+function openCropDialog(file, { isAdd = false } = {}) {
   return new Promise((resolve, reject) => {
     const dialog = $('crop-photo-dialog');
     const viewport = $('crop-viewport');
@@ -386,6 +392,7 @@ function openCropDialog(file) {
 
     const cancelBtn = $('crop-photo-cancel-btn');
     const saveBtn = $('crop-photo-save-btn');
+    saveBtn.textContent = isAdd ? 'Add' : 'Save';
 
     loadImageBitmap(file).then((loaded) => {
       bitmap = loaded;
@@ -686,7 +693,7 @@ function createPhotoWidget(container, { kind, getSlugParts, initialUrl, initialS
     }
     let sourceFile = file;
     if (kind === 'staff') {
-      const cropped = await openCropDialog(file);
+      const cropped = await openCropDialog(file, { isAdd: thumb.tagName !== 'IMG' });
       if (!cropped) return; // cancelled — leave the existing photo alone
       sourceFile = cropped;
     }
