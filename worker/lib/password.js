@@ -5,7 +5,12 @@
 // travels with the hash so it can be raised later without invalidating
 // passwords hashed under a lower count.
 
-const ITERATIONS = 210000; // OWASP's 2023 minimum recommendation for PBKDF2-SHA256
+// OWASP's 2023 minimum recommendation for PBKDF2-SHA256 is 210000, but the
+// Workers runtime's crypto.subtle caps PBKDF2 at 100000 iterations —
+// confirmed live ("Pbkdf2 failed: iteration counts above 100000 are not
+// supported (requested 210000)"). 100000 is the platform ceiling, so it's
+// what's used here.
+const ITERATIONS = 100000;
 const KEY_LENGTH_BITS = 256;
 
 function toHex(bytes) {
