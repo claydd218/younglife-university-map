@@ -58,29 +58,42 @@ function listDiff(oldList, newList) {
 function buildUpdateSummary(oldData, newData) {
   if (!oldData || !newData) return 'Updated';
   const parts = [];
-  if (oldData.city !== newData.city || oldData.country !== newData.country) {
-    parts.push(`moved to ${newData.city}, ${newData.country}`);
+  // Rows logged before this diffing existed only ever captured
+  // {staff: [...]} as old_json — no city/lat/lng/etc "before" value at
+  // all. Treating a genuinely-uncaptured field as "changed" (undefined
+  // !== whatever the new value is) produced a nonsensical wall of false
+  // positives for every one of those older rows ("moved to X, X" for a
+  // ministry that never moved, etc.) — confirmed live. Only diff a field
+  // when old_json actually captured it.
+  const hasFullSnapshot = 'city' in oldData;
+  if (hasFullSnapshot) {
+    if (oldData.city !== newData.city || oldData.country !== newData.country) {
+      parts.push(`moved to ${newData.city}, ${newData.country}`);
+    }
+    if (oldData.lat !== newData.lat || oldData.lng !== newData.lng) parts.push('pin location changed');
+    if (oldData.date_opened !== newData.date_opened) parts.push('opening date changed');
+    if (!!oldData.is_developing !== !!newData.is_developing) {
+      parts.push(newData.is_developing ? 'marked as developing' : 'no longer marked as developing');
+    }
+    if (oldData.blurb !== newData.blurb) parts.push('description changed');
+    if (oldData.universities !== newData.universities) parts.push('universities changed');
+    if (oldData.photos !== newData.photos) parts.push('photos changed');
+    if (oldData.video_url !== newData.video_url || oldData.video_label !== newData.video_label) parts.push('video changed');
   }
-  if (oldData.lat !== newData.lat || oldData.lng !== newData.lng) parts.push('pin location changed');
-  if (oldData.date_opened !== newData.date_opened) parts.push('opening date changed');
-  if (!!oldData.is_developing !== !!newData.is_developing) {
-    parts.push(newData.is_developing ? 'marked as developing' : 'no longer marked as developing');
-  }
-  if (oldData.blurb !== newData.blurb) parts.push('description changed');
-  if (oldData.universities !== newData.universities) parts.push('universities changed');
-  if (oldData.photos !== newData.photos) parts.push('photos changed');
-  if (oldData.video_url !== newData.video_url || oldData.video_label !== newData.video_label) parts.push('video changed');
 
   const sd = staffDiff(oldData.staff, newData.staff);
   if (sd.added.length) parts.push(`staff added: ${sd.added.join(', ')}`);
   if (sd.removed.length) parts.push(`staff removed: ${sd.removed.join(', ')}`);
   if (sd.renamed.length) parts.push(`staff renamed: ${sd.renamed.join(', ')}`);
 
-  const ad = listDiff(oldData.assigned_staff, newData.assigned_staff);
-  if (ad.added.length) parts.push(`assigned here: +${ad.added.join(', ')}`);
-  if (ad.removed.length) parts.push(`assigned here: -${ad.removed.join(', ')}`);
+  if ('assigned_staff' in oldData) {
+    const ad = listDiff(oldData.assigned_staff, newData.assigned_staff);
+    if (ad.added.length) parts.push(`assigned here: +${ad.added.join(', ')}`);
+    if (ad.removed.length) parts.push(`assigned here: -${ad.removed.join(', ')}`);
+  }
 
-  return parts.length ? parts.join('; ') : 'Saved with no visible changes';
+  if (parts.length) return parts.join('; ');
+  return hasFullSnapshot ? 'Saved with no visible changes' : 'Updated';
 }
 
 function buildSummary(action, oldData, newData) {
