@@ -2844,6 +2844,435 @@ function wireOrphanedPhotosCheck() {
   $('check-orphaned-photos-btn').addEventListener('click', checkOrphanedPhotos);
 }
 
+// --- University bulk upload -----------------------------------------------
+// CSV columns: City, Country, University, Year (Year optional). Deliberately
+// additive-only — a university already in D1 but missing from the uploaded
+// file is left alone, never removed, so re-uploading an edited export of
+// the current list is safe. No new server routes: this reuses the same
+// POST /ministries (new area) and PUT /ministries/:id (existing area, via
+// putMinistryField) calls the regular dialogs already use, plus the
+// existing client-side geocode() lookup for a brand-new area's lat/lng.
+
+const SAMPLE_ROW_MARKER = 'EXAMPLE — delete or edit this row';
+
+let bulkRows = [];
+let bulkShowSkipped = false;
+const bulkGeocodeCache = new Map(); // "normCity|normCountry" -> 'pending' | {lat,lng,approximate} | {failed:true}
+let bulkGeocodeQueue = Promise.resolve();
+
+function normalizeForMatch(str) {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function levenshteinDistance(a, b) {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  let curr = new Array(n + 1);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+// Exact match wins outright; otherwise the closest existing area by edit
+// distance is offered as a pre-selected guess (city spellings drift —
+// "Nielles-lès-Ardres" vs "Nielles les Ardres" and plain typos both need
+// this) as long as it clears a similarity floor, so a wildly different city
+// never gets pre-selected just for being the least-bad option on offer.
+function findAreaMatch(city, country) {
+  const key = `${normalizeForMatch(city)}, ${normalizeForMatch(country)}`;
+  for (const row of state.rows) {
+    if (`${normalizeForMatch(row.city)}, ${normalizeForMatch(row.country)}` === key) {
+      return { status: 'match', targetId: row.id };
+    }
+  }
+  let best = null;
+  let bestScore = 0;
+  for (const row of state.rows) {
+    const candidateKey = `${normalizeForMatch(row.city)}, ${normalizeForMatch(row.country)}`;
+    const distance = levenshteinDistance(key, candidateKey);
+    const score = 1 - distance / Math.max(key.length, candidateKey.length, 1);
+    if (score > bestScore) {
+      bestScore = score;
+      best = row;
+    }
+  }
+  if (best && bestScore >= 0.75) return { status: 'possible', targetId: best.id };
+  return { status: 'new', targetId: null };
+}
+
+function resolvedKeyForRow(row) {
+  return row.targetId != null ? `id:${row.targetId}` : `new:${normalizeForMatch(row.city)}|${normalizeForMatch(row.country)}`;
+}
+
+function normalizeBulkHeaderRow(record) {
+  const map = {};
+  for (const key of Object.keys(record)) map[key.trim().toLowerCase()] = record[key];
+  return {
+    city: (map.city || '').trim(),
+    country: (map.country || '').trim(),
+    university: (map.university || '').trim(),
+    year: (map.year || '').trim(),
+  };
+}
+
+function buildBulkRows(records) {
+  const rows = [];
+  let nextId = 1;
+  for (const record of records) {
+    const { city, country, university, year } = normalizeBulkHeaderRow(record);
+    if (city === SAMPLE_ROW_MARKER) continue;
+    if (!city && !country && !university && !year) continue;
+    const row = { id: nextId++, city, country, university, year, checked: undefined, resultState: null, resultMessage: '' };
+    if (!city || !country || !university) {
+      row.status = 'error';
+      row.targetId = null;
+      row.errorMessage = `Missing ${[!city && 'City', !country && 'Country', !university && 'University'].filter(Boolean).join('/')}`;
+    } else {
+      const match = findAreaMatch(city, country);
+      row.status = match.status;
+      row.targetId = match.targetId;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+// Two independent duplicate checks, both additive-only concerns: (a) this
+// university is already on its resolved target area's own list, or (b) two
+// rows in this same file resolve to the same target + university. Either
+// one means nothing should be written for that row — no checkbox at all
+// (see renderBulkRowHtml), not just an unchecked one, since these aren't a
+// judgment call the admin needs to make.
+function recomputeDuplicates(rows) {
+  const seen = new Map();
+  for (const row of rows) {
+    if (row.status === 'error') continue;
+    row.duplicateExisting = false;
+    row.duplicateFile = false;
+    if (row.targetId != null) {
+      const target = state.rows.find((r) => r.id === row.targetId);
+      if (target && target.universities.some((u) => normalizeForMatch(u.name) === normalizeForMatch(row.university))) {
+        row.duplicateExisting = true;
+      }
+    }
+    if (!row.duplicateExisting) {
+      const dupKey = `${resolvedKeyForRow(row)}|${normalizeForMatch(row.university)}`;
+      if (seen.has(dupKey)) row.duplicateFile = true;
+      else seen.set(dupKey, row);
+    }
+  }
+}
+
+function targetLabelForRow(row) {
+  if (row.targetId != null) {
+    const target = state.rows.find((r) => r.id === row.targetId);
+    return target ? `${target.city}, ${target.country}` : '';
+  }
+  return `${row.city}, ${row.country} (new)`;
+}
+
+function rowDisplayStatus(row) {
+  if (row.status === 'error') return { kind: 'error', label: `Error — ${row.errorMessage}` };
+  if (row.resultState === 'done') return { kind: 'done', label: row.resultMessage };
+  if (row.resultState === 'failed') return { kind: 'failed', label: `Failed — ${row.resultMessage}` };
+  if (row.duplicateExisting) return { kind: 'skipped', label: `Skipped — already listed at ${targetLabelForRow(row)}` };
+  if (row.duplicateFile) return { kind: 'skipped', label: 'Skipped — duplicate in this file' };
+  if (row.status === 'match') return { kind: 'match', label: 'Exact match' };
+  if (row.status === 'possible') return { kind: 'possible', label: 'Possible match — check spelling' };
+  const geoKey = `${normalizeForMatch(row.city)}|${normalizeForMatch(row.country)}`;
+  const geo = bulkGeocodeCache.get(geoKey);
+  if (geo === 'pending') return { kind: 'new', label: 'New area — looking up location…' };
+  if (geo && geo.failed) return { kind: 'new', label: 'New area — needs pinpointing' };
+  if (geo && geo.approximate) return { kind: 'new', label: 'New area — approximate location' };
+  return { kind: 'new', label: 'New area' };
+}
+
+// Chained onto a shared queue (rather than fired independently per call) so
+// concurrent triggers — the initial preview render, then a dropdown change
+// reassigning a row back to "new" — never issue overlapping requests for
+// the same city, and so Import can await this same queue to guarantee
+// every new-area lat/lng is resolved (not still "pending") before it reads
+// the cache to build the write payload.
+function ensureGeocodedForNewAreas(rows) {
+  bulkGeocodeQueue = bulkGeocodeQueue.then(() => geocodeNewAreas(rows));
+  return bulkGeocodeQueue;
+}
+
+async function geocodeNewAreas(rows) {
+  const pending = [];
+  const seen = new Set();
+  for (const row of rows) {
+    if (row.status === 'error' || row.targetId != null || row.duplicateExisting || row.duplicateFile) continue;
+    const key = `${normalizeForMatch(row.city)}|${normalizeForMatch(row.country)}`;
+    if (seen.has(key) || bulkGeocodeCache.has(key)) continue;
+    seen.add(key);
+    pending.push({ key, city: row.city, country: row.country });
+  }
+  for (const { key, city, country } of pending) {
+    bulkGeocodeCache.set(key, 'pending');
+    renderBulkTable();
+    try {
+      let result = await geocode(`${city}, ${country}`);
+      let approximate = false;
+      if (!result) {
+        result = await geocode(country);
+        approximate = true;
+      }
+      bulkGeocodeCache.set(key, result ? { lat: Number(result.lat), lng: Number(result.lon), approximate } : { failed: true });
+    } catch {
+      bulkGeocodeCache.set(key, { failed: true });
+    }
+    // Nominatim's usage policy expects roughly one request/second, not a
+    // burst — the single-lookup dialog only ever fires one at a time, but
+    // a bulk upload with several new cities needs this spacing itself.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+  }
+  renderBulkTable();
+}
+
+function buildTargetOptionsHtml(row) {
+  const options = [`<option value="new" ${row.targetId == null ? 'selected' : ''}>Create new area: ${escapeHtml(row.city)}, ${escapeHtml(row.country)}</option>`];
+  const sorted = state.rows.slice().sort((a, b) => `${a.city}, ${a.country}`.localeCompare(`${b.city}, ${b.country}`));
+  for (const r of sorted) {
+    options.push(`<option value="${r.id}" ${row.targetId === r.id ? 'selected' : ''}>${escapeHtml(r.city)}, ${escapeHtml(r.country)}</option>`);
+  }
+  return options.join('');
+}
+
+function renderBulkRowHtml(row) {
+  const display = rowDisplayStatus(row);
+  const isSkipped = display.kind === 'skipped';
+  const isDone = row.resultState === 'done' || row.resultState === 'failed';
+  const hasCheckbox = !isSkipped && row.status !== 'error' && !isDone;
+  if (hasCheckbox && row.checked === undefined) row.checked = true;
+  const checkboxCell = hasCheckbox ? `<input type="checkbox" data-row-checkbox="${row.id}" ${row.checked ? 'checked' : ''}>` : '';
+  let targetCell;
+  if (row.status === 'error') targetCell = '—';
+  else if (isSkipped || isDone) targetCell = escapeHtml(targetLabelForRow(row));
+  else targetCell = `<select data-row-select="${row.id}">${buildTargetOptionsHtml(row)}</select>`;
+  return `
+    <tr class="${isSkipped ? 'bulk-row-skipped' : ''}" data-row-id="${row.id}">
+      <td>${checkboxCell}</td>
+      <td>${escapeHtml(row.university)}</td>
+      <td>${escapeHtml(row.year)}</td>
+      <td>${targetCell}</td>
+      <td><span class="bulk-row-status ${display.kind}">${escapeHtml(display.label)}</span></td>
+    </tr>`;
+}
+
+function renderBulkTable() {
+  recomputeDuplicates(bulkRows);
+  const visibleRows = bulkRows.filter((row) => bulkShowSkipped || rowDisplayStatus(row).kind !== 'skipped');
+  $('university-bulk-tbody').innerHTML = visibleRows.map(renderBulkRowHtml).join('');
+
+  const skippedCount = bulkRows.filter((row) => rowDisplayStatus(row).kind === 'skipped').length;
+  const toggleBtn = $('university-bulk-toggle-skipped');
+  toggleBtn.hidden = skippedCount === 0;
+  toggleBtn.textContent = bulkShowSkipped
+    ? `Hide ${skippedCount} skipped row${skippedCount === 1 ? '' : 's'}`
+    : `Show ${skippedCount} skipped row${skippedCount === 1 ? '' : 's'}`;
+
+  const errorCount = bulkRows.filter((r) => r.status === 'error').length;
+  const activeRows = bulkRows.filter((r) => !r.duplicateExisting && !r.duplicateFile && r.status !== 'error');
+  const matchCount = activeRows.filter((r) => r.status === 'match').length;
+  const possibleCount = activeRows.filter((r) => r.status === 'possible').length;
+  const newCount = activeRows.filter((r) => r.status === 'new').length;
+  const parts = [];
+  if (matchCount) parts.push(`${matchCount} matched`);
+  if (possibleCount) parts.push(`${possibleCount} possible match${possibleCount === 1 ? '' : 'es'} to review`);
+  if (newCount) parts.push(`${newCount} new area${newCount === 1 ? '' : 's'}`);
+  if (skippedCount) parts.push(`${skippedCount} already listed/duplicate`);
+  if (errorCount) parts.push(`${errorCount} error${errorCount === 1 ? '' : 's'}`);
+  $('university-bulk-summary').textContent = parts.length ? parts.join(' · ') : 'Nothing to import.';
+
+  const importCount = bulkRows.filter((row) => {
+    const kind = rowDisplayStatus(row).kind;
+    return (kind === 'match' || kind === 'possible' || kind === 'new') && row.checked;
+  }).length;
+  $('university-bulk-import-btn').textContent = `Import Selected (${importCount})`;
+  $('university-bulk-import-btn').disabled = importCount === 0;
+}
+
+function wireBulkTableEvents() {
+  $('university-bulk-tbody').addEventListener('change', (e) => {
+    const checkboxId = e.target.dataset.rowCheckbox;
+    if (checkboxId) {
+      const row = bulkRows.find((r) => String(r.id) === checkboxId);
+      if (row) row.checked = e.target.checked;
+      renderBulkTable();
+      return;
+    }
+    const selectId = e.target.dataset.rowSelect;
+    if (selectId) {
+      const row = bulkRows.find((r) => String(r.id) === selectId);
+      if (!row) return;
+      row.targetId = e.target.value === 'new' ? null : Number(e.target.value);
+      row.status = row.targetId == null ? 'new' : 'match';
+      renderBulkTable();
+      ensureGeocodedForNewAreas(bulkRows);
+    }
+  });
+}
+
+function openUniversityBulkDialog(rows) {
+  bulkRows = rows;
+  bulkShowSkipped = false;
+  $('university-bulk-banner').hidden = true;
+  renderBulkTable();
+  $('university-bulk-dialog').showModal();
+  ensureGeocodedForNewAreas(bulkRows);
+}
+
+async function importUniversityBulk() {
+  await ensureGeocodedForNewAreas(bulkRows);
+
+  const banner = $('university-bulk-banner');
+  banner.hidden = true;
+
+  const eligible = bulkRows.filter((row) => {
+    const kind = rowDisplayStatus(row).kind;
+    return (kind === 'match' || kind === 'possible' || kind === 'new') && row.checked;
+  });
+  if (!eligible.length) return;
+
+  const groups = new Map();
+  for (const row of eligible) {
+    const key = resolvedKeyForRow(row);
+    if (!groups.has(key)) {
+      groups.set(key, { isNew: row.targetId == null, targetId: row.targetId, city: row.city, country: row.country, universities: [], rows: [] });
+    }
+    const group = groups.get(key);
+    group.universities.push({ name: row.university, year: row.year || '' });
+    group.rows.push(row);
+  }
+
+  let addedCount = 0;
+  let areaCount = 0;
+  let newAreaCount = 0;
+  let failedCount = 0;
+
+  for (const group of groups.values()) {
+    try {
+      if (group.isNew) {
+        const geoKey = `${normalizeForMatch(group.city)}|${normalizeForMatch(group.country)}`;
+        const geo = bulkGeocodeCache.get(geoKey);
+        const lat = geo && !geo.failed ? geo.lat : 0;
+        const lng = geo && !geo.failed ? geo.lng : 0;
+        const result = await apiFetch('/ministries', {
+          method: 'POST',
+          body: JSON.stringify({ city: group.city, country: group.country, lat, lng, universities: group.universities }),
+        });
+        state.rows.push(result.row);
+        newAreaCount += 1;
+      } else {
+        const target = state.rows.find((r) => r.id === group.targetId);
+        await putMinistryField(target, { universities: [...target.universities, ...group.universities] });
+      }
+      addedCount += group.universities.length;
+      areaCount += 1;
+      for (const row of group.rows) {
+        row.resultState = 'done';
+        row.resultMessage = 'Added';
+      }
+    } catch (err) {
+      failedCount += group.universities.length;
+      for (const row of group.rows) {
+        row.resultState = 'failed';
+        row.resultMessage = err.message || String(err);
+      }
+    }
+  }
+
+  renderBulkTable();
+  renderMinistriesTable();
+
+  banner.className = failedCount ? 'banner error' : 'banner info';
+  banner.textContent = `${addedCount} universit${addedCount === 1 ? 'y' : 'ies'} added across ${areaCount} area${areaCount === 1 ? '' : 's'}${newAreaCount ? ` (${newAreaCount} new)` : ''}${failedCount ? ` — ${failedCount} failed` : ''}.`;
+  banner.hidden = false;
+}
+
+function downloadCurrentUniversitiesList() {
+  const data = [];
+  for (const row of state.rows) {
+    for (const u of row.universities) data.push({ City: row.city, Country: row.country, University: u.name, Year: u.year || '' });
+  }
+  const csv = Papa.unparse(data, { columns: ['City', 'Country', 'University', 'Year'] });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `yl-uni-intl-universities-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function handleUniversityBulkFile(file) {
+  const status = $('university-bulk-status');
+  status.classList.remove('error');
+  status.hidden = true;
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      const records = results.data;
+      const hasRequiredHeaders = records.length === 0
+        || ['city', 'country', 'university'].every((h) => Object.keys(records[0]).some((k) => k.trim().toLowerCase() === h));
+      if (!hasRequiredHeaders) {
+        status.textContent = 'CSV must have City, Country, and University columns — see the sample file.';
+        status.classList.add('error');
+        status.hidden = false;
+        return;
+      }
+      const rows = buildBulkRows(records);
+      if (!rows.length) {
+        status.textContent = 'No rows found in that file (besides the example row).';
+        status.classList.add('error');
+        status.hidden = false;
+        return;
+      }
+      openUniversityBulkDialog(rows);
+    },
+    error: (err) => {
+      status.textContent = `Couldn't read the file: ${err.message || err}`;
+      status.classList.add('error');
+      status.hidden = false;
+    },
+  });
+}
+
+function wireUniversityBulkUpload() {
+  $('university-bulk-upload-btn').addEventListener('click', () => $('university-bulk-file-input').click());
+  $('university-bulk-file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) handleUniversityBulkFile(file);
+  });
+  $('university-download-current-btn').addEventListener('click', downloadCurrentUniversitiesList);
+  $('university-bulk-cancel-btn').addEventListener('click', () => $('university-bulk-dialog').close());
+  $('university-bulk-toggle-skipped').addEventListener('click', () => {
+    bulkShowSkipped = !bulkShowSkipped;
+    renderBulkTable();
+  });
+  $('university-bulk-import-btn').addEventListener('click', importUniversityBulk);
+  wireBulkTableEvents();
+}
+
 // --- Log tab -------------------------------------------------------------
 // Reads worker/routes/logs.js's paginated view of ministry_edits (the
 // lightweight audit table added with the D1 migration, now with a
@@ -3089,6 +3518,7 @@ wireLogTab();
 wireAdminUsersTab();
 wirePhotosExportButton();
 wireOrphanedPhotosCheck();
+wireUniversityBulkUpload();
 wireSignOut();
 checkAdminAccess();
 loadMinistries();

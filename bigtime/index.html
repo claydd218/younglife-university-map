@@ -292,6 +292,39 @@
   }
   dialog#admin-user-dialog[open] { display: flex; flex-direction: column; }
   dialog#admin-user-dialog::backdrop { background: rgba(0,0,0,0.4); }
+
+  dialog#university-bulk-dialog {
+    width: min(820px, 96vw);
+    max-height: 88vh;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+  dialog#university-bulk-dialog[open] { display: flex; flex-direction: column; }
+  dialog#university-bulk-dialog::backdrop { background: rgba(0,0,0,0.4); }
+  .university-bulk-table { table-layout: fixed; }
+  .university-bulk-table th:first-child, .university-bulk-table td:first-child { width: 30px; }
+  .university-bulk-table th:nth-child(3), .university-bulk-table td:nth-child(3) { width: 60px; }
+  .university-bulk-table td select {
+    width: 100%;
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+  .university-bulk-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: #1a1a1a; }
+  .bulk-row-status { font-size: 12.5px; }
+  .bulk-row-status.match { color: #2a7d46; }
+  .bulk-row-status.possible { color: #9a6d00; }
+  .bulk-row-status.new { color: #2563a8; }
+  .bulk-row-status.skipped { color: #888; font-style: italic; }
+  .bulk-row-status.error { color: #a33; }
+  .bulk-row-status.done { color: #2a7d46; font-weight: 600; }
+  .bulk-row-status.failed { color: #a33; font-weight: 600; }
+  tr.bulk-row-skipped { background: #fafafa; }
   .assign-staff-scope-row { margin-bottom: 10px; }
   .assign-staff-country-group { margin-bottom: 12px; }
   .assign-staff-country-heading { font-size: 13px; font-weight: 600; color: #555; margin: 0 0 6px; }
@@ -706,6 +739,18 @@
       <button type="button" id="check-orphaned-photos-btn" class="btn secondary">Check for Orphaned Photos</button>
     </div>
     <div id="orphaned-photos-list" class="orphaned-photos-list"></div>
+
+    <h2 class="admin-section-heading">University bulk upload</h2>
+    <p class="admin-section-note">Add universities from a spreadsheet — matches each row against existing areas and previews everything before writing anything. Only ever adds; a university missing from the file is left alone, not removed.</p>
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <a href="university-upload-sample.csv" download class="btn secondary btn-small">Download Sample CSV</a>
+        <button type="button" id="university-download-current-btn" class="btn secondary btn-small">Download Current List</button>
+      </div>
+      <button type="button" id="university-bulk-upload-btn" class="btn secondary">Upload CSV</button>
+    </div>
+    <input type="file" id="university-bulk-file-input" class="hidden-file-input" accept=".csv">
+    <span id="university-bulk-status" class="status-text" hidden></span>
   </section>
 
   <dialog id="admin-user-dialog">
@@ -865,6 +910,27 @@
     </div>
     <div class="dialog-body">
       <div id="assign-staff-list"></div>
+    </div>
+  </dialog>
+
+  <dialog id="university-bulk-dialog">
+    <div class="dialog-header">
+      <h2>Import Universities</h2>
+      <div class="dialog-header-actions">
+        <button type="button" class="btn secondary" id="university-bulk-cancel-btn">Cancel</button>
+        <button type="button" class="btn" id="university-bulk-import-btn">Import Selected (0)</button>
+      </div>
+    </div>
+    <div id="university-bulk-banner" class="banner error" hidden></div>
+    <div class="dialog-body">
+      <p class="admin-section-note" id="university-bulk-summary"></p>
+      <button type="button" class="btn secondary btn-small" id="university-bulk-toggle-skipped" hidden></button>
+      <table class="university-bulk-table">
+        <thead>
+          <tr><th></th><th>University</th><th>Year</th><th>Target area</th><th>Status</th></tr>
+        </thead>
+        <tbody id="university-bulk-tbody"></tbody>
+      </table>
     </div>
   </dialog>
 
