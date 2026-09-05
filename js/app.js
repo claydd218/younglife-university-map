@@ -1502,12 +1502,13 @@ function wireTitleEasterEgg() {
   // doesn't fit on one line; restoring via innerHTML (not textContent)
   // preserves that back after the first toggle.
   const originalHtml = titleEl.innerHTML;
-  // <br> forces the wrap to land between "sets" and "on" instead of
-  // wherever the browser's own line-breaking happens to fall — which,
-  // left alone, was landing mid-word inside "Brett-ish". The nowrap span
-  // around "Brett-ish" (reusing .title-part) keeps that word from ever
-  // breaking at its hyphen either, on any width.
-  const jokeHtml = 'The sun never sets<br>on the <span class="title-part">Brett-ish</span> Empire';
+  // Two .title-part spans, exactly like the real title's own two halves —
+  // not a bare <br>, which (combined with .site-header h1's flex-column
+  // layout at this breakpoint) made every text run and the <br> itself
+  // its own flex item, breaking far more than once. Each span is nowrap,
+  // so this is a single clean break between "on" and "the", and never
+  // lands mid-word inside "Brett-ish".
+  const jokeHtml = '<span class="title-part">The sun never sets on</span> <span class="title-part">the Brett-ish Empire</span>';
   let showingJoke = false;
   // Counts clicks/taps within a short window rather than trusting the
   // native event's own click-count (e.detail) — iOS Safari's synthetic
