@@ -127,6 +127,25 @@ h1, h2, h3, .legend-label, .cluster-badge {
   }
 }
 
+/* A landscape phone (iPhone SE at 667px up through Pro Max at 932px) still
+   matches the max-width:950px query above, but has plenty of width for one
+   line — the two-line stacked layout there is sized for a narrow *portrait*
+   width, so here it read as oversized and needlessly wrapped. Falls back to
+   the same flat single-line treatment as desktop instead, just scaled down
+   a bit (declared after the query above so it wins on the shared
+   .site-header h1 properties). The 2.6vw rate is the largest that still
+   keeps the full title clear of the nav-menu button's 100px reservation
+   (see the min-width:951px rule) down to the narrowest real landscape
+   phone width (667px) — verified against the same 755px-at-26px
+   measurement used there. */
+@media (max-width: 950px) and (orientation: landscape) {
+  .site-header h1 {
+    display: block;
+    max-width: calc(100% - 100px);
+    font-size: clamp(16px, 2.6vw, 26px);
+  }
+}
+
 /* ---------- Metrics overlay ---------- */
 
 /* Sits inside .site-header, right under the title, so it inherits the
