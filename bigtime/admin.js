@@ -2783,6 +2783,67 @@ function wirePhotosExportButton() {
   });
 }
 
+// Reads worker/routes/orphaned-photos.js's comparison of what's actually
+// in R2 against what D1 says should be there. Read-only on the server —
+// deleting one reuses the same DELETE /bigtime/api/photos/:slug route the
+// Images tab's own Remove action already has, since "delete the file(s)
+// matching this slug" is exactly the right operation for an orphan too
+// (and it's already a no-op on the ministry-photos scrub step, since an
+// orphan is by definition referenced by nothing).
+async function checkOrphanedPhotos() {
+  const status = $('orphaned-photos-status');
+  const list = $('orphaned-photos-list');
+  const btn = $('check-orphaned-photos-btn');
+  btn.disabled = true;
+  status.textContent = 'Checking…';
+  list.innerHTML = '';
+  try {
+    const result = await apiFetch('/orphaned-photos');
+    if (!result.orphans.length) {
+      status.textContent = `No orphaned photos found (checked ${result.totalFiles} files).`;
+      return;
+    }
+    status.textContent = `${result.orphans.length} orphaned photo${result.orphans.length === 1 ? '' : 's'} found (of ${result.totalFiles} files checked).`;
+    renderOrphanedPhotosList(result.orphans);
+  } catch (err) {
+    status.textContent = err.message || String(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderOrphanedPhotosList(filenames) {
+  const list = $('orphaned-photos-list');
+  list.innerHTML = filenames.map((filename) => `
+    <div class="orphaned-photo-item" data-filename="${escapeHtml(filename)}">
+      <img src="../${CONFIG.IMAGES_DIR}${encodeURIComponent(filename)}" alt="" loading="lazy">
+      <span class="orphaned-photo-filename">${escapeHtml(filename)}</span>
+      <button type="button" class="btn danger btn-small" data-action="delete-orphan">Delete</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('[data-action="delete-orphan"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const item = btn.closest('.orphaned-photo-item');
+      const filename = item.dataset.filename;
+      if (!window.confirm(`Delete ${filename}? This can't be undone.`)) return;
+      btn.disabled = true;
+      try {
+        const slug = filename.replace(/\.[^.]+$/, '');
+        await apiFetch(`/photos/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+        item.remove();
+      } catch (err) {
+        showBanner('error', err.message || String(err));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function wireOrphanedPhotosCheck() {
+  $('check-orphaned-photos-btn').addEventListener('click', checkOrphanedPhotos);
+}
+
 // --- Log tab -------------------------------------------------------------
 // Reads worker/routes/logs.js's paginated view of ministry_edits (the
 // lightweight audit table added with the D1 migration, now with a
@@ -3027,6 +3088,7 @@ wireReportPdfButton();
 wireLogTab();
 wireAdminUsersTab();
 wirePhotosExportButton();
+wireOrphanedPhotosCheck();
 wireSignOut();
 checkAdminAccess();
 loadMinistries();

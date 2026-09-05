@@ -25,6 +25,7 @@ import { onRequestGet as mapScreenshotGet } from './routes/map-screenshot.js';
 import { onRequestGet as reportPdfGet } from './routes/report-pdf.js';
 import { onRequestGet as imagesManifestGet } from './routes/images-manifest.js';
 import { onRequestGet as photosExportGet } from './routes/photos-export.js';
+import { onRequestGet as orphanedPhotosGet } from './routes/orphaned-photos.js';
 import { onRequestGet as publicMinistriesGet } from './routes/public-ministries.js';
 import { onRequestGet as logsGet } from './routes/logs.js';
 import { onRequestGet as meGet } from './routes/me.js';
@@ -255,6 +256,10 @@ export default {
 
         if (pathname === '/bigtime/api/photos-export' && method === 'GET') {
           return await photosExportGet({ env, user: sessionUser });
+        }
+
+        if (pathname === '/bigtime/api/orphaned-photos' && method === 'GET') {
+          return await orphanedPhotosGet({ env, user: sessionUser });
         }
 
         const photoMatch = pathname.match(/^\/bigtime\/api\/photos\/([^/]+)$/);

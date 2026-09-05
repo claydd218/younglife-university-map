@@ -122,6 +122,26 @@
 
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .admin-section-heading { font-size: 15px; margin: 32px 0 14px; padding-top: 20px; border-top: 1px solid #ddd; color: #444; }
+  .admin-section-note { font-size: 13px; color: #666; margin: -6px 0 12px; }
+  .orphaned-photos-list { display: flex; flex-direction: column; gap: 10px; }
+  .orphaned-photo-item {
+    display: grid;
+    grid-template-columns: 100px 1fr auto;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .orphaned-photo-item img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+  .orphaned-photo-filename { font-size: 13px; word-break: break-all; }
   .toolbar-left { display: flex; align-items: center; gap: 12px; }
   .ministries-search-wrap { position: relative; display: flex; align-items: center; }
   .ministries-search {
@@ -678,6 +698,14 @@
       <span id="photos-export-status" class="status-text" hidden></span>
       <button type="button" id="photos-export-btn" class="btn secondary">Download Photos (ZIP)</button>
     </div>
+
+    <h2 class="admin-section-heading">Orphaned photos</h2>
+    <p class="admin-section-note">Files in storage no staff member or ministry currently references — safe to review and delete, or leave alone.</p>
+    <div class="toolbar">
+      <span id="orphaned-photos-status" class="status-text"></span>
+      <button type="button" id="check-orphaned-photos-btn" class="btn secondary">Check for Orphaned Photos</button>
+    </div>
+    <div id="orphaned-photos-list" class="orphaned-photos-list"></div>
   </section>
 
   <dialog id="admin-user-dialog">
