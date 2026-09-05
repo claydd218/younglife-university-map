@@ -1490,25 +1490,40 @@ function wireVideoLightbox() {
   map.on('movestart', close);
 }
 
-// Easter egg: triple-clicking the page title swaps it for a joke variant,
-// and swaps back on the next triple-click. Triple-click (not single/double)
-// so it's not something a visitor stumbles into by accident.
+// Easter egg: triple-clicking/tapping the page title swaps it for a joke
+// variant, and swaps back on the next triple-click. Triple-click (not
+// single/double) so it's not something a visitor stumbles into by accident.
 function wireTitleEasterEgg() {
   const titleEl = document.getElementById('site-title');
   if (!titleEl) return;
   // Saved as markup, not just text — the title's real content is two
   // nowrap <span>s (see index.html/the .title-part rule in style.css) so
   // it only breaks at the "University / International" joint when it
-  // doesn't fit on one line; restoring via textContent would flatten that
-  // back to plain auto-wrapping text after the first toggle.
+  // doesn't fit on one line; restoring via innerHTML (not textContent)
+  // preserves that back after the first toggle.
   const originalHtml = titleEl.innerHTML;
-  const joke = 'The sun never sets on the Brett-ish Empire';
+  // <br> forces the wrap to land between "sets" and "on" instead of
+  // wherever the browser's own line-breaking happens to fall — which,
+  // left alone, was landing mid-word inside "Brett-ish". The nowrap span
+  // around "Brett-ish" (reusing .title-part) keeps that word from ever
+  // breaking at its hyphen either, on any width.
+  const jokeHtml = 'The sun never sets<br>on the <span class="title-part">Brett-ish</span> Empire';
   let showingJoke = false;
-  titleEl.addEventListener('click', (e) => {
-    if (e.detail !== 3) return;
+  // Counts clicks/taps within a short window rather than trusting the
+  // native event's own click-count (e.detail) — iOS Safari's synthetic
+  // click events from tapping never increment e.detail past 1, so a
+  // triple-tap never fired this on mobile even though triple-click always
+  // worked fine on desktop.
+  let tapCount = 0;
+  let tapTimer = null;
+  titleEl.addEventListener('click', () => {
+    tapCount += 1;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { tapCount = 0; }, 500);
+    if (tapCount < 3) return;
+    tapCount = 0;
     showingJoke = !showingJoke;
-    if (showingJoke) titleEl.textContent = joke;
-    else titleEl.innerHTML = originalHtml;
+    titleEl.innerHTML = showingJoke ? jokeHtml : originalHtml;
   });
 }
 
