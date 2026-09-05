@@ -1278,4 +1278,24 @@ img.popup-photo {
   .leaflet-popup-content {
     width: 300px !important;
   }
+  /* Claws back part of .site-header's own 20px side padding just for the
+     metrics row, so the 4 boxes have enough width to stay on one line on a
+     narrow phone instead of wrapping their labels to a second line. Only
+     12px of the 20px is reclaimed (not the full amount) so the boxes still
+     clear the decorative frame-border, which sits ~8px from the viewport
+     edge. Tightened gap/padding/min-width below make up the rest. */
+  .metrics-overlay {
+    margin-left: -12px;
+    margin-right: -12px;
+  }
+  .metrics-boxes {
+    gap: 4px;
+  }
+  .metric-box {
+    min-width: 72px;
+    padding: 6px 6px;
+  }
+  .metric-box-label {
+    letter-spacing: 0.03em;
+  }
 }
