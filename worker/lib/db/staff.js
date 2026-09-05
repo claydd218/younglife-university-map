@@ -7,6 +7,7 @@
 // client-side scan across every ministry row.
 
 import { slugify } from '../text.js';
+import { deletePhotosBySlug } from '../photoCleanup.js';
 
 export async function staffRowsForMinistry(env, ministryId) {
   const { results } = await env.DB.prepare('SELECT * FROM staff WHERE home_ministry_id = ? ORDER BY id').bind(ministryId).all();
@@ -62,9 +63,13 @@ export async function upsertHomeStaff(env, ministryId, staffEntries) {
 
   // ON DELETE CASCADE removes their assignments elsewhere too — the real
   // bug fix over the old sweepAssignments() workaround, see schema.sql.
+  // Their photo is a separate cleanup, since R2 has no equivalent of a
+  // foreign-key cascade — confirmed live as a real gap: a removed
+  // staffer's photo used to just sit there in R2 forever.
   for (const row of existing) {
     if (!wantedIds.has(row.id)) {
       await env.DB.prepare('DELETE FROM staff WHERE id = ?').bind(row.id).run();
+      await deletePhotosBySlug(env, row.slug);
     }
   }
 }

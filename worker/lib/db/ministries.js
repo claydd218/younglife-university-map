@@ -9,6 +9,7 @@
 
 import { setAssignment, removeAssignment, upsertHomeStaff, staffRowsForMinistry, assignedStaffNamesForMinistry, getStaffIdByName } from './staff.js';
 import { joinParenList } from '../text.js';
+import { deletePhotoFile, deletePhotosBySlug } from '../photoCleanup.js';
 
 export class ConflictError extends Error {
   constructor(message) {
@@ -245,6 +246,22 @@ export async function deleteMinistry(env, id, userName = null) {
   await env.DB.prepare(
     'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json, user_name) VALUES (?, ?, ?, ?, NULL, ?)'
   ).bind(id, new Date().toISOString(), 'delete', JSON.stringify({ ...row, staff: staffRows }), userName).run();
+
+  // R2 cleanup — the DB delete above only removed rows; ON DELETE CASCADE
+  // has no equivalent for R2 objects, so a deleted ministry's own photos
+  // and every one of its (now cascade-deleted) staff's photos used to
+  // just sit there in R2 forever. Best-effort: any single failure here
+  // shouldn't undo an already-successful ministry deletion.
+  for (const filename of JSON.parse(row.photos)) {
+    await deletePhotoFile(env, filename).catch((err) => {
+      console.error(`Failed to delete photo ${filename} for deleted ministry ${id}:`, err);
+    });
+  }
+  for (const staffRow of staffRows) {
+    await deletePhotosBySlug(env, staffRow.slug).catch((err) => {
+      console.error(`Failed to delete photo for deleted staff ${staffRow.slug}:`, err);
+    });
+  }
 
   return { city: row.city, country: row.country, removedStaffNames: staffRows.map((s) => s.name) };
 }
