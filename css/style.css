@@ -191,13 +191,9 @@ h1, h2, h3, .legend-label, .cluster-badge {
 }
 .king-brett-image {
   display: block;
-  width: 84px;
-  height: 84px;
-  margin: 0 auto 8px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid var(--ink);
-  box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
+  height: 130px;
+  width: auto;
+  margin: 0 auto;
 }
 
 .metrics-boxes {

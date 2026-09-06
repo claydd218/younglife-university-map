@@ -290,10 +290,10 @@ export default {
         // straight to ASSETS.fetch. Confirmed live: every page's favicon
         // (and the hamburger menu's "World" icon, which reuses
         // favicon.svg) was broken site-wide until this carve-out.
-        // king-brett.jpg (the title easter egg's portrait) is the same
+        // king-brett.png (the title easter egg's portrait) is the same
         // deal — real static site chrome, git-committed, never uploaded to
         // R2, so it 404s through serveMedia below like the other two would.
-        if (pathname === '/images/favicon.svg' || pathname === '/images/apple-touch-icon.png' || pathname === '/images/king-brett.jpg') {
+        if (pathname === '/images/favicon.svg' || pathname === '/images/apple-touch-icon.png' || pathname === '/images/king-brett.png') {
           return await env.ASSETS.fetch(request);
         }
 
