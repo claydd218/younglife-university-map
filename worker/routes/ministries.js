@@ -15,7 +15,11 @@ import { regenerateReportArchive } from '../lib/reportArchive.js';
 function validateFields(body) {
   const required = ['city', 'country', 'lat', 'lng'];
   for (const field of required) {
-    if (!body[field] || !String(body[field]).trim()) {
+    // Not a plain `!body[field]` check — lat/lng of exactly 0 (the prime
+    // meridian, or the equator) is a legitimate value that's falsy in JS,
+    // and would otherwise be wrongly rejected as "missing".
+    const value = body[field];
+    if (value === undefined || value === null || String(value).trim() === '') {
       throw new ValidationError(`${field} is required`, field);
     }
   }
