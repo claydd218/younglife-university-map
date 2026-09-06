@@ -50,7 +50,11 @@ export async function listObjects(env, prefix) {
   do {
     const page = await env.MEDIA.list({ prefix, cursor });
     for (const obj of page.objects) {
-      out.push({ name: obj.key.slice(prefix.length), key: obj.key });
+      // etag is R2's content hash for a plain (non-multipart) put — two
+      // keys sharing one means byte-identical content, which is what
+      // worker/routes/duplicate-photos.js groups on to find re-uploads of
+      // the same file under a different name.
+      out.push({ name: obj.key.slice(prefix.length), key: obj.key, etag: obj.etag });
     }
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
