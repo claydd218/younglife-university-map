@@ -1523,7 +1523,6 @@ function wireVideoLightbox() {
 function wireTitleEasterEgg() {
   const titleEl = document.getElementById('site-title');
   if (!titleEl) return;
-  const kingImage = document.getElementById('king-brett-image');
   // Saved as markup, not just text — the title's real content is two
   // nowrap <span>s (see index.html/the .title-part rule in style.css) so
   // it only breaks at the "University / International" joint when it
@@ -1553,10 +1552,7 @@ function wireTitleEasterEgg() {
     tapCount = 0;
     showingJoke = !showingJoke;
     titleEl.innerHTML = showingJoke ? jokeHtml : originalHtml;
-    // Both directions reset to the same "World" view + world metrics — the
-    // portrait itself is what actually marks the joke as on or off,
-    // fading in/out with the rest of the metrics overlay from there.
-    if (kingImage) kingImage.hidden = !showingJoke;
+    // Both directions reset to the same "World" view + world metrics.
     if (goToWorldFn) goToWorldFn();
   });
 }

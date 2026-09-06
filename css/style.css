@@ -212,28 +212,6 @@ h1, h2, h3, .legend-label, .cluster-badge {
   pointer-events: none;
 }
 
-/* The title easter egg's own portrait — a sibling of .metrics-boxes inside
-   #metrics-overlay (see index.html), so it fades/dismisses along with the
-   rest of the overlay for free (same .metrics-hidden opacity transition,
-   same click-to-dismiss). Its own [hidden] attribute is the separate gate
-   that actually ties it to the joke being active — see wireTitleEasterEgg
-   in js/app.js — independent of whatever's currently fading the overlay
-   itself in or out. */
-.king-brett-image[hidden] {
-  /* Overrides the plain-class display:block below — the browser's own
-     default [hidden] { display:none } rule and that class rule have equal
-     specificity, and this stylesheet loading after the UA one means the
-     class was winning, leaving the portrait visible at all times regardless
-     of the [hidden] attribute JS actually toggles. */
-  display: none;
-}
-.king-brett-image {
-  display: block;
-  height: 130px;
-  width: auto;
-  margin: 0 auto;
-}
-
 .metrics-boxes {
   display: flex;
   flex-wrap: wrap;
