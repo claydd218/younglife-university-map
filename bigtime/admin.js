@@ -1732,6 +1732,13 @@ function openDialog(row) {
   state.editingId = row ? row.id : null;
   $('dialog-title').textContent = row ? `Edit ${row.city}, ${row.country}` : 'Add Ministry';
 
+  // Loading an existing row's own City/Country shouldn't immediately flag
+  // itself as a duplicate the moment the field is next blurred (e.g. after
+  // just tabbing through to check the lat/lng) — seeding this with the
+  // row's own key means checkForExistingArea only fires once it actually
+  // changes to something new.
+  lastAreaCheckKey = row ? `${normalizeForMatch(row.city)}|${normalizeForMatch(row.country)}` : null;
+
   $('field-city').value = row ? row.city : '';
   $('field-country').value = row ? row.country : '';
   updateCityCountryMatchNote();
@@ -2094,6 +2101,41 @@ function autoLookupLatLngOnBlur() {
   lookupLatLng();
 }
 
+// Catches the exact mistake that produced several real duplicate ministries
+// this same admin tool already had (Bogota/Bogata/Bogota, three separate
+// Managua rows, etc.) — someone typing a new area's City/Country without
+// realizing it (or a close spelling of it) already exists. Reuses the same
+// normalize+fuzzy matching as the University Bulk Upload's own area
+// matching (findAreaMatch), excluding the row currently being edited so
+// editing an existing ministry never flags itself. Only asks once per
+// distinct City/Country combo (lastAreaCheckKey) — re-blurring the same
+// unchanged fields (tabbing back through, a city-suggestion pick that
+// didn't change anything) shouldn't re-prompt.
+let lastAreaCheckKey = null;
+
+function checkForExistingArea() {
+  const city = $('field-city').value.trim();
+  const country = $('field-country').value.trim();
+  if (!city || !country) return;
+  const key = `${normalizeForMatch(city)}|${normalizeForMatch(country)}`;
+  if (key === lastAreaCheckKey) return;
+  lastAreaCheckKey = key;
+
+  const match = findAreaMatch(city, country, state.editingId);
+  if (match.status !== 'match' && match.status !== 'possible') return;
+  const existing = state.rows.find((r) => r.id === match.targetId);
+  const label = `${existing.city}, ${existing.country}`;
+  const message = match.status === 'match'
+    ? `A ministry for ${label} already exists. Continue adding this as a new, separate area anyway, or Cancel to go back and check the existing one?`
+    : `This looks similar to an existing ministry — ${label} — possibly just a different spelling. Continue adding this as a new, separate area anyway, or Cancel to go back?`;
+  if (!window.confirm(message)) {
+    $('field-city').value = '';
+    lastAreaCheckKey = null;
+    updateSaveButtonState();
+    $('field-city').focus();
+  }
+}
+
 async function lookupLatLng() {
   const city = $('field-city').value.trim();
   const country = $('field-country').value.trim();
@@ -2300,6 +2342,9 @@ function wireDialog() {
   $('add-university-btn').addEventListener('click', () => addUniversityRow());
   wireMinistryPhotoAdd();
   wireVideoLinkFields();
+  // Runs before the lat/lng lookup so a duplicate area is caught before
+  // spending a geocode request on it.
+  $('field-city').addEventListener('blur', checkForExistingArea);
   $('field-city').addEventListener('blur', autoLookupLatLngOnBlur);
   // The lookup status ("Found: ...", an error, etc.) describes whatever
   // City held at the last blur — stale and potentially misleading the
@@ -2910,16 +2955,19 @@ function levenshteinDistance(a, b) {
 // "Nielles-lès-Ardres" vs "Nielles les Ardres" and plain typos both need
 // this) as long as it clears a similarity floor, so a wildly different city
 // never gets pre-selected just for being the least-bad option on offer.
-function findAreaMatch(city, country) {
+// excludeId lets a caller editing an existing row search for a match
+// without that row always matching itself (see checkForExistingArea).
+function findAreaMatch(city, country, excludeId = null) {
   const key = `${normalizeForMatch(city)}, ${normalizeForMatch(country)}`;
-  for (const row of state.rows) {
+  const candidates = excludeId == null ? state.rows : state.rows.filter((r) => r.id !== excludeId);
+  for (const row of candidates) {
     if (`${normalizeForMatch(row.city)}, ${normalizeForMatch(row.country)}` === key) {
       return { status: 'match', targetId: row.id };
     }
   }
   let best = null;
   let bestScore = 0;
-  for (const row of state.rows) {
+  for (const row of candidates) {
     const candidateKey = `${normalizeForMatch(row.city)}, ${normalizeForMatch(row.country)}`;
     const distance = levenshteinDistance(key, candidateKey);
     const score = 1 - distance / Math.max(key.length, candidateKey.length, 1);
