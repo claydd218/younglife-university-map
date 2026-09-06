@@ -181,6 +181,14 @@ h1, h2, h3, .legend-label, .cluster-badge {
    that actually ties it to the joke being active — see wireTitleEasterEgg
    in js/app.js — independent of whatever's currently fading the overlay
    itself in or out. */
+.king-brett-image[hidden] {
+  /* Overrides the plain-class display:block below — the browser's own
+     default [hidden] { display:none } rule and that class rule have equal
+     specificity, and this stylesheet loading after the UA one means the
+     class was winning, leaving the portrait visible at all times regardless
+     of the [hidden] attribute JS actually toggles. */
+  display: none;
+}
 .king-brett-image {
   display: block;
   width: 84px;

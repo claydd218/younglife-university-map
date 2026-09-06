@@ -602,6 +602,58 @@ function wireMetricsOverlayDismiss() {
 // goToWorld already handles — without duplicating that logic.
 let goToWorldFn = null;
 
+// Module-level (not a fresh closure per call) specifically so two calls in
+// quick succession — e.g. picking a division right before the title easter
+// egg fires its own goToWorld — share one suppression window instead of
+// racing. Each call used to set up its own independent moveend listener/
+// debounce/hard-ceiling closure, all driving the same shared
+// state.suppressOverlayDismiss flag — so an earlier call's own debounced
+// clear() could flip that flag back to false while a *later* call's move
+// was still animating, letting the overlay dismiss itself mid-transition
+// (confirmed live: triggering the easter egg shortly after a division
+// click left the metrics overlay hidden and the map never reaching the
+// world view). Starting a new call here now always cancels whatever
+// listener/timers a previous call left pending first, so only the latest
+// call's own settling can ever actually clear the flag.
+let suppressDismissMoveEndListener = null;
+let suppressDismissDebounceTimer = null;
+let suppressDismissHardTimer = null;
+
+// The nav-menu's own move is what's suppressing dismiss here, so it needs
+// to un-suppress itself once that move actually settles. A big zoom
+// change (world -> a division) doesn't animate as one single pan/zoom —
+// Leaflet plays it as several legs (e.g. an animated pan, then a instant
+// zoom step), each firing its own movestart/moveend, and marker-cluster
+// re-clustering on top of that can fire more of the same — confirmed live
+// by the overlay dismissing itself mid-transition when this only waited
+// for the first moveend. So: debounce on every moveend seen and only
+// actually clear once none has fired for a bit, with a hard ceiling in
+// case moveend never fires cleanly at all (e.g. fitBounds silently no-ops
+// when the map's already sitting at the requested view).
+function withSuppressedDismiss(moveFn) {
+  state.suppressOverlayDismiss = true;
+  if (suppressDismissMoveEndListener) map.off('moveend', suppressDismissMoveEndListener);
+  clearTimeout(suppressDismissDebounceTimer);
+  clearTimeout(suppressDismissHardTimer);
+
+  const clear = () => {
+    state.suppressOverlayDismiss = false;
+    if (suppressDismissMoveEndListener) {
+      map.off('moveend', suppressDismissMoveEndListener);
+      suppressDismissMoveEndListener = null;
+    }
+    clearTimeout(suppressDismissDebounceTimer);
+    clearTimeout(suppressDismissHardTimer);
+  };
+  suppressDismissMoveEndListener = () => {
+    clearTimeout(suppressDismissDebounceTimer);
+    suppressDismissDebounceTimer = setTimeout(clear, 300);
+  };
+  map.on('moveend', suppressDismissMoveEndListener);
+  suppressDismissHardTimer = setTimeout(clear, 3000);
+  moveFn();
+}
+
 function wireNavMenu() {
   const toggle = document.getElementById('nav-menu-toggle');
   const menu = document.getElementById('nav-menu');
@@ -632,37 +684,6 @@ function wireNavMenu() {
     list.querySelectorAll('.nav-menu-item').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.nav === navKey);
     });
-  }
-
-  // The nav-menu's own move is what's suppressing dismiss here, so it needs
-  // to un-suppress itself once that move actually settles. A big zoom
-  // change (world -> a division) doesn't animate as one single pan/zoom —
-  // Leaflet plays it as several legs (e.g. an animated pan, then a instant
-  // zoom step), each firing its own movestart/moveend, and marker-cluster
-  // re-clustering on top of that can fire more of the same — confirmed live
-  // by the overlay dismissing itself mid-transition when this only waited
-  // for the first moveend. So: debounce on every moveend seen and only
-  // actually clear once none has fired for a bit, with a hard ceiling in
-  // case moveend never fires cleanly at all (e.g. fitBounds silently no-ops
-  // when the map's already sitting at the requested view).
-  function withSuppressedDismiss(moveFn) {
-    state.suppressOverlayDismiss = true;
-    let cleared = false;
-    let debounceTimer = null;
-    const clear = () => {
-      if (cleared) return;
-      cleared = true;
-      state.suppressOverlayDismiss = false;
-      map.off('moveend', onMoveEnd);
-      clearTimeout(debounceTimer);
-    };
-    function onMoveEnd() {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(clear, 300);
-    }
-    map.on('moveend', onMoveEnd);
-    setTimeout(clear, 3000);
-    moveFn();
   }
 
   function goToWorld() {
