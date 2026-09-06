@@ -71,13 +71,20 @@ h1, h2, h3, .legend-label, .cluster-badge {
    and a background tied to that box stopped short of the edges instead of
    spanning them. Positioned absolute against .site-header (the nearest
    positioned ancestor) so left/right:0 reaches the real edges regardless of
-   how narrow h1's own content box is; painted first (pseudo-elements always
-   precede real children) so it sits behind the title text and never
-   intercepts clicks meant for it or anything past its own height, which is
-   tuned per breakpoint below to roughly match the title's own height —
-   stopping at the title, not fading into the metrics row under it. */
+   how narrow h1's own content box is. Its own height is tuned per
+   breakpoint below to roughly match the title's own height — stopping at
+   the title, not fading into the metrics row under it.
+   z-index:-1 is load-bearing, not decorative: a positioned element (this
+   one) paints *above* normal in-flow content (h1) by default regardless of
+   source order — being a "first child" pseudo-element doesn't change that
+   painting-order rule — so without this the gradient sat on top of the
+   title text instead of behind it. The negative value is safely scoped to
+   .site-header's own stacking context (it already isolates one via
+   position+z-index), not a risk of sinking below the map or other page
+   content. */
 .site-header::before {
   content: '';
+  z-index: -1;
   position: absolute;
   top: 0;
   left: 0;
