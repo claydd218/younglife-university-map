@@ -63,13 +63,16 @@ h1, h2, h3, .legend-label, .cluster-badge {
   text-align: center;
   padding: max(14px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 10px max(20px, env(safe-area-inset-left));
   pointer-events: none;
-  /* background: linear-gradient(to bottom, rgba(241, 230, 205, 0.92) 0%, rgba(241, 230, 205, 0) 100%); */
 }
 
 .site-header h1 {
   margin: 0 auto;
   pointer-events: auto;
   user-select: none;
+  /* Scoped to just the title's own box (not the whole header, which would
+     also fade in behind the metrics row/portrait below it) — stops at the
+     title, per request. */
+  background: linear-gradient(to bottom, rgba(241, 230, 205, 0.92) 0%, rgba(241, 230, 205, 0) 100%);
   /* Flat, not scaled by vw — measured against the actual rendered text
      width (see the two media queries below) to guarantee it clears the
      nav-menu button whenever it's showing as one line, at every width
