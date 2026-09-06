@@ -65,14 +65,37 @@ h1, h2, h3, .legend-label, .cluster-badge {
   pointer-events: none;
 }
 
+/* Full-bleed backdrop for just the title — a pseudo-element rather than a
+   background on h1 itself, since h1's own box is deliberately narrower than
+   the full header (see its max-width rule below, for nav-button clearance)
+   and a background tied to that box stopped short of the edges instead of
+   spanning them. Positioned absolute against .site-header (the nearest
+   positioned ancestor) so left/right:0 reaches the real edges regardless of
+   how narrow h1's own content box is; painted first (pseudo-elements always
+   precede real children) so it sits behind the title text and never
+   intercepts clicks meant for it or anything past its own height, which is
+   tuned per breakpoint below to roughly match the title's own height —
+   stopping at the title, not fading into the metrics row under it. */
+.site-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  background: linear-gradient(to bottom, rgba(241, 230, 205, 0.92) 0%, rgba(241, 230, 205, 0) 100%);
+}
+
+@media (max-width: 950px) {
+  .site-header::before {
+    height: 100px;
+  }
+}
+
 .site-header h1 {
   margin: 0 auto;
   pointer-events: auto;
   user-select: none;
-  /* Scoped to just the title's own box (not the whole header, which would
-     also fade in behind the metrics row/portrait below it) — stops at the
-     title, per request. */
-  background: linear-gradient(to bottom, rgba(241, 230, 205, 0.92) 0%, rgba(241, 230, 205, 0) 100%);
   /* Flat, not scaled by vw — measured against the actual rendered text
      width (see the two media queries below) to guarantee it clears the
      nav-menu button whenever it's showing as one line, at every width
@@ -146,6 +169,11 @@ h1, h2, h3, .legend-label, .cluster-badge {
     display: block;
     max-width: calc(100% - 100px);
     font-size: clamp(16px, 2.6vw, 26px);
+  }
+  /* Back to the single-line backdrop height — the 100px one above is sized
+     for the stacked two-line portrait layout, which this falls back out of. */
+  .site-header::before {
+    height: 70px;
   }
 }
 
