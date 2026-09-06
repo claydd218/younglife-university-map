@@ -1939,7 +1939,23 @@ async function reconcileAllPhotos() {
   }
 }
 
+// Guards against overlapping saves — nothing previously stopped a second
+// Save/Update click (or tap) from starting a whole separate run of this
+// function while the first was still mid-flight (awaiting uploads/PUTs),
+// which is a realistic thing to do on a slow connection where the button
+// doesn't visibly react right away. Confirmed as the actual cause of a
+// real production bug: several ministries ended up with the exact same
+// photo filename listed 2-4 times in their `photos` array, all from a
+// single save — concurrent commitPendingMinistryPhotos runs each compute
+// the "next" filename by listing what's already in R2 (see upload.js),
+// so two overlapping saves can both see nothing there yet and both land
+// on the same target name. A brand-new ministry (POST, no state.editingId
+// to collide on) instead ended up as several duplicate rows, one per
+// overlapping call. Both are just symptoms of the same missing guard.
+let ministrySaveInFlight = false;
+
 async function saveMinistry() {
+  if (ministrySaveInFlight) return;
   if (!validateNoParensInForm()) return;
   if (!validateVideoUrlInForm()) return;
 
@@ -1990,6 +2006,7 @@ async function saveMinistry() {
 
   const { sha: _staleSha, ...rowFields } = body;
 
+  ministrySaveInFlight = true;
   const closeBtn = $('dialog-close-btn');
   closeBtn.disabled = true;
   closeBtn.textContent = 'Saving…';
@@ -2031,6 +2048,7 @@ async function saveMinistry() {
     // it open on top of freshly reloaded rows underneath.
     handleWriteError(err, () => { $('ministry-dialog').close(); loadMinistries(); });
   } finally {
+    ministrySaveInFlight = false;
     closeBtn.textContent = state.editingId ? 'Update' : 'Save';
     updateSaveButtonState();
     $('dialog-cancel-btn').disabled = false;
