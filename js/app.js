@@ -597,6 +597,11 @@ function wireMetricsOverlayDismiss() {
 // metrics in its own color. Deliberately does NOT call __isolateDivision —
 // this is just a camera move, every division stays colored the way it
 // always does on the live map.
+// Exposed so the title easter egg (wireTitleEasterEgg) can trigger the
+// exact same "World" reset — including the movestart-dismiss suppression
+// goToWorld already handles — without duplicating that logic.
+let goToWorldFn = null;
+
 function wireNavMenu() {
   const toggle = document.getElementById('nav-menu-toggle');
   const menu = document.getElementById('nav-menu');
@@ -669,6 +674,7 @@ function wireNavMenu() {
     });
     showMetricsOverlay(state.worldMetrics, null);
   }
+  goToWorldFn = goToWorld;
 
   function goToDivision(key) {
     const bounds = window.__divisionBounds(key);
@@ -1496,6 +1502,7 @@ function wireVideoLightbox() {
 function wireTitleEasterEgg() {
   const titleEl = document.getElementById('site-title');
   if (!titleEl) return;
+  const kingImage = document.getElementById('king-brett-image');
   // Saved as markup, not just text — the title's real content is two
   // nowrap <span>s (see index.html/the .title-part rule in style.css) so
   // it only breaks at the "University / International" joint when it
@@ -1525,6 +1532,11 @@ function wireTitleEasterEgg() {
     tapCount = 0;
     showingJoke = !showingJoke;
     titleEl.innerHTML = showingJoke ? jokeHtml : originalHtml;
+    // Both directions reset to the same "World" view + world metrics — the
+    // portrait itself is what actually marks the joke as on or off,
+    // fading in/out with the rest of the metrics overlay from there.
+    if (kingImage) kingImage.hidden = !showingJoke;
+    if (goToWorldFn) goToWorldFn();
   });
 }
 
