@@ -649,6 +649,30 @@ function showCountryMetricsOverlay(name) {
   );
 }
 
+// Flies to `name`'s own bounds and shows its metrics — the same two things
+// the country-polygon click handler in init() does for a "present" country,
+// factored out here for runQueryStringAnimation's own scripted tour below
+// (which needs to trigger this without a real click on the polygon).
+// withSuppressedDismiss is required, not optional, even though nothing
+// else is fighting to dismiss the overlay during a scripted tour — flyTo
+// itself always fires 'zoomstart' internally (confirmed against Leaflet's
+// own source), which is one of wireMetricsOverlayDismiss's two real
+// dismiss triggers, so an unwrapped flyTo here would immediately hide the
+// very overlay this function just asked to show.
+function goToCountryMetrics(name) {
+  let countryLayer;
+  state.geoLayer.eachLayer((layer) => {
+    if (normalizeCountryName(layer.feature.properties.name) === name) countryLayer = layer;
+  });
+  if (!countryLayer) return;
+  const bounds = computeMainLandBounds(countryLayer.feature);
+  const targetZoom = map.getBoundsZoom(bounds) - 0.5;
+  withSuppressedDismiss(() => {
+    map.flyTo(bounds.getCenter(), targetZoom);
+  });
+  showCountryMetricsOverlay(name);
+}
+
 function hideMetricsOverlay() {
   if (state.overlayDismissed) return;
   state.overlayDismissed = true;
@@ -719,8 +743,10 @@ function wireMetricsOverlayDismiss() {
 // always does on the live map.
 // Exposed so the title easter egg (wireTitleEasterEgg) can trigger the
 // exact same "World" reset — including the movestart-dismiss suppression
-// goToWorld already handles — without duplicating that logic.
+// goToWorld already handles — without duplicating that logic. goToDivisionFn
+// is the same idea, for runQueryStringAnimation's own scripted tour below.
 let goToWorldFn = null;
+let goToDivisionFn = null;
 
 // Module-level (not a fresh closure per call) specifically so two calls in
 // quick succession — e.g. picking a division right before the title easter
@@ -843,6 +869,7 @@ function wireNavMenu() {
     });
     showMetricsOverlay(state.metricsByDivision.get(key) || [], DIVISIONS[key].pin, escapeHtml(DIVISIONS[key].label));
   }
+  goToDivisionFn = goToDivision;
 
   list.addEventListener('click', (e) => {
     const btn = e.target.closest('.nav-menu-item');
@@ -1449,6 +1476,13 @@ function wireMinistryPhotoCarousel() {
 
   function showNext() { slideTo((index + 1) % photos.length, 1); }
   function showPrev() { slideTo((index - 1 + photos.length) % photos.length, -1); }
+
+  // Exposed so runQueryStringAnimation's own scripted tour can drive this
+  // carousel the same way a real viewer's clicks/arrow keys do, without
+  // reaching into (or duplicating) this closure's own open/showNext/close.
+  // Same window.__ convention this file already uses for other internal
+  // hooks (__divisionBounds, __isolateDivision, __mapReady, ...).
+  window.__ministryLightbox = { open, showNext, close, isVisible: () => lightbox.classList.contains('visible') };
 
   prevBtn.addEventListener('click', (e) => { e.stopPropagation(); showPrev(); });
   nextBtn.addEventListener('click', (e) => { e.stopPropagation(); showNext(); });
@@ -2370,7 +2404,15 @@ async function init() {
   }
 }
 
-init();
+// Chained with .then, not the bare fire-and-forget call this used to be —
+// runQueryStringAnimation (bottom of file) needs everything init() sets up
+// (state.markersByCountry, goToWorldFn/goToDivisionFn, the photo lightbox's
+// window.__ministryLightbox) to actually exist before it can start, which
+// only happens once the whole async function body — not just the
+// synchronous call to it — has finished.
+init().then(() => {
+  if (window.__mapReady) runQueryStringAnimation();
+});
 
 // Keeps the metrics overlay honest about whatever ministry is actually in
 // focus: a pin/cluster click no longer dismisses the overlay (see
@@ -2496,4 +2538,105 @@ if (window.visualViewport) {
 }
 if (window.screen && window.screen.orientation) {
   window.screen.orientation.addEventListener('change', refreshMapSizeSoon);
+}
+
+// ---------------------------------------------------------------------
+// ?animate=NAME — an unlisted, ambient auto-tour of one division: World,
+// pause; that division, pause; then for each of its countries (that
+// actually has a ministry pin), in turn: fly there and show its metrics,
+// pause; for every ministry pin in that country, in turn: open its popup,
+// pause, and if it has photos, cycle through all of them full-screen
+// before closing back up and moving to the next pin. Once every country's
+// done, loops back to World and starts over — this is a prototype for
+// trying the idea out live (per explicit request) before building the
+// real thing: an admin-curated version with its own per-tour config,
+// named tours, hideable divisions, and a public menu to pick one. Nothing
+// here is meant to survive that rewrite as-is; ANIMATIONS below is a
+// stand-in for what will eventually be admin-authored data.
+//
+// Deliberately loops forever with no way to stop it short of reloading
+// without the query string — fine for trying the idea out; the real
+// version will make looping a per-tour choice.
+// ---------------------------------------------------------------------
+
+const ANIMATIONS = {
+  lac: { divisionKey: 'latin_america_caribbean' },
+};
+
+// Milliseconds to sit on each step before moving to the next. Rough first
+// guesses, not measured against anything — trivial to retune once this is
+// actually watched end to end.
+const ANIMATION_PAUSE = {
+  world: 3000,
+  division: 3500,
+  country: 3500,
+  pin: 3000,
+  photo: 2500,
+  // Brief breather after closing a popup/lightbox, before the next step —
+  // otherwise back-to-back moves have no visual seam between them at all.
+  settle: 400,
+};
+
+function animationSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Every country in `divisionKey` that actually has a ministry pin (an
+// empty country has nothing for the tour to show or say), alphabetized
+// for a stable, predictable order run to run.
+function countriesInDivision(divisionKey) {
+  const names = [];
+  for (const [countryName, entries] of state.markersByCountry) {
+    if (entries.length && state.countryDivisionByName.get(countryName) === divisionKey) {
+      names.push(countryName);
+    }
+  }
+  return names.sort((a, b) => a.localeCompare(b));
+}
+
+async function runAnimation(config) {
+  const countries = countriesInDivision(config.divisionKey);
+  for (;;) {
+    goToWorldFn();
+    await animationSleep(ANIMATION_PAUSE.world);
+
+    goToDivisionFn(config.divisionKey);
+    await animationSleep(ANIMATION_PAUSE.division);
+
+    for (const countryName of countries) {
+      goToCountryMetrics(countryName);
+      await animationSleep(ANIMATION_PAUSE.country);
+
+      const entries = state.markersByCountry.get(countryName) || [];
+      for (const { marker, row } of entries) {
+        marker.openPopup();
+        await animationSleep(ANIMATION_PAUSE.pin);
+
+        const photos = (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+        if (photos.length) {
+          await window.__ministryLightbox.open(photos);
+          for (let i = 0; i < photos.length; i++) {
+            await animationSleep(ANIMATION_PAUSE.photo);
+            if (i < photos.length - 1) window.__ministryLightbox.showNext();
+          }
+          window.__ministryLightbox.close();
+          await animationSleep(ANIMATION_PAUSE.settle);
+        }
+
+        map.closePopup();
+        await animationSleep(ANIMATION_PAUSE.settle);
+      }
+    }
+  }
+}
+
+function runQueryStringAnimation() {
+  const name = new URLSearchParams(location.search).get('animate');
+  if (!name) return;
+  const config = ANIMATIONS[name];
+  if (!config) {
+    console.warn(`?animate=${name} — no such animation. Known: ${Object.keys(ANIMATIONS).join(', ')}`);
+    return;
+  }
+  runAnimation(config);
 }
