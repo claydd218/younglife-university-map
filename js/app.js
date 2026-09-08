@@ -235,15 +235,16 @@ function normalizeCountryName(name) {
 // parseParenList, slugify, and initialsFor live in js/utils.js, shared with
 // the admin tools.
 
-// Classic map-pin silhouette (Material "place" glyph) — one path, reused
-// for both stages: filled (established) uses fill-rule="evenodd" so the
-// inner circle punches a hole, giving the recognizable pushpin-with-window
-// look; outline (developing) uses the same path stroked with no fill, so
-// both the outer teardrop and inner circle render as open outlines instead.
-const PIN_PATH = 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z';
-
+// A thumbtack silhouette (round head + a thin spike below it), not the
+// teardrop "map pin" glyph — a round head + triangular point, each stroked
+// individually so the seam between them reads as a collar/rivet line
+// rather than a flaw. Filled (established) fills both with the division
+// color; outline (developing) leaves them unfilled, stroked with it.
 function shapeMarkup(shape, color) {
-  return `<svg class="pin-shape pin-${shape}" viewBox="0 0 24 24" style="--pin-color:${color}"><path d="${PIN_PATH}" fill-rule="evenodd"/></svg>`;
+  return `<svg class="pin-shape pin-${shape}" viewBox="0 0 24 24" style="--pin-color:${color}">
+    <circle cx="12" cy="8" r="6"/>
+    <path d="M8.7 13.2 L15.3 13.2 L12 23 Z"/>
+  </svg>`;
 }
 
 // Builds an <img> that tries each of CONFIG.IMAGE_EXTENSIONS in turn (via
