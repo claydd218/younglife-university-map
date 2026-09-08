@@ -2677,25 +2677,10 @@ function countriesInDivision(divisionKey) {
 // limits mid-flight even when its settled end state is fine.
 function zoomToShowMarker(marker, divisionKey) {
   const group = state.clusterGroups[divisionKey];
-  // TEMP DEBUG — investigating an intermittent zoom-out-to-hemisphere bug
-  // seen live on the ?animate=lac tour. Remove once diagnosed.
-  console.log('[tourDebug] zoomToShowMarker start', {
-    hasIcon: !!marker._icon,
-    boundsContains: map.getBounds().contains(marker.getLatLng()),
-    parentZoom: marker.__parent ? marker.__parent._zoom : null,
-    groupZoom: group._zoom,
-    inZoomAnimation: group._inZoomAnimation,
-    mapZoom: map.getZoom(),
-    mapCenter: map.getCenter(),
-  });
   return new Promise((resolve) => {
     suppressMapClamp = true;
     withSuppressedDismiss(() => {
       group.zoomToShowLayer(marker, () => {
-        console.log('[tourDebug] zoomToShowMarker done', {
-          mapZoom: map.getZoom(),
-          mapCenter: map.getCenter(),
-        });
         suppressMapClamp = false;
         clampSouth();
         clampNorth();
