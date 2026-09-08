@@ -2063,7 +2063,7 @@ async function init() {
     const coastalGlowOptions = {
       pane: 'coastalGlowPane',
       interactive: false,
-      style: () => ({ fillColor: '#d3ecf7', fillOpacity: 1, color: '#d3ecf7', weight: 8, opacity: 1 }),
+      style: () => ({ fillColor: '#bedced', fillOpacity: 1, color: '#bedced', weight: 8, opacity: 1 }),
     };
     L.geoJSON(countryGeo, coastalGlowOptions).addTo(map);
     for (const offsetDeg of [-360, 360]) {
