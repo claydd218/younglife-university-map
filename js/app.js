@@ -630,22 +630,38 @@ function hideMetricsOverlay() {
   overlay.setAttribute('aria-hidden', 'true');
 }
 
-// Any real map interaction dismisses the overlay: dragging/zooming
-// ('movestart' — zooming also fires this outside the pin/cluster cases
-// below), or a plain click that doesn't move the map at all (an empty-area
-// or country click — see the country click handler in init()). Suppressed
-// while a nav-menu selection's own setView/fitBounds is playing out, so
-// picking "World" or a division doesn't immediately re-hide the overlay it
-// just asked to show.
+// A real, user-driven map interaction dismisses the overlay: dragging
+// ('dragstart') or zooming by hand — scroll wheel, pinch, double-click, the
+// +/- control ('zoomstart', covers all of those) — or a plain click that
+// doesn't move the map at all (an empty-area or country click — see the
+// country click handler in init()). Suppressed while a nav-menu selection's
+// own setView/fitBounds is playing out, so picking "World" or a division
+// doesn't immediately re-hide the overlay it just asked to show.
 //
-// Clicking a ministry pin or a cluster badge is exempt from all of this —
-// browsing individual ministries (opening a popup) or zooming into a
-// cluster is still "looking at the same selection," not leaving it, so
-// neither should dismiss the overlay. Popups never fire 'movestart'/
-// dismiss on their own; the cluster-click zoom handler below wraps its own
-// setView in withSuppressedDismiss the same way a nav-menu move does. What
-// remains to guard against here is just the *click itself* bubbling up to
-// this map-level listener — inspecting the real DOM target (not Leaflet's
+// Deliberately NOT the generic 'movestart' (which used to be the trigger
+// here) — that fires for every programmatic view change too, not just
+// real user drags/zooms, and there's a real one that isn't obviously a
+// "leave this selection" moment: opening a ministry popup near a screen
+// edge triggers this file's own header/edge-clearance auto-pan
+// (map.panBy, below), which used to immediately dismiss the overlay right
+// after a pin click that's otherwise exempt from dismissing it at all —
+// confirmed live as the cause of a pin click still closing the country
+// overlay via that pan. 'dragstart'/'zoomstart' only ever fire for the
+// user's own hand on the map (Leaflet's Drag/Zoom input handlers), never
+// for a plain panBy/setView/flyTo call made from code, so every
+// programmatic move in this file (that popup auto-pan included) is
+// naturally exempt without needing its own suppression.
+//
+// Clicking a ministry pin or a cluster badge is exempt from the click
+// trigger — browsing individual ministries (opening a popup) or zooming
+// into a cluster is still "looking at the same selection," not leaving
+// it, so neither should dismiss the overlay; the cluster-click zoom
+// handler below wraps its own setView in withSuppressedDismiss the same
+// way a nav-menu move does (mainly for the *bubbled click* on the cluster
+// icon, since its zoom is a 'zoomstart' either way and — per above —
+// wouldn't have dismissed on its own regardless). What remains to guard
+// against for clicks is just the click itself bubbling up to this
+// map-level listener — inspecting the real DOM target (not Leaflet's
 // synthetic event propagation, which historically shifted across marker/
 // cluster-plugin versions) is the most robust way to tell "this click
 // landed on a pin/cluster icon" apart from blank map or country-polygon
@@ -655,7 +671,7 @@ function wireMetricsOverlayDismiss() {
     if (state.suppressOverlayDismiss) return;
     hideMetricsOverlay();
   }
-  map.on('movestart', maybeHide);
+  map.on('dragstart zoomstart', maybeHide);
   map.on('click', (e) => {
     if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest('.ministry-marker, .ministry-cluster')) return;
     maybeHide();
