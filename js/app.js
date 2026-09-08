@@ -2679,7 +2679,32 @@ function panMarkerToBottomCenter(marker) {
   const pt = map.latLngToContainerPoint(marker.getLatLng());
   const desiredX = size.x / 2;
   const desiredY = size.y - bottomMargin;
-  map.panBy([pt.x - desiredX, pt.y - desiredY], { animate: true });
+  let panY = pt.y - desiredY;
+
+  // Cap panY so this pan alone never provokes the page's own
+  // clampSouth/clampNorth (both defined above, both run on every 'move').
+  // A marker sitting below the bottom-center target needs a positive panY
+  // to reach it — which shifts the viewport to reveal more of what's
+  // south of it — and for a pin far enough south to begin with (Chile,
+  // Argentina), that reveal could push past SOUTH_LIMIT_LAT before this
+  // pan even finishes, only for clampSouth to immediately yank the view
+  // back on the very next 'move' event. Confirmed live as the cause of a
+  // real bug: the pin pan visibly overshot south, then snapped back north
+  // a moment later. Clamping our own target here instead means the pin
+  // ends up as close to bottom-center as the map's existing bounds allow
+  // and never past them, so nothing is left to correct afterward. The
+  // symmetric north cap guards the same failure mode in the other
+  // direction, even though no real ministry is anywhere near it in
+  // practice.
+  const centerLng = map.getCenter().lng;
+  const southLimitY = map.latLngToContainerPoint([SOUTH_LIMIT_LAT, centerLng]).y;
+  const maxPanY = southLimitY - size.y;
+  if (panY > maxPanY) panY = maxPanY;
+  const northEdgeY = map.latLngToContainerPoint([85.0511, centerLng]).y;
+  const minPanY = northEdgeY - NORTH_LIMIT_PX;
+  if (panY < minPanY) panY = minPanY;
+
+  map.panBy([pt.x - desiredX, panY], { animate: true });
 }
 
 async function runAnimation(config) {
