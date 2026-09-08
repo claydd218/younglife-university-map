@@ -193,7 +193,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
    title plus #metrics-label below, not the boxes here — see that rule's
    own comment). */
 .metrics-overlay {
-  margin-top: 10px;
+  margin-top: 2px;
   /* auto (not inherited none, like the rest of .site-header) so a tap here
      dismisses the overlay itself (see the click listener in
      wireMetricsOverlayDismiss) instead of falling through to whatever
