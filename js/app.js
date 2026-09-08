@@ -1594,25 +1594,22 @@ function wireTitleEasterEgg() {
 // further interaction then behaves normally and leaves the page, same as
 // if the map had never been touched.
 function wireBackButtonReset() {
-  const initialView = { center: L.latLng(CONFIG.MAP_CENTER), zoom: CONFIG.MAP_ZOOM };
   let pushed = false;
-  // Set while resetMapView's own setView call is in flight, so that
-  // programmatic move doesn't immediately re-arm the trap it was called to
-  // disarm — cleared on the next tick, once Leaflet's synchronous
-  // (animate:false) move/zoom events for that call have all fired.
-  let suppressArm = false;
 
   function armTrap() {
-    if (pushed || suppressArm) return;
+    // Reuses the same flag goToWorld/goToDivision already set for the
+    // whole span of their own animated, multi-leg moves (see
+    // withSuppressedDismiss) — Back should behave exactly like choosing
+    // "World" from the nav menu, including not re-arming itself partway
+    // through that same animated transition.
+    if (pushed || state.suppressOverlayDismiss) return;
     pushed = true;
     history.pushState({ ylMapView: true }, '', location.href);
   }
 
   function resetMapView() {
-    suppressArm = true;
     map.closePopup();
-    map.setView(initialView.center, initialView.zoom, { animate: false });
-    setTimeout(() => { suppressArm = false; }, 0);
+    if (goToWorldFn) goToWorldFn();
   }
 
   map.on('movestart', armTrap);
