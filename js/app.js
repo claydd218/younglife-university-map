@@ -154,8 +154,30 @@ map.addControl(new DirectoryControl());
 // real, reproduced freeze. inertia: false above (see map options)
 // removes that animation entirely, so there's no competing frame-by-
 // frame loop left for this to fight — safe to run live again.
+// True only while one of the ?animate=NAME tour's own pin-level moves
+// (zoomToShowMarker, panMarkerToBottomCenter — both far below) is in
+// flight. Those two are real culprits behind a genuine bug: each is a
+// live, animated pan/zoom that can transiently swing the view across
+// SOUTH_LIMIT_LAT/the north edge mid-flight even when its own FINAL
+// resting position is fine (e.g. zooming in on a clustered pin near the
+// south of a country whose own bounds are already close to the limit) —
+// and since clampSouth/clampNorth react to every single 'move' tick, not
+// just the settled end state, that mid-flight crossing was enough to
+// trigger a correction *during* the animation, which read as the view
+// overshooting south and then visibly snapping back. Confirmed live.
+// Suppressing the correction while a tour move is animating, then
+// re-enabling it and running one explicit check once that move has
+// actually settled (see both functions below), fixes the final resting
+// position exactly the same way without any of the mid-flight fighting.
+// Deliberately NOT used for goToWorld/goToDivision/goToCountryMetrics —
+// those are also how a real visitor moves the map (nav menu, country
+// clicks), where per-frame correction during a drag is the actual
+// intended behavior (see this function's own header comment below).
+let suppressMapClamp = false;
+
 const SOUTH_LIMIT_LAT = -71;
 function clampSouth() {
+  if (suppressMapClamp) return;
   const limitPt = map.latLngToContainerPoint([SOUTH_LIMIT_LAT, map.getCenter().lng]);
   const bottomEdgePx = map.getSize().y;
   if (limitPt.y < bottomEdgePx) {
@@ -181,6 +203,7 @@ map.on('move', clampSouth);
 // that inertia: false means there's no live animation left to fight.
 const NORTH_LIMIT_PX = 700;
 function clampNorth() {
+  if (suppressMapClamp) return;
   const trueEdgePt = map.latLngToContainerPoint([85.0511, map.getCenter().lng]);
   if (trueEdgePt.y > NORTH_LIMIT_PX) {
     map.panBy([0, trueEdgePt.y - NORTH_LIMIT_PX], { animate: false });
@@ -2647,12 +2670,22 @@ function countriesInDivision(divisionKey) {
 // tour's other real navigational moves, since the zoom side of this (not
 // the plain-pan case) fires 'zoomstart' internally same as flyTo does,
 // which would otherwise dismiss the very country metrics overlay this
-// step is happening underneath.
+// step is happening underneath. Also wrapped in suppressMapClamp (see its
+// own comment above, next to clampSouth) for the same reason
+// panMarkerToBottomCenter below is — a zoom deep enough to reveal a
+// clustered pin can transiently cross the map's own south/north viewing
+// limits mid-flight even when its settled end state is fine.
 function zoomToShowMarker(marker, divisionKey) {
   const group = state.clusterGroups[divisionKey];
   return new Promise((resolve) => {
+    suppressMapClamp = true;
     withSuppressedDismiss(() => {
-      group.zoomToShowLayer(marker, resolve);
+      group.zoomToShowLayer(marker, () => {
+        suppressMapClamp = false;
+        clampSouth();
+        clampNorth();
+        resolve();
+      });
     });
   });
 }
@@ -2666,11 +2699,22 @@ function zoomToShowMarker(marker, divisionKey) {
 // which could be anywhere from top to bottom of the viewport depending on
 // where in that country this particular ministry sits.
 //
-// Plain panBy, not withSuppressedDismiss-wrapped like the tour's other
-// moves — panBy only ever fires 'movestart' (confirmed against Leaflet's
-// own source, same research behind wireMetricsOverlayDismiss switching to
-// dragstart/zoomstart), never 'dragstart' or 'zoomstart', so it was never
-// going to dismiss the overlay in the first place.
+// Not withSuppressedDismiss-wrapped like the tour's other moves — panBy
+// only ever fires 'movestart' (confirmed against Leaflet's own source,
+// same research behind wireMetricsOverlayDismiss switching to dragstart/
+// zoomstart), never 'dragstart' or 'zoomstart', so it was never going to
+// dismiss the overlay in the first place. IS wrapped in suppressMapClamp
+// (see its own comment above, next to clampSouth) though: a marker
+// sitting below the bottom-center target needs a pan that reveals more of
+// what's south of it, and for a pin far enough south to begin with (Chile,
+// Argentina), that reveal can cross SOUTH_LIMIT_LAT mid-pan — confirmed
+// live as a real bug, the view visibly overshooting south and snapping
+// back, since clampSouth reacts to every single 'move' tick during the
+// animation, not just its settled end. Suppressing the correction while
+// this pan is animating and running one explicit clamp check once it
+// actually settles (panBy's own default duration is 0.25s; 300ms covers
+// that with a little to spare) fixes the final resting position the same
+// way, without fighting the pan mid-flight to get there.
 function panMarkerToBottomCenter(marker) {
   const controls = document.getElementById('animation-controls');
   const controlsHeight = controls.getBoundingClientRect().height;
@@ -2679,32 +2723,16 @@ function panMarkerToBottomCenter(marker) {
   const pt = map.latLngToContainerPoint(marker.getLatLng());
   const desiredX = size.x / 2;
   const desiredY = size.y - bottomMargin;
-  let panY = pt.y - desiredY;
-
-  // Cap panY so this pan alone never provokes the page's own
-  // clampSouth/clampNorth (both defined above, both run on every 'move').
-  // A marker sitting below the bottom-center target needs a positive panY
-  // to reach it — which shifts the viewport to reveal more of what's
-  // south of it — and for a pin far enough south to begin with (Chile,
-  // Argentina), that reveal could push past SOUTH_LIMIT_LAT before this
-  // pan even finishes, only for clampSouth to immediately yank the view
-  // back on the very next 'move' event. Confirmed live as the cause of a
-  // real bug: the pin pan visibly overshot south, then snapped back north
-  // a moment later. Clamping our own target here instead means the pin
-  // ends up as close to bottom-center as the map's existing bounds allow
-  // and never past them, so nothing is left to correct afterward. The
-  // symmetric north cap guards the same failure mode in the other
-  // direction, even though no real ministry is anywhere near it in
-  // practice.
-  const centerLng = map.getCenter().lng;
-  const southLimitY = map.latLngToContainerPoint([SOUTH_LIMIT_LAT, centerLng]).y;
-  const maxPanY = southLimitY - size.y;
-  if (panY > maxPanY) panY = maxPanY;
-  const northEdgeY = map.latLngToContainerPoint([85.0511, centerLng]).y;
-  const minPanY = northEdgeY - NORTH_LIMIT_PX;
-  if (panY < minPanY) panY = minPanY;
-
-  map.panBy([pt.x - desiredX, panY], { animate: true });
+  suppressMapClamp = true;
+  map.panBy([pt.x - desiredX, pt.y - desiredY], { animate: true });
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      suppressMapClamp = false;
+      clampSouth();
+      clampNorth();
+      resolve();
+    }, 300);
+  });
 }
 
 async function runAnimation(config) {
@@ -2728,7 +2756,7 @@ async function runAnimation(config) {
         await animationCheckpoint();
         await zoomToShowMarker(marker, config.divisionKey);
         await animationCheckpoint();
-        panMarkerToBottomCenter(marker);
+        await panMarkerToBottomCenter(marker);
         await animationWait(ANIMATION_PAUSE.settle);
         marker.openPopup();
         await animationWait(ANIMATION_PAUSE.pin);
