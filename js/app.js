@@ -552,7 +552,13 @@ function buildLegend() {
   }
 }
 
-// Mirrors bigtime/reports2/reports2.js's computeMetrics, which drives the
+// "1 Ministry Area" not "1 Ministry Areas" — every metric label goes
+// through this, singular form only when the count is exactly 1.
+function pluralizeLabel(num, singular, plural) {
+  return num === 1 ? singular : plural;
+}
+
+// Mirrors bigtime/report/report.js's own computeMetrics, which drives the
 // same four numbers on the PDF report — kept in sync by eye since one runs
 // against parsed row objects (staff/universities already arrays) and this
 // one runs against the raw CSV rows this page loads (staff/universities
@@ -564,12 +570,19 @@ function computeMetrics(rowsSubset, { includeCountries = true } = {}) {
   const metrics = [];
   if (includeCountries) {
     const countries = new Set(rowsSubset.map((r) => normalizeCountryName(r.country)).filter(Boolean));
-    metrics.push({ label: 'Countries', num: countries.size });
+    metrics.push({ label: pluralizeLabel(countries.size, 'Country', 'Countries'), num: countries.size });
   }
+  const ministryAreaCount = rowsSubset.length;
+  const staffCount = rowsSubset.reduce((sum, r) => sum + parseParenList(r.staff).length, 0);
+  const universityCount = rowsSubset.reduce((sum, r) => sum + parseParenList(r.universities).length, 0);
   metrics.push(
-    { label: 'Ministry Areas', num: rowsSubset.length },
-    { label: 'Staff', num: rowsSubset.reduce((sum, r) => sum + parseParenList(r.staff).length, 0) },
-    { label: 'Universities', num: rowsSubset.reduce((sum, r) => sum + parseParenList(r.universities).length, 0) },
+    { label: pluralizeLabel(ministryAreaCount, 'Ministry Area', 'Ministry Areas'), num: ministryAreaCount },
+    // "Staff" reads the same singular or plural (a collective noun,
+    // unlike the other three) — routed through pluralizeLabel anyway so
+    // every label follows the same pattern, not because the word itself
+    // changes.
+    { label: pluralizeLabel(staffCount, 'Staff', 'Staff'), num: staffCount },
+    { label: pluralizeLabel(universityCount, 'University', 'Universities'), num: universityCount },
   );
   return metrics;
 }
@@ -755,7 +768,15 @@ function wireNavMenu() {
     setActive('world');
     map.closePopup();
     withSuppressedDismiss(() => {
-      map.setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM, { animate: true });
+      // flyTo, not setView — a plain animated setView only actually
+      // animates when the zoom-level change is under Leaflet's own
+      // zoomAnimationThreshold (4 by default); past that it silently
+      // skips the animation and jumps straight to the target instead,
+      // which is exactly what a big move (e.g. zoomed into one country
+      // and choosing World) was doing despite animate:true. flyTo has no
+      // such cutoff — it always plays its own zoom-out/pan/zoom-in curve,
+      // which is also just a more dynamic transition in general.
+      map.flyTo(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM);
     });
     showMetricsOverlay(state.worldMetrics, null);
   }
@@ -770,10 +791,11 @@ function wireNavMenu() {
     withSuppressedDismiss(() => {
       // Extra top padding clears the header/metrics overlay; the rest is
       // just breathing room, same spirit as mapCapture.js's DIVISION_PADDING.
-      map.fitBounds(bounds, {
+      // flyToBounds — see goToWorld's comment on why flyTo(Bounds) over a
+      // plain animated fitBounds/setView.
+      map.flyToBounds(bounds, {
         paddingTopLeft: [40, 170],
         paddingBottomRight: [40, 40],
-        animate: true,
       });
     });
     showMetricsOverlay(state.metricsByDivision.get(key) || [], DIVISIONS[key].pin, escapeHtml(DIVISIONS[key].label));
@@ -945,7 +967,10 @@ function flyToCountry(countryName) {
   });
   if (!countryLayer) return;
   const bounds = computeMainLandBounds(countryLayer.feature);
-  map.setView(bounds.getCenter(), map.getBoundsZoom(bounds) - 0.5);
+  // flyTo, not setView — see goToWorld's own comment on why (no
+  // zoomAnimationThreshold cutoff, so a distant search result still
+  // animates instead of jumping).
+  map.flyTo(bounds.getCenter(), map.getBoundsZoom(bounds) - 0.5);
 
   // A single ministry also gets its popup opened as a bonus, but only if
   // it isn't still buried inside an unopened cluster at this (country,
@@ -1776,14 +1801,20 @@ async function init() {
             // Zooms in OR out to this fit, every time — e.g. clicking a
             // small country while zoomed in on a big one now zooms back
             // out to bring the small one into view, rather than staying
-            // zoomed in past it.
+            // zoomed in past it. flyTo, not setView — a neighbor-to-
+            // neighbor click (e.g. Ukraine, then Poland) is exactly the
+            // kind of move whose zoom-level change routinely exceeds
+            // Leaflet's zoomAnimationThreshold, where a plain animated
+            // setView silently skips its own animation and just jumps;
+            // flyTo has no such cutoff (see goToWorld's own comment on
+            // this) and reads as a real, continuous move between the two.
             // Suppressed the same way the nav menu's own World/division
             // moves are (withSuppressedDismiss) — without it, this same
-            // setView's own 'movestart', and the map 'click' this layer
+            // flyTo's own 'movestart', and the map 'click' this layer
             // click is about to bubble into, would each immediately hide
             // the metrics overlay this click is showing.
             withSuppressedDismiss(() => {
-              map.setView(bounds.getCenter(), targetZoom);
+              map.flyTo(bounds.getCenter(), targetZoom);
             });
             // A country can only ever belong to one division in practice
             // (present.size > 1 would mean the same country name maps to

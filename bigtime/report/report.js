@@ -148,13 +148,22 @@ function buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles, staffHome
     </div>`;
 }
 
+// "1 Ministry Area" not "1 Ministry Areas" — mirrors js/app.js's own
+// pluralizeLabel/computeMetrics (kept in sync by eye, see that file).
+function pluralizeLabel(num, singular, plural) {
+  return num === 1 ? singular : plural;
+}
+
 function computeMetrics(rowsSubset) {
   const countries = new Set(rowsSubset.map((r) => r.country.trim()).filter(Boolean));
+  const ministryAreaCount = rowsSubset.length;
+  const staffCount = rowsSubset.reduce((sum, r) => sum + r.staff.length, 0);
+  const universityCount = rowsSubset.reduce((sum, r) => sum + r.universities.length, 0);
   return [
-    { label: 'Countries', num: countries.size },
-    { label: 'Ministry Areas', num: rowsSubset.length },
-    { label: 'Staff', num: rowsSubset.reduce((sum, r) => sum + r.staff.length, 0) },
-    { label: 'Universities', num: rowsSubset.reduce((sum, r) => sum + r.universities.length, 0) },
+    { label: pluralizeLabel(countries.size, 'Country', 'Countries'), num: countries.size },
+    { label: pluralizeLabel(ministryAreaCount, 'Ministry Area', 'Ministry Areas'), num: ministryAreaCount },
+    { label: pluralizeLabel(staffCount, 'Staff', 'Staff'), num: staffCount },
+    { label: pluralizeLabel(universityCount, 'University', 'Universities'), num: universityCount },
   ];
 }
 
