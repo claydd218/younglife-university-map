@@ -221,7 +221,17 @@ export async function updateMinistry(env, id, expectedUpdatedAt, fields, userNam
     video_url: existing.video_url, video_label: existing.video_label,
     staff: oldStaff, assigned_staff: oldAssignedNames,
   };
-  const newSnapshot = { ...cols, staff: fields.staff || [], assigned_staff: fields.assigned_staff || oldAssignedNames };
+  // Re-queried rather than trusting fields.assigned_staff || oldAssignedNames
+  // — upsertHomeStaff (above) can cascade-delete a staff_assignments row as
+  // a side effect of deleting the staffer's own home record (e.g. they were
+  // self-assigned to this same ministry, or removed while still listed
+  // elsewhere), which changes the *actual* assigned_staff here even though
+  // this save's own request body never touched that field. Trusting the
+  // submitted value produced a log entry that reported "staff removed" but
+  // silently said nothing about the assignment that vanished with it —
+  // confirmed live. Querying fresh after every write in this function
+  // always matches the database's real resulting state.
+  const newSnapshot = { ...cols, staff: fields.staff || [], assigned_staff: await assignedStaffNamesForMinistry(env, id) };
 
   await env.DB.prepare(
     'INSERT INTO ministry_edits (ministry_id, changed_at, action, old_json, new_json, user_name) VALUES (?, ?, ?, ?, ?, ?)'

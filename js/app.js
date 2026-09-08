@@ -364,20 +364,28 @@ function buildPopupHtml(row, divisionKey) {
   const div = DIVISIONS[divisionKey];
   const flag = flagEmoji(state.countryIsoByName.get(normalizeCountryName(row.country)));
 
+  const ownStaff = parseParenList(row.staff);
+  const ownStaffNames = new Set(ownStaff.map((s) => s.name));
+
   // Staff assigned here from elsewhere (a name only — role/photo resolve
   // through their home entry, state.staffHomeByName) render first, ahead
   // of this ministry's own staff — they're effectively the on-site lead.
   // A name with no resolvable home (a dangling reference) is skipped
-  // rather than shown with no role at all.
+  // rather than shown with no role at all. Also skips a name that's
+  // already this same ministry's own staff — a mistaken self-assignment
+  // (someone assigned to their own home ministry, confirmed live as real
+  // stored data, not just a hypothetical) would otherwise render them
+  // twice back to back.
   const assignedStaff = (row.assigned_staff || '').split(';')
     .map((s) => s.trim())
     .filter(Boolean)
+    .filter((name) => !ownStaffNames.has(name))
     .map((name) => {
       const home = state.staffHomeByName.get(name);
       return home ? { name, meta: home.meta } : null;
     })
     .filter(Boolean);
-  const staff = [...assignedStaff, ...parseParenList(row.staff)];
+  const staff = [...assignedStaff, ...ownStaff];
   const staffHtml = staff.length
     ? `<ul class="popup-staff">${staff
         .map((s) => {

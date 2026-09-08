@@ -108,10 +108,16 @@ function buildMinistryAreaHtml(row, countryIsoByName, def, imageFiles, staffHome
     ? `<img class="ministry-area-photo" data-src="../../${CONFIG.IMAGES_DIR}${encodeURIComponent(row.photos[0])}" alt="">`
     : '';
 
+  const ownStaffNames = new Set(row.staff.map((s) => s.name));
+
   // Assigned-elsewhere staff first — they're effectively the on-site lead
   // (same ordering as js/app.js's popup). A name with no resolvable home
-  // (a dangling reference) is skipped rather than shown with no role.
+  // (a dangling reference) is skipped rather than shown with no role. Also
+  // skips a name that's already this same ministry's own staff — see
+  // js/app.js's buildPopupHtml for why (a mistaken self-assignment,
+  // confirmed live as real stored data).
   const assignedStaff = row.assigned_staff
+    .filter((n) => !ownStaffNames.has(n))
     .map((n) => (staffHomeByName.has(n) ? { name: n, role: staffHomeByName.get(n) } : null))
     .filter(Boolean);
   const staff = [...assignedStaff, ...row.staff];
