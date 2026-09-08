@@ -1150,6 +1150,7 @@ function flyToArea(countryName, marker, divisionKey) {
 
 function openDirectory() {
   closeOpenCountryTooltip();
+  map.closePopup();
   document.getElementById('directory-modal').hidden = false;
   const search = document.getElementById('directory-search');
   search.value = '';
