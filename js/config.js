@@ -92,10 +92,10 @@ const DIVISIONS = {
 const STAGES = {
   developing: {
     label: 'Developing',
-    shape: 'dot',
+    shape: 'outline',
   },
   established: {
     label: 'Established',
-    shape: 'star',
+    shape: 'filled',
   },
 };

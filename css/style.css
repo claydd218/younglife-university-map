@@ -596,40 +596,35 @@ h1, h2, h3, .legend-label, .cluster-badge {
 
 .pin-shape {
   display: block;
-  width: 16px;
-  height: 16px;
-  background: var(--pin-color);
-  border: 1.5px solid var(--ink);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.45);
+  width: 22px;
+  height: 28px;
+  overflow: visible;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45));
 }
 
-.pin-dot {
-  /* A filled circle reads visually heavier than a star of the same
-     bounding box (the star's points leave more background showing
-     through), so it's sized down a bit to look balanced against it. */
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin: 3px;
+/* Established — a solid pushpin, the inner circle punched out as a hole
+   by the path's own fill-rule="evenodd" (see PIN_PATH in js/app.js). The
+   ink border keeps it readable against pin colors close to the parchment
+   background, same role .pin-shape's old border played. */
+.pin-filled path {
+  fill: var(--pin-color);
+  stroke: var(--ink);
+  stroke-width: 1;
 }
 
-.pin-star {
-  background: var(--pin-color);
-  border: none;
-  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.45));
+/* Developing — the same silhouette, unfilled, so the pair reads as
+   "the same kind of marker, just not solid yet" rather than two
+   unrelated shapes. */
+.pin-outline path {
+  fill: none;
+  stroke: var(--pin-color);
+  stroke-width: 1.8;
 }
 
 .legend .pin-shape {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 19px;
   flex: 0 0 auto;
-}
-
-.legend .pin-dot {
-  width: 8px;
-  height: 8px;
-  margin: 2.5px;
 }
 
 .color-swatch {

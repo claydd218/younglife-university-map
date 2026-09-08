@@ -235,8 +235,15 @@ function normalizeCountryName(name) {
 // parseParenList, slugify, and initialsFor live in js/utils.js, shared with
 // the admin tools.
 
+// Classic map-pin silhouette (Material "place" glyph) — one path, reused
+// for both stages: filled (established) uses fill-rule="evenodd" so the
+// inner circle punches a hole, giving the recognizable pushpin-with-window
+// look; outline (developing) uses the same path stroked with no fill, so
+// both the outer teardrop and inner circle render as open outlines instead.
+const PIN_PATH = 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z';
+
 function shapeMarkup(shape, color) {
-  return `<span class="pin-shape pin-${shape}" style="--pin-color:${color}"></span>`;
+  return `<svg class="pin-shape pin-${shape}" viewBox="0 0 24 24" style="--pin-color:${color}"><path d="${PIN_PATH}" fill-rule="evenodd"/></svg>`;
 }
 
 // Builds an <img> that tries each of CONFIG.IMAGE_EXTENSIONS in turn (via
@@ -291,9 +298,14 @@ function markerIcon(divisionKey, stageKey) {
   return L.divIcon({
     className: 'ministry-marker',
     html: shapeMarkup(stage.shape, div.pin),
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
-    popupAnchor: [0, -10],
+    // Taller than the old star/dot box to fit the pin's teardrop shape,
+    // anchored near its bottom point (where a pin actually marks a spot)
+    // rather than centered — popupAnchor is relative to *that* anchor, not
+    // the icon's top-left, so it's a big negative Y to land back up near
+    // the pin's round head where the popup used to appear.
+    iconSize: [22, 28],
+    iconAnchor: [11, 27],
+    popupAnchor: [0, -24],
   });
 }
 
