@@ -32,13 +32,6 @@ const state = {
   metricsByCountry: new Map(), // normalized country name -> [{label, num}, ...]
   currentNavView: 'world', // 'world' or a DIVISIONS key — which nav-menu item is active
   overlayDismissed: false, // has the metrics overlay been faded out by user interaction
-  // Normalized country name while a single country's metrics are showing
-  // (set by the country click handler in init(), cleared by goToWorld/
-  // goToDivision), else null. Lets wireMetricsOverlayDismiss's popupopen
-  // handler tell "opened a ministry popup inside the country currently
-  // being shown" (keep the overlay up) apart from "opened one somewhere
-  // else, e.g. after panning away" (dismiss as normal).
-  currentCountryFocus: null,
   // True only while a nav-menu selection's own programmatic setView/fitBounds
   // is in flight, so that move doesn't immediately re-trigger the same
   // dismiss-on-interaction logic it was called to override — see wireNavMenu.
@@ -625,32 +618,35 @@ function hideMetricsOverlay() {
 }
 
 // Any real map interaction dismisses the overlay: dragging/zooming
-// ('movestart' — zooming also fires this), opening a ministry popup
-// ('popupopen'), or a plain click that doesn't move the map at all (an
-// empty-area or country click — see the country click handler in init()).
-// Suppressed while a nav-menu selection's own setView/fitBounds is playing
-// out, so picking "World" or a division doesn't immediately re-hide the
-// overlay it just asked to show.
+// ('movestart' — zooming also fires this outside the pin/cluster cases
+// below), or a plain click that doesn't move the map at all (an empty-area
+// or country click — see the country click handler in init()). Suppressed
+// while a nav-menu selection's own setView/fitBounds is playing out, so
+// picking "World" or a division doesn't immediately re-hide the overlay it
+// just asked to show.
+//
+// Clicking a ministry pin or a cluster badge is exempt from all of this —
+// browsing individual ministries (opening a popup) or zooming into a
+// cluster is still "looking at the same selection," not leaving it, so
+// neither should dismiss the overlay. Popups never fire 'movestart'/
+// dismiss on their own; the cluster-click zoom handler below wraps its own
+// setView in withSuppressedDismiss the same way a nav-menu move does. What
+// remains to guard against here is just the *click itself* bubbling up to
+// this map-level listener — inspecting the real DOM target (not Leaflet's
+// synthetic event propagation, which historically shifted across marker/
+// cluster-plugin versions) is the most robust way to tell "this click
+// landed on a pin/cluster icon" apart from blank map or country-polygon
+// clicks, which should still dismiss as before.
 function wireMetricsOverlayDismiss() {
   function maybeHide() {
     if (state.suppressOverlayDismiss) return;
     hideMetricsOverlay();
   }
   map.on('movestart', maybeHide);
-  // A popup opened for a ministry inside the country currently shown in
-  // the overlay is browsing *within* that selection, not leaving it — the
-  // overlay stays up. Opening one anywhere else (no country focused, a
-  // different country's marker, one of the west/east ghost copies of a
-  // marker outside the focused country) dismisses as normal. Every real
-  // marker's row carries its own country (see the marker.ministryRow
-  // assignment in init()) precisely so this can compare against it
-  // directly, rather than trying to work it out from the click position.
-  map.on('popupopen', (e) => {
-    const row = e.popup._source && e.popup._source.ministryRow;
-    if (state.currentCountryFocus && row && normalizeCountryName(row.country) === state.currentCountryFocus) return;
+  map.on('click', (e) => {
+    if (e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest('.ministry-marker, .ministry-cluster')) return;
     maybeHide();
   });
-  map.on('click', maybeHide);
   // The overlay itself now has pointer-events:auto (see .metrics-overlay in
   // css/style.css) specifically so a tap on it never falls through to
   // whatever country/marker is underneath — which also means that tap
@@ -756,7 +752,6 @@ function wireNavMenu() {
 
   function goToWorld() {
     state.currentNavView = 'world';
-    state.currentCountryFocus = null;
     setActive('world');
     map.closePopup();
     withSuppressedDismiss(() => {
@@ -770,7 +765,6 @@ function wireNavMenu() {
     const bounds = window.__divisionBounds(key);
     if (!bounds) return;
     state.currentNavView = key;
-    state.currentCountryFocus = null;
     setActive(key);
     map.closePopup();
     withSuppressedDismiss(() => {
@@ -1774,11 +1768,6 @@ async function init() {
             state.openCountryTooltipLayer = layer;
           } else {
             state.openCountryTooltipLayer = null;
-            // Read by wireMetricsOverlayDismiss's popupopen handler, so
-            // opening a ministry popup inside this same country (browsing
-            // within the current selection) doesn't dismiss the metrics
-            // overlay this click is about to show.
-            state.currentCountryFocus = name;
             // A touch out from a tight fit, so the country reads with a
             // little breathing room and its neighbors are visible for
             // context, without backing off as far as a full zoom level.
@@ -1921,10 +1910,6 @@ async function init() {
       const marker = L.marker([lat, lng], { icon: markerIcon(divisionKey, stageKey) });
       marker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
       marker.bindPopup(popupHtml, popupOptions);
-      // Read back by wireMetricsOverlayDismiss's popupopen handler (via
-      // e.popup._source) to tell whether an opened popup belongs to the
-      // country currently focused in the metrics overlay.
-      marker.ministryRow = row;
       state.clusterGroups[divisionKey].addLayer(marker);
 
       if (!state.markersByCountry.has(countryName)) state.markersByCountry.set(countryName, []);
@@ -1938,7 +1923,6 @@ async function init() {
         const ghostMarker = L.marker([lat, lng + offsetDeg], { icon: markerIcon(divisionKey, stageKey) });
         ghostMarker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
         ghostMarker.bindPopup(popupHtml, popupOptions);
-        ghostMarker.ministryRow = row;
         state.clusterGroups[divisionKey].addLayer(ghostMarker);
       }
 
@@ -1962,7 +1946,13 @@ async function init() {
         const cluster = e.layer;
         const idealZoom = map.getBoundsZoom(cluster.getBounds());
         const cap = map.getZoom() + CLUSTER_CLICK_MAX_ZOOM_STEP;
-        map.setView(cluster.getLatLng(), Math.min(idealZoom, cap, map.getMaxZoom()));
+        // Suppressed like a nav-menu move — zooming into a cluster is
+        // still browsing the same selection, not leaving it, so it
+        // shouldn't dismiss the metrics overlay (see
+        // wireMetricsOverlayDismiss's own comment on this).
+        withSuppressedDismiss(() => {
+          map.setView(cluster.getLatLng(), Math.min(idealZoom, cap, map.getMaxZoom()));
+        });
       });
     }
 
