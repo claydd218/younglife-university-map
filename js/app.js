@@ -2553,7 +2553,43 @@ init().then(() => {
 // flyToCountry's own single-ministry bonus popup — re-syncs the overlay to
 // that country via the same showCountryMetricsOverlay the country-polygon
 // click handler itself uses, without moving the map.
+// Ministry popups fade in and out. Leaflet's own built-in way to do this
+// (the map's fadeAnimation option) is deliberately off — see that option's
+// own comment in the map init above: it broke the header-clearance pan
+// measurement further down on iOS. This reimplements just the pure-opacity
+// fade Leaflet's own Popup.onAdd/onRemove would otherwise do, entirely
+// independent of that option and the map's zoom-animation machinery, so it
+// can only ever touch opacity — never layout/position — which
+// getBoundingClientRect() (used by that same pan measurement) is
+// unaffected by either way.
+const POPUP_FADE_MS = 220;
+const originalPopupOnRemove = L.Popup.prototype.onRemove;
+L.Popup.prototype.onRemove = function popupOnRemoveWithFade(map) {
+  const container = this._container;
+  if (!container) {
+    originalPopupOnRemove.call(this, map);
+    return;
+  }
+  container.style.transition = `opacity ${POPUP_FADE_MS}ms ease`;
+  container.style.opacity = '0';
+  // Same instance property Leaflet's own (unpatched) onAdd already clears
+  // via clearTimeout(this._removeTimeout) on reopen — reusing that name
+  // means a marker clicked again mid-fade-out correctly cancels this
+  // delayed removal instead of yanking the just-reopened popup back out
+  // of the DOM once this timeout eventually fires.
+  this._removeTimeout = setTimeout(() => originalPopupOnRemove.call(this, map), POPUP_FADE_MS);
+};
+
 map.on('popupopen', (e) => {
+  const container = e.popup._container;
+  if (container) {
+    container.style.transition = 'none';
+    container.style.opacity = '0';
+    void container.offsetHeight; // force a reflow so opacity:0 actually applies before the transition below starts
+    container.style.transition = `opacity ${POPUP_FADE_MS}ms ease`;
+    container.style.opacity = '1';
+  }
+
   const country = e.popup._source && e.popup._source.ministryCountry;
   if (country) showCountryMetricsOverlay(country);
 });
