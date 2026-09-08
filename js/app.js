@@ -2582,8 +2582,12 @@ if (window.screen && window.screen.orientation) {
 // version will make looping a per-tour choice.
 // ---------------------------------------------------------------------
 
+// TEMP DEBUG — narrowed to Nicaragua only while chasing the intermittent
+// zoom-out-to-hemisphere bug live (fast loop back to the same country
+// instead of waiting through all of LAC each time). Revert to the full
+// division once diagnosed.
 const ANIMATIONS = {
-  lac: { divisionKey: 'latin_america_caribbean' },
+  lac: { divisionKey: 'latin_america_caribbean', countries: ['Nicaragua'] },
 };
 
 // Milliseconds to sit on each step before moving to the next. Rough first
@@ -2677,10 +2681,24 @@ function countriesInDivision(divisionKey) {
 // limits mid-flight even when its settled end state is fine.
 function zoomToShowMarker(marker, divisionKey) {
   const group = state.clusterGroups[divisionKey];
+  // TEMP DEBUG — see the ANIMATIONS comment above.
+  console.log('[tourDebug] zoomToShowMarker start', {
+    hasIcon: !!marker._icon,
+    boundsContains: map.getBounds().contains(marker.getLatLng()),
+    parentZoom: marker.__parent ? marker.__parent._zoom : null,
+    groupZoom: group._zoom,
+    inZoomAnimation: group._inZoomAnimation,
+    mapZoom: map.getZoom(),
+    mapCenter: map.getCenter(),
+  });
   return new Promise((resolve) => {
     suppressMapClamp = true;
     withSuppressedDismiss(() => {
       group.zoomToShowLayer(marker, () => {
+        console.log('[tourDebug] zoomToShowMarker done', {
+          mapZoom: map.getZoom(),
+          mapCenter: map.getCenter(),
+        });
         suppressMapClamp = false;
         clampSouth();
         clampNorth();
@@ -2723,6 +2741,11 @@ function panMarkerToBottomCenter(marker) {
   const pt = map.latLngToContainerPoint(marker.getLatLng());
   const desiredX = size.x / 2;
   const desiredY = size.y - bottomMargin;
+  // TEMP DEBUG — see the ANIMATIONS comment above.
+  console.log('[tourDebug] panMarkerToBottomCenter', {
+    size, pt, desiredX, desiredY, delta: [pt.x - desiredX, pt.y - desiredY],
+    mapZoomBefore: map.getZoom(),
+  });
   suppressMapClamp = true;
   map.panBy([pt.x - desiredX, pt.y - desiredY], { animate: true });
   return new Promise((resolve) => {
@@ -2730,13 +2753,16 @@ function panMarkerToBottomCenter(marker) {
       suppressMapClamp = false;
       clampSouth();
       clampNorth();
+      console.log('[tourDebug] panMarkerToBottomCenter done', {
+        mapZoomAfter: map.getZoom(), mapCenterAfter: map.getCenter(),
+      });
       resolve();
     }, 300);
   });
 }
 
 async function runAnimation(config) {
-  const countries = countriesInDivision(config.divisionKey);
+  const countries = config.countries || countriesInDivision(config.divisionKey);
   for (;;) {
     await animationCheckpoint();
     goToWorldFn();
