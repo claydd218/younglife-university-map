@@ -235,15 +235,15 @@ function normalizeCountryName(name) {
 // parseParenList, slugify, and initialsFor live in js/utils.js, shared with
 // the admin tools.
 
-// A thumbtack silhouette (round head + a thin spike below it), not the
-// teardrop "map pin" glyph — a round head + triangular point, each stroked
-// individually so the seam between them reads as a collar/rivet line
-// rather than a flaw. Filled (established) fills both with the division
-// color; outline (developing) leaves them unfilled, stroked with it.
+// A thumbtack silhouette — round head, and the "pin" itself is just a thin
+// line (not a filled triangle, which read as an ice cream cone), angled
+// 30° left of vertical like a tack driven in at a slight angle. The
+// needle is always the same ink-colored line regardless of stage (see
+// its CSS) — only the head's fill differs between established/developing.
 function shapeMarkup(shape, color) {
   return `<svg class="pin-shape pin-${shape}" viewBox="0 0 24 24" style="--pin-color:${color}">
+    <line x1="12" y1="13" x2="6.2" y2="23"/>
     <circle cx="12" cy="8" r="6"/>
-    <path d="M8.7 13.2 L15.3 13.2 L12 23 Z"/>
   </svg>`;
 }
 
@@ -299,14 +299,16 @@ function markerIcon(divisionKey, stageKey) {
   return L.divIcon({
     className: 'ministry-marker',
     html: shapeMarkup(stage.shape, div.pin),
-    // Taller than the old star/dot box to fit the pin's teardrop shape,
-    // anchored near its bottom point (where a pin actually marks a spot)
-    // rather than centered — popupAnchor is relative to *that* anchor, not
-    // the icon's top-left, so it's a big negative Y to land back up near
-    // the pin's round head where the popup used to appear.
+    // Anchored at the needle's tip (12, 23 in the 24x24 viewBox, scaled to
+    // this icon box) — where the tack actually marks a location — not the
+    // icon's center or top-left. The left-leaning needle puts that tip
+    // off-center (x≈6 instead of 11), unlike the old symmetric shapes.
+    // popupAnchor is relative to that same off-center anchor, so it has an
+    // offsetting positive X to land the popup back over the round head's
+    // center instead of the head's own left edge.
     iconSize: [22, 28],
-    iconAnchor: [11, 27],
-    popupAnchor: [0, -24],
+    iconAnchor: [6, 27],
+    popupAnchor: [5, -18],
   });
 }
 
