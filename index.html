@@ -140,6 +140,15 @@
     </div>
   </div>
 
+  <!-- Only ever shown for the ?animate=NAME prototype tour (see
+       runQueryStringAnimation in js/app.js) — hidden by default here, not
+       wired to any regular-visitor UI yet. -->
+  <div id="animation-controls" class="animation-controls" hidden>
+    <button type="button" id="animation-play-btn" class="animation-control-btn" aria-label="Play">&#9654;</button>
+    <button type="button" id="animation-pause-btn" class="animation-control-btn" aria-label="Pause">&#10074;&#10074;</button>
+    <button type="button" id="animation-stop-btn" class="animation-control-btn" aria-label="Stop">&#9632;</button>
+  </div>
+
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/leaflet-markercluster/leaflet.markercluster.js"></script>
   <script src="vendor/papaparse/papaparse.min.js"></script>

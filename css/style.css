@@ -305,6 +305,56 @@ h1, h2, h3, .legend-label, .cluster-badge {
   background: var(--parchment);
 }
 
+/* Bottom-center playback bar for the ?animate=NAME prototype tour (see
+   runQueryStringAnimation in js/app.js) — same card/border/shadow
+   treatment as .nav-menu-toggle, just relocated and widened for three
+   buttons in a row. js/app.js's panMarkerToBottomCenter reads this
+   element's own rendered height to keep each tour pin framed just above
+   it, so its height should stay whatever this CSS actually renders, not
+   a separately-hardcoded number in the JS. */
+.animation-controls {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 970;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
+}
+
+.animation-controls[hidden] {
+  display: none;
+}
+
+.animation-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 15px;
+  background: var(--parchment);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.animation-control-btn:hover:not(:disabled) {
+  background: #fff;
+}
+
+.animation-control-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .nav-menu {
   position: fixed;
   top: calc(max(14px, env(safe-area-inset-top)) + 46px);

@@ -2581,6 +2581,46 @@ function animationSleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Thrown from animationCheckpoint to unwind runAnimation's whole call
+// stack in one motion when Stop is pressed — the tour is nested several
+// loops deep (division -> country -> pin -> photo) by the time a viewer
+// might stop it, and a thrown signal caught once at the top of
+// runAnimation is far simpler than threading a "was I stopped?" check
+// through every one of those loops by hand.
+class AnimationStopSignal extends Error {}
+
+// 'playing' | 'paused' | 'stopped' — 'stopped' doubles as "never started".
+// Read/written by animationCheckpoint and the three control buttons below;
+// nothing else in the tour touches it directly.
+const animationController = { state: 'stopped' };
+
+// Every await point in the tour is (indirectly, via animationWait) a call
+// to this — blocks in place while paused, and throws to unwind entirely
+// once stopped, so Play/Pause/Stop take effect at the next step boundary
+// without every step needing its own bespoke handling.
+async function animationCheckpoint() {
+  while (animationController.state === 'paused') {
+    await animationSleep(150);
+  }
+  if (animationController.state === 'stopped') throw new AnimationStopSignal();
+}
+
+// The tour's own replacement for a plain sleep — chopped into small
+// chunks (rather than one long setTimeout) specifically so Pause/Stop
+// pressed mid-wait takes effect within ~100ms instead of only being
+// noticed once the full multi-second pause has already elapsed.
+async function animationWait(ms) {
+  const stepMs = 100;
+  let elapsed = 0;
+  while (elapsed < ms) {
+    await animationCheckpoint();
+    const chunk = Math.min(stepMs, ms - elapsed);
+    await animationSleep(chunk);
+    elapsed += chunk;
+  }
+  await animationCheckpoint();
+}
+
 // Every country in `divisionKey` that actually has a ministry pin (an
 // empty country has nothing for the tour to show or say), alphabetized
 // for a stable, predictable order run to run.
@@ -2594,40 +2634,124 @@ function countriesInDivision(divisionKey) {
   return names.sort((a, b) => a.localeCompare(b));
 }
 
+// Pans (not flies — this is a short, local nudge, not a real navigational
+// move) so `marker` ends up centered horizontally and sitting just above
+// the playback bar, before its popup opens. A popup opens upward from its
+// marker, so parking the marker itself near the bottom leaves the popup
+// the whole upper two-thirds of the screen to open into, predictably,
+// rather than wherever the country-level flyTo happened to leave it —
+// which could be anywhere from top to bottom of the viewport depending on
+// where in that country this particular ministry sits.
+//
+// Plain panBy, not withSuppressedDismiss-wrapped like the tour's other
+// moves — panBy only ever fires 'movestart' (confirmed against Leaflet's
+// own source, same research behind wireMetricsOverlayDismiss switching to
+// dragstart/zoomstart), never 'dragstart' or 'zoomstart', so it was never
+// going to dismiss the overlay in the first place.
+function panMarkerToBottomCenter(marker) {
+  const controls = document.getElementById('animation-controls');
+  const controlsHeight = controls.getBoundingClientRect().height;
+  const bottomMargin = controlsHeight + 24; // breathing room above the bar
+  const size = map.getSize();
+  const pt = map.latLngToContainerPoint(marker.getLatLng());
+  const desiredX = size.x / 2;
+  const desiredY = size.y - bottomMargin;
+  map.panBy([pt.x - desiredX, pt.y - desiredY], { animate: true });
+}
+
 async function runAnimation(config) {
   const countries = countriesInDivision(config.divisionKey);
   for (;;) {
+    await animationCheckpoint();
     goToWorldFn();
-    await animationSleep(ANIMATION_PAUSE.world);
+    await animationWait(ANIMATION_PAUSE.world);
 
+    await animationCheckpoint();
     goToDivisionFn(config.divisionKey);
-    await animationSleep(ANIMATION_PAUSE.division);
+    await animationWait(ANIMATION_PAUSE.division);
 
     for (const countryName of countries) {
+      await animationCheckpoint();
       goToCountryMetrics(countryName);
-      await animationSleep(ANIMATION_PAUSE.country);
+      await animationWait(ANIMATION_PAUSE.country);
 
       const entries = state.markersByCountry.get(countryName) || [];
       for (const { marker, row } of entries) {
+        await animationCheckpoint();
+        panMarkerToBottomCenter(marker);
+        await animationWait(ANIMATION_PAUSE.settle);
         marker.openPopup();
-        await animationSleep(ANIMATION_PAUSE.pin);
+        await animationWait(ANIMATION_PAUSE.pin);
 
         const photos = (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
         if (photos.length) {
+          await animationCheckpoint();
           await window.__ministryLightbox.open(photos);
           for (let i = 0; i < photos.length; i++) {
-            await animationSleep(ANIMATION_PAUSE.photo);
+            await animationWait(ANIMATION_PAUSE.photo);
             if (i < photos.length - 1) window.__ministryLightbox.showNext();
           }
           window.__ministryLightbox.close();
-          await animationSleep(ANIMATION_PAUSE.settle);
+          await animationWait(ANIMATION_PAUSE.settle);
         }
 
         map.closePopup();
-        await animationSleep(ANIMATION_PAUSE.settle);
+        await animationWait(ANIMATION_PAUSE.settle);
       }
     }
   }
+}
+
+// The one in-flight runAnimation() call, if any — lets playAnimation tell
+// "paused, just flip the flag back" apart from "fully stopped, a fresh
+// call is needed to start again from the top."
+let animationRunPromise = null;
+let currentAnimationConfig = null;
+
+function updateAnimationControlsUI() {
+  const playing = animationController.state === 'playing';
+  const paused = animationController.state === 'paused';
+  document.getElementById('animation-play-btn').disabled = playing;
+  document.getElementById('animation-pause-btn').disabled = !playing;
+  document.getElementById('animation-stop-btn').disabled = !playing && !paused;
+}
+
+function playAnimation() {
+  if (animationController.state === 'paused') {
+    animationController.state = 'playing';
+    updateAnimationControlsUI();
+    return;
+  }
+  if (animationRunPromise || !currentAnimationConfig) return; // already running, or nothing to run
+  animationController.state = 'playing';
+  updateAnimationControlsUI();
+  animationRunPromise = runAnimation(currentAnimationConfig)
+    .catch((err) => {
+      if (!(err instanceof AnimationStopSignal)) console.error(err);
+    })
+    .finally(() => {
+      animationRunPromise = null;
+    });
+}
+
+function pauseAnimation() {
+  if (animationController.state !== 'playing') return;
+  animationController.state = 'paused';
+  updateAnimationControlsUI();
+}
+
+function stopAnimation() {
+  // The in-flight runAnimation (if any) unwinds on its own via
+  // AnimationStopSignal the next time animationCheckpoint runs — nothing
+  // else to do here but flip the state it's watching for.
+  animationController.state = 'stopped';
+  updateAnimationControlsUI();
+}
+
+function wireAnimationControls() {
+  document.getElementById('animation-play-btn').addEventListener('click', playAnimation);
+  document.getElementById('animation-pause-btn').addEventListener('click', pauseAnimation);
+  document.getElementById('animation-stop-btn').addEventListener('click', stopAnimation);
 }
 
 function runQueryStringAnimation() {
@@ -2638,5 +2762,9 @@ function runQueryStringAnimation() {
     console.warn(`?animate=${name} — no such animation. Known: ${Object.keys(ANIMATIONS).join(', ')}`);
     return;
   }
-  runAnimation(config);
+  currentAnimationConfig = config;
+  document.getElementById('animation-controls').hidden = false;
+  wireAnimationControls();
+  updateAnimationControlsUI();
+  playAnimation();
 }
