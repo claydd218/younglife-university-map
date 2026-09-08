@@ -61,8 +61,8 @@ const OCEAN_LABELS = [
 const DIVISIONS = {
   latin_america_caribbean: {
     label: 'Latin America & Caribbean',
-    country: '#9fd3de',
-    pin: '#0d9bb5',
+    country: '#f4c49d',
+    pin: '#e0631a',
   },
   europe: {
     label: 'Europe',
