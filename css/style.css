@@ -65,15 +65,17 @@ h1, h2, h3, .legend-label, .cluster-badge {
   pointer-events: none;
 }
 
-/* Full-bleed backdrop for just the title — a pseudo-element rather than a
-   background on h1 itself, since h1's own box is deliberately narrower than
-   the full header (see its max-width rule below, for nav-button clearance)
-   and a background tied to that box stopped short of the edges instead of
-   spanning them. Positioned absolute against .site-header (the nearest
-   positioned ancestor) so left/right:0 reaches the real edges regardless of
-   how narrow h1's own content box is. Its own height is tuned per
-   breakpoint below to roughly match the title's own height — stopping at
-   the title, not fading into the metrics row under it.
+/* Full-bleed backdrop for the title and the metrics overlay's own
+   division/country label under it (#metrics-label — see js/app.js's
+   showMetricsOverlay) — a pseudo-element rather than a background on h1
+   itself, since h1's own box is deliberately narrower than the full header
+   (see its max-width rule below, for nav-button clearance) and a background
+   tied to that box stopped short of the edges instead of spanning them.
+   Positioned absolute against .site-header (the nearest positioned
+   ancestor) so left/right:0 reaches the real edges regardless of how
+   narrow h1's own content box is. Its own height is tuned per breakpoint
+   below to roughly match the title's plus the label's own height —
+   stopping there, not fading into the metric boxes under it.
    z-index:-1 is load-bearing, not decorative: a positioned element (this
    one) paints *above* normal in-flow content (h1) by default regardless of
    source order — being a "first child" pseudo-element doesn't change that
@@ -89,13 +91,13 @@ h1, h2, h3, .legend-label, .cluster-badge {
   top: 0;
   left: 0;
   right: 0;
-  height: 70px;
+  height: 108px;
   background: linear-gradient(to bottom, rgba(241, 230, 205, 0.92) 0%, rgba(241, 230, 205, 0) 100%);
 }
 
 @media (max-width: 950px) {
   .site-header::before {
-    height: 100px;
+    height: 140px;
   }
 }
 
@@ -177,19 +179,19 @@ h1, h2, h3, .legend-label, .cluster-badge {
     max-width: calc(100% - 100px);
     font-size: clamp(16px, 2.6vw, 26px);
   }
-  /* Back to the single-line backdrop height — the 100px one above is sized
+  /* Back to the single-line backdrop height — the 140px one above is sized
      for the stacked two-line portrait layout, which this falls back out of. */
   .site-header::before {
-    height: 70px;
+    height: 108px;
   }
 }
 
 /* ---------- Metrics overlay ---------- */
 
-/* Sits inside .site-header, right under the title, so it inherits the
-   header's own top safe-area padding and fade-to-transparent background —
-   the background gradient stretches to the header's new (taller) height
-   once this is present, so it still fades out by the new bottom edge. */
+/* Sits inside .site-header, right under the title, within the fixed-height
+   reach of .site-header::before's own fade gradient (tuned to cover the
+   title plus #metrics-label below, not the boxes here — see that rule's
+   own comment). */
 .metrics-overlay {
   margin-top: 10px;
   /* auto (not inherited none, like the rest of .site-header) so a tap here
