@@ -1352,11 +1352,25 @@ function wireMinistryPhotoCarousel() {
   // Only while this lightbox is actually open — otherwise every arrow key
   // press on the page (scrolling, editing a field elsewhere) would get
   // eaten by a listener with nothing open to act on.
+  //
+  // Capture phase, not the usual bubbling one, and both prevented *and*
+  // stopped — Leaflet's own keyboard handler (map.options.keyboard,
+  // on by default) is bound directly to the map container and also
+  // reacts to arrow keys by panning the map, which fires 'movestart' —
+  // and this very carousel closes itself on 'movestart' a few lines up,
+  // to dismiss when the user interacts with the map underneath. Left as
+  // a normal bubbling listener, that pan (and the close it triggers) was
+  // happening before this handler ever ran, so every arrow press just
+  // closed the lightbox instead of navigating it. Capturing on document
+  // intercepts the key before it ever reaches the map container.
   document.addEventListener('keydown', (e) => {
     if (!lightbox.classList.contains('visible')) return;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); showPrev(); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); showNext(); }
-  });
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'ArrowLeft') showPrev();
+    else showNext();
+  }, true);
 
   // Touch drag: axis-locked so an ambiguous or vertical gesture is left
   // alone (nothing to vertically scroll here, but this also matters on
