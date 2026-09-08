@@ -1391,6 +1391,39 @@ img.popup-photo {
   font-variant-numeric: tabular-nums;
 }
 
+.directory-country-block {
+  margin-bottom: 2px;
+}
+
+.directory-country-link {
+  font-weight: 600;
+}
+
+.directory-area-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.directory-area-link {
+  width: 100%;
+  display: block;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(59,42,26,0.06);
+  text-align: left;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  color: var(--ink-soft);
+  padding: 5px 4px 5px 26px;
+  cursor: pointer;
+}
+
+.directory-area-link:hover {
+  background: var(--parchment);
+  color: var(--ink);
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 640px) {

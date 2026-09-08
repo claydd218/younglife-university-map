@@ -929,57 +929,91 @@ function wireNavMenu() {
   });
 }
 
-function buildCountryDirectory(ministryRows) {
-  const byDivision = new Map(); // division key -> Map(country -> count)
-  for (const row of ministryRows) {
-    const countryName = normalizeCountryName(row.country);
-    const divisionKey = state.countryDivisionByName.get(countryName);
-    if (!divisionKey) continue;
-    if (!byDivision.has(divisionKey)) byDivision.set(divisionKey, new Map());
-    const countryCounts = byDivision.get(divisionKey);
-    countryCounts.set(countryName, (countryCounts.get(countryName) || 0) + 1);
-  }
+// One entry per ministry area, keyed by array index — directoryAreas[i]
+// backs the i-th .directory-area-link's data-key, since the marker/row
+// objects themselves can't round-trip through a data-* attribute. Rebuilt
+// fresh each time buildDirectory runs.
+let directoryAreas = [];
 
+function buildDirectory() {
+  directoryAreas = [];
   const container = document.getElementById('directory-list');
   container.innerHTML = '';
 
   for (const [divisionKey, div] of Object.entries(DIVISIONS)) {
-    const countryCounts = byDivision.get(divisionKey);
-    if (!countryCounts || !countryCounts.size) continue;
+    // Every country in this division that actually has a ministry pin,
+    // each carrying its own {marker, row} entries — same source
+    // flyToArea below flies to, per its own comment on why (the one true
+    // marker, not a world-copy ghost twin).
+    const countriesInThisDivision = [];
+    for (const [countryName, entries] of state.markersByCountry) {
+      if (entries.length && state.countryDivisionByName.get(countryName) === divisionKey) {
+        countriesInThisDivision.push(countryName);
+      }
+    }
+    if (!countriesInThisDivision.length) continue;
+    countriesInThisDivision.sort((a, b) => a.localeCompare(b));
 
     const group = document.createElement('div');
     group.className = 'directory-group';
     group.innerHTML = `<h3 style="color:${div.pin}">${escapeHtml(div.label)}</h3>`;
 
-    const ul = document.createElement('ul');
-    const sortedCountries = Array.from(countryCounts.keys()).sort((a, b) => a.localeCompare(b));
-    for (const countryName of sortedCountries) {
-      const count = countryCounts.get(countryName);
+    for (const countryName of countriesInThisDivision) {
+      const entries = state.markersByCountry.get(countryName)
+        .slice()
+        .sort((a, b) => a.row.city.localeCompare(b.row.city));
       const flag = flagEmoji(state.countryIsoByName.get(countryName));
-      const li = document.createElement('li');
-      li.className = 'directory-item';
-      li.dataset.country = countryName.toLowerCase();
-      li.innerHTML = `<button type="button" class="directory-link" data-country="${escapeHtml(countryName)}">${flag ? `${flag} ` : ''}${escapeHtml(countryName)} <span class="directory-count">${count}</span></button>`;
-      ul.appendChild(li);
+
+      const block = document.createElement('div');
+      block.className = 'directory-country-block';
+      block.dataset.country = countryName.toLowerCase();
+      block.innerHTML = `<button type="button" class="directory-link directory-country-link" data-country="${escapeHtml(countryName)}">${flag ? `${flag} ` : ''}${escapeHtml(countryName)} <span class="directory-count">${entries.length}</span></button>`;
+
+      const ul = document.createElement('ul');
+      ul.className = 'directory-area-list';
+      for (const { marker, row } of entries) {
+        // Same three fields the admin's own ministries-search matches
+        // (city/country/staff — see bigtime/admin.js's
+        // matchesMinistriesSearch), plus university, since a visitor is
+        // just as likely to search for a school as a staffer.
+        const staffNames = parseParenList(row.staff).map((s) => s.name);
+        const universityNames = parseParenList(row.universities).map((u) => u.name);
+        const haystack = [row.city, row.country, ...staffNames, ...universityNames].join(' ').toLowerCase();
+
+        const key = directoryAreas.length;
+        directoryAreas.push({ marker, countryName, divisionKey });
+
+        const li = document.createElement('li');
+        li.className = 'directory-area-item';
+        li.dataset.search = haystack;
+        li.innerHTML = `<button type="button" class="directory-area-link" data-key="${key}">${escapeHtml(row.city)}</button>`;
+        ul.appendChild(li);
+      }
+      block.appendChild(ul);
+      group.appendChild(block);
     }
-    group.appendChild(ul);
     container.appendChild(group);
   }
 
   container.addEventListener('click', (e) => {
-    const btn = e.target.closest('.directory-link');
-    if (!btn) return;
-    const country = btn.dataset.country;
+    const areaBtn = e.target.closest('.directory-area-link');
+    const countryBtn = e.target.closest('.directory-country-link');
+    if (!areaBtn && !countryBtn) return;
     closeDirectory();
     // On mobile, the on-screen keyboard (from the search input) is often
-    // still open here, shrinking the visible viewport. Flying to the
-    // country immediately would size the zoom/bounds for that shrunk
-    // viewport, leaving the map looking over-zoomed once the keyboard
-    // actually dismisses. Waiting for it to close, then re-measuring the
-    // map container, keeps the zoom correct for the real, full viewport.
+    // still open here, shrinking the visible viewport. Flying immediately
+    // would size the zoom/bounds for that shrunk viewport, leaving the map
+    // looking over-zoomed once the keyboard actually dismisses. Waiting
+    // for it to close, then re-measuring the map container, keeps the
+    // zoom correct for the real, full viewport.
     setTimeout(() => {
       map.invalidateSize();
-      flyToCountry(country);
+      if (areaBtn) {
+        const { marker, countryName, divisionKey } = directoryAreas[Number(areaBtn.dataset.key)];
+        flyToArea(countryName, marker, divisionKey);
+      } else {
+        flyToCountry(countryBtn.dataset.country);
+      }
     }, 300);
   });
 }
@@ -1057,24 +1091,36 @@ function computeMainLandBounds(feature) {
   return L.latLngBounds([minLat, minLng], [maxLat, maxLng]);
 }
 
-function flyToCountry(countryName) {
-  const entries = state.markersByCountry.get(countryName);
-  if (!entries || !entries.length) return;
-
-  // Zooms to the country itself now, same fit as clicking it on the map —
-  // it used to fit to the ministry pins' own bounds instead, which for a
-  // country with all its ministries clustered in one corner (or just one)
-  // zoomed in far tighter than the country level this is meant to give.
+// Flies to `countryName`'s own bounds and shows its metrics overlay — the
+// same two things the country-polygon click handler in init() does for a
+// "present" country (see goToCountryMetrics's identical comment; this is
+// the directory/search version of the same idea, kept separate rather
+// than reusing goToCountryMetrics directly since that function's flyTo
+// duration is deliberately tuned slow for the ?animate=NAME tour, its
+// only other caller — not the snappier feel a real visitor's search
+// result deserves). Returns false (no metrics shown, nothing flown to) if
+// countryName's polygon can't be found.
+function flyToCountryBounds(countryName) {
   let countryLayer;
   state.geoLayer.eachLayer((layer) => {
     if (normalizeCountryName(layer.feature.properties.name) === countryName) countryLayer = layer;
   });
-  if (!countryLayer) return;
+  if (!countryLayer) return false;
   const bounds = computeMainLandBounds(countryLayer.feature);
   // flyTo, not setView — see goToWorld's own comment on why (no
   // zoomAnimationThreshold cutoff, so a distant search result still
   // animates instead of jumping).
-  map.flyTo(bounds.getCenter(), map.getBoundsZoom(bounds) - 0.5);
+  withSuppressedDismiss(() => {
+    map.flyTo(bounds.getCenter(), map.getBoundsZoom(bounds) - 0.5);
+  });
+  showCountryMetricsOverlay(countryName);
+  return true;
+}
+
+function flyToCountry(countryName) {
+  const entries = state.markersByCountry.get(countryName);
+  if (!entries || !entries.length) return;
+  if (!flyToCountryBounds(countryName)) return;
 
   // A single ministry also gets its popup opened as a bonus, but only if
   // it isn't still buried inside an unopened cluster at this (country,
@@ -1088,6 +1134,18 @@ function flyToCountry(countryName) {
       if (visibleMarker === marker) marker.openPopup();
     });
   }
+}
+
+// The directory's per-area pick — flies/shows metrics same as
+// flyToCountry, but always ends with `marker`'s own popup open, forcing
+// it out of a cluster if needed (zoomToShowMarker, same mechanism the
+// ?animate=NAME tour uses to reveal a clustered pin) rather than
+// flyToCountry's own single-ministry convenience case above, which only
+// opens the popup if it's already visible at the plain country zoom — an
+// explicit area pick from search should always land on that exact one.
+function flyToArea(countryName, marker, divisionKey) {
+  if (!flyToCountryBounds(countryName)) return;
+  zoomToShowMarker(marker, divisionKey).then(() => marker.openPopup());
 }
 
 function openDirectory() {
@@ -1108,13 +1166,24 @@ function filterDirectory(query) {
   const q = query.trim().toLowerCase();
   const groups = document.querySelectorAll('#directory-list .directory-group');
   groups.forEach((group) => {
-    let anyVisible = false;
-    group.querySelectorAll('.directory-item').forEach((item) => {
-      const match = !q || item.dataset.country.includes(q);
-      item.hidden = !match;
-      if (match) anyVisible = true;
+    let anyVisibleInGroup = false;
+    group.querySelectorAll('.directory-country-block').forEach((block) => {
+      // A query matching the country's own name shows every area under
+      // it (same as before this searched anything finer); otherwise each
+      // area is judged on its own city/staff/university text, so e.g.
+      // searching a staffer's name surfaces just their one area, not
+      // their whole country.
+      const countryMatches = !q || block.dataset.country.includes(q);
+      let anyAreaVisible = false;
+      block.querySelectorAll('.directory-area-item').forEach((item) => {
+        const areaMatches = countryMatches || item.dataset.search.includes(q);
+        item.hidden = !areaMatches;
+        if (areaMatches) anyAreaVisible = true;
+      });
+      block.hidden = !anyAreaVisible;
+      if (anyAreaVisible) anyVisibleInGroup = true;
     });
-    group.hidden = !anyVisible;
+    group.hidden = !anyVisibleInGroup;
   });
 }
 
@@ -2108,7 +2177,7 @@ async function init() {
     refreshCountryStyles();
     buildLegend();
     wireLegendToggle();
-    buildCountryDirectory(ministryRows);
+    buildDirectory();
     wireDirectoryControls();
 
     state.worldMetrics = computeMetrics(ministryRows);
