@@ -2779,10 +2779,31 @@ async function runAnimation(config) {
 
       const entries = state.markersByCountry.get(countryName) || [];
       for (const { marker, row } of entries) {
+        // Pan to bottom-center FIRST, using the marker's current projected
+        // position — this works even while the marker is off-screen (pure
+        // lat/lng-to-pixel math, no dependency on it being individually
+        // rendered). Doing this before zoomToShowMarker means the marker is
+        // usually already in view by the time zoomToShowLayer runs, so it
+        // takes its synchronous "already visible" fast path instead of
+        // doing its own independent pan/zoom — confirmed live as the cause
+        // of a double-motion "overshoot": the previous pin's own
+        // bottom-center pan pushes the NEXT pin off-screen, so
+        // zoomToShowLayer saw boundsContains:false and did its own recenter
+        // pan, immediately followed by our own pan shoving it back down to
+        // the bottom — two separately-eased pans in a row read as an
+        // overshoot-and-correct. Only re-run the bottom-center pan
+        // afterward if zoomToShowMarker actually changed the zoom (a
+        // genuinely clustered pin needing to zoom in) — that changes the
+        // marker's screen position enough to need re-centering.
+        await animationCheckpoint();
+        const zoomBeforeShow = map.getZoom();
+        await panMarkerToBottomCenter(marker);
         await animationCheckpoint();
         await zoomToShowMarker(marker, config.divisionKey);
-        await animationCheckpoint();
-        await panMarkerToBottomCenter(marker);
+        if (map.getZoom() !== zoomBeforeShow) {
+          await animationCheckpoint();
+          await panMarkerToBottomCenter(marker);
+        }
         await animationWait(ANIMATION_PAUSE.settle);
         marker.openPopup();
         await animationWait(ANIMATION_PAUSE.pin);
