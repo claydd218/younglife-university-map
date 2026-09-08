@@ -557,14 +557,21 @@ function buildLegend() {
 // against parsed row objects (staff/universities already arrays) and this
 // one runs against the raw CSV rows this page loads (staff/universities
 // still semicolon-delimited strings, hence parseParenList here).
-function computeMetrics(rowsSubset) {
-  const countries = new Set(rowsSubset.map((r) => normalizeCountryName(r.country)).filter(Boolean));
-  return [
-    { label: 'Countries', num: countries.size },
+// includeCountries: false drops the "Countries" box entirely — used for a
+// single-country view (see the country click handler in init()), where
+// that count is always exactly 1 and just restates the label above it.
+function computeMetrics(rowsSubset, { includeCountries = true } = {}) {
+  const metrics = [];
+  if (includeCountries) {
+    const countries = new Set(rowsSubset.map((r) => normalizeCountryName(r.country)).filter(Boolean));
+    metrics.push({ label: 'Countries', num: countries.size });
+  }
+  metrics.push(
     { label: 'Ministry Areas', num: rowsSubset.length },
     { label: 'Staff', num: rowsSubset.reduce((sum, r) => sum + parseParenList(r.staff).length, 0) },
     { label: 'Universities', num: rowsSubset.reduce((sum, r) => sum + parseParenList(r.universities).length, 0) },
-  ];
+  );
+  return metrics;
 }
 
 function renderMetrics(metrics, accentColor) {
@@ -579,8 +586,23 @@ function renderMetrics(metrics, accentColor) {
   `).join('');
 }
 
-function showMetricsOverlay(metrics, accentColor) {
+// labelHtml identifies *what* the metrics below it describe — a division
+// name, or a country name with its flag — shown above the boxes for every
+// view except World (world metrics are the default/ambient state, not a
+// selection that needs naming). Trusted pre-built HTML, not plain text:
+// callers that include a country/division name are responsible for
+// escaping it themselves (see the two call sites in init()), same
+// division-of-labor as buildPopupHtml's own callers.
+function showMetricsOverlay(metrics, accentColor, labelHtml) {
   renderMetrics(metrics, accentColor);
+  const labelEl = document.getElementById('metrics-label');
+  if (labelHtml) {
+    labelEl.innerHTML = labelHtml;
+    labelEl.style.color = accentColor || '';
+    labelEl.hidden = false;
+  } else {
+    labelEl.hidden = true;
+  }
   const overlay = document.getElementById('metrics-overlay');
   overlay.classList.remove('metrics-hidden');
   overlay.setAttribute('aria-hidden', 'false');
@@ -739,7 +761,7 @@ function wireNavMenu() {
         animate: true,
       });
     });
-    showMetricsOverlay(state.metricsByDivision.get(key) || [], DIVISIONS[key].pin);
+    showMetricsOverlay(state.metricsByDivision.get(key) || [], DIVISIONS[key].pin, escapeHtml(DIVISIONS[key].label));
   }
 
   list.addEventListener('click', (e) => {
@@ -1694,8 +1716,11 @@ async function init() {
 
         // Only countries actually holding a ministry pin are worth zooming
         // into — clicking anywhere else on the (uncolored) landmass would
-        // otherwise zoom to an empty country with nothing to see, but every
-        // country still gets its name tooltip on click.
+        // otherwise zoom to an empty country with nothing to see, so an
+        // empty country instead just gets its name tooltip (see the
+        // present/else branch below) — the only way to identify it at all,
+        // since a country *with* pins gets its name from the metrics
+        // overlay's own label instead, not this tooltip.
         layer.on('click', (e) => {
           // A click on a country turns out to ALSO fire the map's own
           // 'click' (see the map.on('click', ...) below) in the same
@@ -1705,17 +1730,29 @@ async function init() {
           if (state.openCountryTooltipLayer && state.openCountryTooltipLayer !== layer) {
             state.openCountryTooltipLayer.closeTooltip();
           }
-          // If this were ever undefined, Leaflet's Tooltip._prepareOpen
-          // silently falls back to the country's own center instead of the
-          // click position — computing it ourselves guarantees that never
-          // happens, regardless of why e.latlng could come back empty.
-          const clickLatLng = e.latlng || map.mouseEventToLatLng(e.originalEvent);
-          layer.openTooltip(clickLatLng);
-          state.openCountryTooltipLayer = layer;
 
           const name = normalizeCountryName(feature.properties.name);
           const present = state.countriesWithVisiblePins.get(name);
-          if (present && present.size) {
+
+          // The metrics overlay's own label above the boxes already names
+          // this country (with its flag — see showMetricsOverlay below)
+          // once a country with ministry data is clicked, so the
+          // plain-text map tooltip would just be a redundant second label
+          // for the same click — skipped entirely here. An *empty*
+          // country (the else branch below) still gets it: with nothing
+          // to zoom to or show metrics for, the tooltip is the only way
+          // to identify it at all.
+          if (!(present && present.size)) {
+            // If this were ever undefined, Leaflet's Tooltip._prepareOpen
+            // silently falls back to the country's own center instead of
+            // the click position — computing it ourselves guarantees that
+            // never happens, regardless of why e.latlng could come back
+            // empty.
+            const clickLatLng = e.latlng || map.mouseEventToLatLng(e.originalEvent);
+            layer.openTooltip(clickLatLng);
+            state.openCountryTooltipLayer = layer;
+          } else {
+            state.openCountryTooltipLayer = null;
             // A touch out from a tight fit, so the country reads with a
             // little breathing room and its neighbors are visible for
             // context, without backing off as far as a full zoom level.
@@ -1739,7 +1776,12 @@ async function init() {
             // shouldn't happen) — picking the first is a reasonable
             // fallback rather than a real ambiguity to resolve.
             const divisionKey = present.values().next().value;
-            showMetricsOverlay(state.metricsByCountry.get(name) || [], DIVISIONS[divisionKey].pin);
+            const flag = flagEmoji(state.countryIsoByName.get(name));
+            showMetricsOverlay(
+              state.metricsByCountry.get(name) || [],
+              DIVISIONS[divisionKey].pin,
+              `${flag ? `${flag} ` : ''}${escapeHtml(name)}`,
+            );
           }
         });
       },
@@ -1919,7 +1961,7 @@ async function init() {
       rowsByCountry.get(name).push(row);
     }
     for (const [name, rows] of rowsByCountry) {
-      state.metricsByCountry.set(name, computeMetrics(rows));
+      state.metricsByCountry.set(name, computeMetrics(rows, { includeCountries: false }));
     }
     showMetricsOverlay(state.worldMetrics, null);
     wireMetricsOverlayDismiss();

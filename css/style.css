@@ -212,6 +212,22 @@ h1, h2, h3, .legend-label, .cluster-badge {
   pointer-events: none;
 }
 
+/* Names what the boxes below it describe (a division, or a country with
+   its flag) — shown for every view except World, whose metrics are the
+   default/ambient state rather than a selection that needs naming (see
+   showMetricsOverlay in js/app.js, which leaves this [hidden] for World).
+   Its color is set inline per call, same accent as the boxes' own
+   border/text below it, so the two visibly belong together. */
+.metrics-label {
+  margin: 0 auto 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+}
+
 .metrics-boxes {
   display: flex;
   flex-wrap: wrap;
