@@ -691,7 +691,10 @@ function goToCountryMetrics(name) {
   const bounds = computeMainLandBounds(countryLayer.feature);
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
   withSuppressedDismiss(() => {
-    map.flyTo(bounds.getCenter(), targetZoom);
+    // duration only matters here for the tour (see TOUR_MOVE_DURATION's own
+    // comment) — this function has no other caller, so it's safe to set
+    // globally rather than needing a per-call override.
+    map.flyTo(bounds.getCenter(), targetZoom, { duration: TOUR_MOVE_DURATION });
   });
   showCountryMetricsOverlay(name);
 }
@@ -2590,19 +2593,32 @@ const ANIMATIONS = {
   lac: { divisionKey: 'latin_america_caribbean', countries: ['Nicaragua'] },
 };
 
-// Milliseconds to sit on each step before moving to the next. Rough first
-// guesses, not measured against anything — trivial to retune once this is
-// actually watched end to end.
+// Milliseconds to sit on each step before moving to the next. Every hold
+// except `photo` is 0 — the tour now paces itself entirely through the
+// pan/zoom animation durations below (TOUR_MOVE_DURATION) rather than
+// dwelling on a static view, so movement is continuous instead of
+// move-then-pause-then-move. `photo` is a real dwell time (there's no
+// camera movement to pace against while a photo is on screen) and stays as
+// a deliberate wait.
 const ANIMATION_PAUSE = {
-  world: 3000,
-  division: 3500,
-  country: 3500,
-  pin: 3000,
+  world: 0,
+  division: 0,
+  country: 0,
+  pin: 0,
   photo: 2500,
-  // Brief breather after closing a popup/lightbox, before the next step —
-  // otherwise back-to-back moves have no visual seam between them at all.
-  settle: 400,
+  settle: 0,
 };
+
+// Seconds for the tour's own pan/zoom moves — explicit and slower than
+// Leaflet's defaults (flyTo's own adaptive duration, panBy's 0.25s) so the
+// camera reads as a deliberate, smooth glide instead of a snap, now that
+// ANIMATION_PAUSE no longer holds still between steps to sell the motion.
+// Only applied to moves the tour itself triggers (goToCountryMetrics here,
+// panMarkerToBottomCenter below) — NOT goToWorldFn/goToDivisionFn, which
+// are shared with the real nav menu and the title easter egg and shouldn't
+// change speed for every visitor because of this prototype.
+const TOUR_MOVE_DURATION = 2.5; // country-level flyTo
+const TOUR_PAN_DURATION = 1.4; // panMarkerToBottomCenter's panBy
 
 function animationSleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -2681,24 +2697,10 @@ function countriesInDivision(divisionKey) {
 // limits mid-flight even when its settled end state is fine.
 function zoomToShowMarker(marker, divisionKey) {
   const group = state.clusterGroups[divisionKey];
-  // TEMP DEBUG — see the ANIMATIONS comment above.
-  console.log('[tourDebug] zoomToShowMarker start', {
-    hasIcon: !!marker._icon,
-    boundsContains: map.getBounds().contains(marker.getLatLng()),
-    parentZoom: marker.__parent ? marker.__parent._zoom : null,
-    groupZoom: group._zoom,
-    inZoomAnimation: group._inZoomAnimation,
-    mapZoom: map.getZoom(),
-    mapCenter: map.getCenter(),
-  });
   return new Promise((resolve) => {
     suppressMapClamp = true;
     withSuppressedDismiss(() => {
       group.zoomToShowLayer(marker, () => {
-        console.log('[tourDebug] zoomToShowMarker done', {
-          mapZoom: map.getZoom(),
-          mapCenter: map.getCenter(),
-        });
         suppressMapClamp = false;
         clampSouth();
         clampNorth();
@@ -2730,7 +2732,7 @@ function zoomToShowMarker(marker, divisionKey) {
 // back, since clampSouth reacts to every single 'move' tick during the
 // animation, not just its settled end. Suppressing the correction while
 // this pan is animating and running one explicit clamp check once it
-// actually settles (panBy's own default duration is 0.25s; 300ms covers
+// actually settles (TOUR_PAN_DURATION seconds; the timeout below covers
 // that with a little to spare) fixes the final resting position the same
 // way, without fighting the pan mid-flight to get there.
 function panMarkerToBottomCenter(marker) {
@@ -2741,23 +2743,15 @@ function panMarkerToBottomCenter(marker) {
   const pt = map.latLngToContainerPoint(marker.getLatLng());
   const desiredX = size.x / 2;
   const desiredY = size.y - bottomMargin;
-  // TEMP DEBUG — see the ANIMATIONS comment above.
-  console.log('[tourDebug] panMarkerToBottomCenter', {
-    size, pt, desiredX, desiredY, delta: [pt.x - desiredX, pt.y - desiredY],
-    mapZoomBefore: map.getZoom(),
-  });
   suppressMapClamp = true;
-  map.panBy([pt.x - desiredX, pt.y - desiredY], { animate: true });
+  map.panBy([pt.x - desiredX, pt.y - desiredY], { animate: true, duration: TOUR_PAN_DURATION });
   return new Promise((resolve) => {
     setTimeout(() => {
       suppressMapClamp = false;
       clampSouth();
       clampNorth();
-      console.log('[tourDebug] panMarkerToBottomCenter done', {
-        mapZoomAfter: map.getZoom(), mapCenterAfter: map.getCenter(),
-      });
       resolve();
-    }, 300);
+    }, TOUR_PAN_DURATION * 1000 + 100);
   });
 }
 
