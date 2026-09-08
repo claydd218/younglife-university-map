@@ -965,42 +965,28 @@ img.popup-photo {
 /* Fixed-size window rather than sized to the current photo — a sliding
    track needs every slide to share one box so the outgoing and incoming
    photos line up edge-to-edge while they move together. Each photo
-   letterboxes inside it via object-fit on .lightbox-slide. */
+   letterboxes inside it via object-fit on .lightbox-slide.
+   Held at one constant 4:3 ratio (the recommended upload shape — see
+   js/config.js) rather than resizing to match whichever photo is current.
+   That per-photo resize used to animate (width/height transition) so a
+   ratio change mid-slide wouldn't just snap — but the animation itself
+   read as a bare dark box visibly growing/shrinking before the photo
+   caught up, which was worse than the snap it replaced. A fixed box means
+   an unusually-shaped photo just sits letterboxed (same as it always did
+   while resizing was still catching up), with nothing left to animate. */
 .lightbox-viewport {
   position: relative;
-  /* --ratio (width/height, unitless) is set by JS per photo — see
-     applyViewportRatio in wireMinistryPhotoCarousel — since real uploads
-     vary (not every photo is exactly the recommended 4:3), so a fixed
-     ratio here still letterboxed most of them one way or another. 1.3333
-     is just the fallback shown for an instant before the first photo's
-     real dimensions are known. Sized as large as possible within the
-     92vw/85vh bounds while holding that ratio exactly (the two min()s are
-     the standard "biggest N:M box that fits a W×H area" trick, both
-     terms deriving from the same 900px height cap so they stay
-     consistent for whatever ratio is current). */
-  --ratio: 1.3333;
-  width: min(92vw, calc(85vh * var(--ratio)), calc(900px * var(--ratio)));
-  height: min(85vh, calc(92vw / var(--ratio)), 900px);
-  /* --ratio changing (a new photo with a different aspect ratio becoming
-     current) used to snap the box straight to its new size — jarring on
-     its own, and doubly so mid-slide, where the incoming photo would
-     otherwise sit letterboxed against the almost-black background at the
-     OLD size for the whole swipe before popping to its real size right as
-     the slide finished. Animating the resize instead, over the same
-     duration as the slide itself (SLIDE_MS in wireMinistryPhotoCarousel —
-     keep these in sync), makes the two read as one smooth motion instead
-     of a slide followed by a pop. */
-  transition: width 220ms ease, height 220ms ease;
+  width: min(92vw, calc(85vh * 4 / 3), 1200px);
+  height: min(85vh, calc(92vw * 3 / 4), 900px);
   overflow: hidden;
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   background: rgba(10, 8, 4, 0.96);
 }
 
-/* No JS-measured --ratio needed here the way .lightbox-viewport has —
-   every YouTube/Vimeo embed is the same fixed 16:9, so the box can just
-   hold that ratio directly. Same size-to-fit reasoning as .lightbox-
-   viewport otherwise (biggest 16:9 box within the 92vw/85vh/900px caps). */
+/* Every YouTube/Vimeo embed is the same fixed 16:9, so the box just holds
+   that ratio directly — same size-to-fit reasoning as .lightbox-viewport's
+   own fixed 4:3 (biggest N:M box within the 92vw/85vh/900px caps). */
 .video-lightbox-content {
   width: min(92vw, calc(85vh * 16 / 9), calc(900px * 16 / 9));
 }

@@ -1422,16 +1422,6 @@ function wireMinistryPhotoCarousel() {
     });
   }
 
-  // Real uploads vary in aspect ratio (not every photo is exactly the
-  // recommended 4:3), so the viewport's shape is resized to match
-  // whichever photo is current rather than held at one fixed ratio —
-  // otherwise most photos would still letterbox one way or another.
-  function applyViewportRatio(img) {
-    if (img.naturalWidth && img.naturalHeight) {
-      viewport.style.setProperty('--ratio', img.naturalWidth / img.naturalHeight);
-    }
-  }
-
   // Loads the current-index photo into the middle slide and waits for it
   // to actually be ready before returning — callers only touch the
   // transform once this resolves. As long as every caller only mutates a
@@ -1443,7 +1433,6 @@ function wireMinistryPhotoCarousel() {
     resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
     slideCurrent.src = urlFor(index);
     await whenLoaded(slideCurrent);
-    applyViewportRatio(slideCurrent);
   }
 
   // Prev/next aren't visible at rest, so — unlike the current slide —
@@ -1500,14 +1489,7 @@ function wireMinistryPhotoCarousel() {
     index = 0;
     track.style.transition = 'none';
     track.style.transform = REST_TRANSFORM;
-    // Same reasoning as the track's own transition:none above — the very
-    // first photo should just appear at its real size, not visibly grow/
-    // shrink from the viewport's fallback --ratio (see style.css) into
-    // place while the lightbox fades in.
-    viewport.style.transition = 'none';
     await loadCurrentSlide();
-    void viewport.offsetWidth; // commits the instant resize before re-enabling the transition
-    viewport.style.transition = '';
     loadNeighbors();
     renderDots();
     const multi = photos.length > 1;
@@ -1533,20 +1515,6 @@ function wireMinistryPhotoCarousel() {
   function slideTo(newIndex, dir) {
     if (sliding || newIndex === index || photos.length < 2) return;
     sliding = true;
-
-    // The incoming slide was already loaded by the previous loadNeighbors()
-    // call, so its real dimensions are almost always already known this
-    // early — apply them now, right as the slide starts, so the
-    // viewport's own resize (see its transition in style.css) plays
-    // alongside the slide motion instead of only catching up once the
-    // slide finishes, which otherwise looked like the old (possibly
-    // larger) box sliding in a smaller photo letterboxed against black,
-    // then popping to the right size right at the end. loadCurrentSlide
-    // below still re-applies this once the slide settles, as a fallback
-    // for the rare case this fires before the incoming image has finished
-    // loading.
-    const incoming = dir === 1 ? slideNext : slidePrev;
-    if (incoming.complete && incoming.naturalWidth) applyViewportRatio(incoming);
 
     track.style.transition = `transform ${SLIDE_MS}ms ease`;
     // Forces the browser to commit the transition (and the drag's current
