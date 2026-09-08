@@ -29,6 +29,7 @@ const state = {
   staffHomeByName: new Map(),
   worldMetrics: null, // [{label, num}, ...], computed once ministry data loads
   metricsByDivision: new Map(), // division key -> [{label, num}, ...]
+  metricsByCountry: new Map(), // normalized country name -> [{label, num}, ...]
   currentNavView: 'world', // 'world' or a DIVISIONS key — which nav-menu item is active
   overlayDismissed: false, // has the metrics overlay been faded out by user interaction
   // True only while a nav-menu selection's own programmatic setView/fitBounds
@@ -1724,7 +1725,21 @@ async function init() {
             // small country while zoomed in on a big one now zooms back
             // out to bring the small one into view, rather than staying
             // zoomed in past it.
-            map.setView(bounds.getCenter(), targetZoom);
+            // Suppressed the same way the nav menu's own World/division
+            // moves are (withSuppressedDismiss) — without it, this same
+            // setView's own 'movestart', and the map 'click' this layer
+            // click is about to bubble into, would each immediately hide
+            // the metrics overlay this click is showing.
+            withSuppressedDismiss(() => {
+              map.setView(bounds.getCenter(), targetZoom);
+            });
+            // A country can only ever belong to one division in practice
+            // (present.size > 1 would mean the same country name maps to
+            // ministry rows filed under two different divisions, which
+            // shouldn't happen) — picking the first is a reasonable
+            // fallback rather than a real ambiguity to resolve.
+            const divisionKey = present.values().next().value;
+            showMetricsOverlay(state.metricsByCountry.get(name) || [], DIVISIONS[divisionKey].pin);
           }
         });
       },
@@ -1891,6 +1906,20 @@ async function init() {
         (row) => state.countryDivisionByName.get(normalizeCountryName(row.country)) === key
       );
       state.metricsByDivision.set(key, computeMetrics(divisionRows));
+    }
+    // Same idea, one level narrower — computed for every country that has
+    // at least one ministry row, not just ones with a visible pin (a
+    // country's own click handler below only ever looks this up for a
+    // country that's already confirmed to have visible pins, but computing
+    // the full set here up front is simpler than special-casing that).
+    const rowsByCountry = new Map();
+    for (const row of ministryRows) {
+      const name = normalizeCountryName(row.country);
+      if (!rowsByCountry.has(name)) rowsByCountry.set(name, []);
+      rowsByCountry.get(name).push(row);
+    }
+    for (const [name, rows] of rowsByCountry) {
+      state.metricsByCountry.set(name, computeMetrics(rows));
     }
     showMetricsOverlay(state.worldMetrics, null);
     wireMetricsOverlayDismiss();
