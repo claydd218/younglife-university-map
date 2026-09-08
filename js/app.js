@@ -642,7 +642,6 @@ function showMetricsOverlay(metrics, accentColor, labelHtml) {
   const labelEl = document.getElementById('metrics-label');
   if (labelHtml) {
     labelEl.innerHTML = labelHtml;
-    labelEl.style.color = accentColor || '';
     labelEl.hidden = false;
   } else {
     labelEl.hidden = true;
@@ -2044,6 +2043,31 @@ async function init() {
         layer._path.removeAttribute('tabindex');
         layer._path.addEventListener('mousedown', (ev) => ev.preventDefault());
       });
+    }
+
+    // Coastal glow — a soft lighter-blue "shallow water" halo just outside
+    // every coastline, faked from these same country polygons rather than
+    // real bathymetry data (Leaflet has no ocean-depth layer of its own,
+    // and a realistic bathymetric tile basemap would clash hard with this
+    // site's illustrated antique-atlas style anyway). A dedicated pane
+    // lets one CSS blur cover the whole thing cheaply, instead of a
+    // separate blur filter per polygon; z-index sits just under
+    // overlayPane (400, where the real crisp country layer below renders)
+    // so the blur's inward half is hidden under real land and only the
+    // outward half shows over open ocean. interactive:false so clicks/
+    // hover pass straight through to the real layer beneath.
+    map.createPane('coastalGlowPane');
+    map.getPane('coastalGlowPane').style.zIndex = 380;
+    map.getPane('coastalGlowPane').style.filter = 'blur(7px)';
+    map.getPane('coastalGlowPane').style.pointerEvents = 'none';
+    const coastalGlowOptions = {
+      pane: 'coastalGlowPane',
+      interactive: false,
+      style: () => ({ fillColor: '#a9cbe3', fillOpacity: 1, color: '#a9cbe3', weight: 8, opacity: 1 }),
+    };
+    L.geoJSON(countryGeo, coastalGlowOptions).addTo(map);
+    for (const offsetDeg of [-360, 360]) {
+      L.geoJSON(shiftGeoJSONLng(countryGeo, offsetDeg), coastalGlowOptions).addTo(map);
     }
 
     // state.geoLayer stays the one true (offset 0) copy — it's the only one
