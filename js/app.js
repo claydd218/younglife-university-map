@@ -2021,6 +2021,18 @@ async function init() {
         withSuppressedDismiss(() => {
           map.setView(cluster.getLatLng(), Math.min(idealZoom, cap, map.getMaxZoom()));
         });
+        // Same re-sync a pin's own popup does (see the map-level
+        // 'popupopen' listener below init()) — a cluster click has no
+        // popup to hang that off of, so it needs its own trigger here.
+        // A cluster can in principle span two countries (maxClusterRadius
+        // groups by screen proximity, not by border) — its first child is
+        // a reasonable fallback rather than a real ambiguity to resolve,
+        // same reasoning as the country-polygon click handler's own
+        // identical fallback for a country spanning divisions.
+        const children = cluster.getAllChildMarkers();
+        if (children.length && children[0].ministryCountry) {
+          showCountryMetricsOverlay(children[0].ministryCountry);
+        }
       });
     }
 
