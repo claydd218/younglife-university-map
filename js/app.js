@@ -1595,21 +1595,30 @@ function wireTitleEasterEgg() {
 // if the map had never been touched.
 function wireBackButtonReset() {
   let pushed = false;
+  // True only for the span of resetMapView's own goToWorldFn() call below —
+  // NOT the same thing as state.suppressOverlayDismiss, which is also true
+  // during a plain nav-menu click and would (confirmed live) wrongly
+  // suppress arming the trap for that legitimate, separate view change too.
+  let suppressArm = false;
 
   function armTrap() {
-    // Reuses the same flag goToWorld/goToDivision already set for the
-    // whole span of their own animated, multi-leg moves (see
-    // withSuppressedDismiss) — Back should behave exactly like choosing
-    // "World" from the nav menu, including not re-arming itself partway
-    // through that same animated transition.
-    if (pushed || state.suppressOverlayDismiss) return;
+    if (pushed || suppressArm) return;
     pushed = true;
     history.pushState({ ylMapView: true }, '', location.href);
   }
 
   function resetMapView() {
+    suppressArm = true;
     map.closePopup();
     if (goToWorldFn) goToWorldFn();
+    // goToWorldFn's own move is animated and multi-leg (see
+    // withSuppressedDismiss), so a fixed timeout can't safely bound it —
+    // piggyback on the same settling signal it already clears
+    // (state.suppressOverlayDismiss) instead of duplicating that logic.
+    (function waitForSettle() {
+      if (!state.suppressOverlayDismiss) { suppressArm = false; return; }
+      requestAnimationFrame(waitForSettle);
+    })();
   }
 
   map.on('movestart', armTrap);
