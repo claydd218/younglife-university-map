@@ -32,6 +32,13 @@ const state = {
   metricsByCountry: new Map(), // normalized country name -> [{label, num}, ...]
   currentNavView: 'world', // 'world' or a DIVISIONS key — which nav-menu item is active
   overlayDismissed: false, // has the metrics overlay been faded out by user interaction
+  // Normalized country name while a single country's metrics are showing
+  // (set by the country click handler in init(), cleared by goToWorld/
+  // goToDivision), else null. Lets wireMetricsOverlayDismiss's popupopen
+  // handler tell "opened a ministry popup inside the country currently
+  // being shown" (keep the overlay up) apart from "opened one somewhere
+  // else, e.g. after panning away" (dismiss as normal).
+  currentCountryFocus: null,
   // True only while a nav-menu selection's own programmatic setView/fitBounds
   // is in flight, so that move doesn't immediately re-trigger the same
   // dismiss-on-interaction logic it was called to override — see wireNavMenu.
@@ -630,7 +637,19 @@ function wireMetricsOverlayDismiss() {
     hideMetricsOverlay();
   }
   map.on('movestart', maybeHide);
-  map.on('popupopen', maybeHide);
+  // A popup opened for a ministry inside the country currently shown in
+  // the overlay is browsing *within* that selection, not leaving it — the
+  // overlay stays up. Opening one anywhere else (no country focused, a
+  // different country's marker, one of the west/east ghost copies of a
+  // marker outside the focused country) dismisses as normal. Every real
+  // marker's row carries its own country (see the marker.ministryRow
+  // assignment in init()) precisely so this can compare against it
+  // directly, rather than trying to work it out from the click position.
+  map.on('popupopen', (e) => {
+    const row = e.popup._source && e.popup._source.ministryRow;
+    if (state.currentCountryFocus && row && normalizeCountryName(row.country) === state.currentCountryFocus) return;
+    maybeHide();
+  });
   map.on('click', maybeHide);
   // The overlay itself now has pointer-events:auto (see .metrics-overlay in
   // css/style.css) specifically so a tap on it never falls through to
@@ -737,6 +756,7 @@ function wireNavMenu() {
 
   function goToWorld() {
     state.currentNavView = 'world';
+    state.currentCountryFocus = null;
     setActive('world');
     map.closePopup();
     withSuppressedDismiss(() => {
@@ -750,6 +770,7 @@ function wireNavMenu() {
     const bounds = window.__divisionBounds(key);
     if (!bounds) return;
     state.currentNavView = key;
+    state.currentCountryFocus = null;
     setActive(key);
     map.closePopup();
     withSuppressedDismiss(() => {
@@ -1753,6 +1774,11 @@ async function init() {
             state.openCountryTooltipLayer = layer;
           } else {
             state.openCountryTooltipLayer = null;
+            // Read by wireMetricsOverlayDismiss's popupopen handler, so
+            // opening a ministry popup inside this same country (browsing
+            // within the current selection) doesn't dismiss the metrics
+            // overlay this click is about to show.
+            state.currentCountryFocus = name;
             // A touch out from a tight fit, so the country reads with a
             // little breathing room and its neighbors are visible for
             // context, without backing off as far as a full zoom level.
@@ -1895,6 +1921,10 @@ async function init() {
       const marker = L.marker([lat, lng], { icon: markerIcon(divisionKey, stageKey) });
       marker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
       marker.bindPopup(popupHtml, popupOptions);
+      // Read back by wireMetricsOverlayDismiss's popupopen handler (via
+      // e.popup._source) to tell whether an opened popup belongs to the
+      // country currently focused in the metrics overlay.
+      marker.ministryRow = row;
       state.clusterGroups[divisionKey].addLayer(marker);
 
       if (!state.markersByCountry.has(countryName)) state.markersByCountry.set(countryName, []);
@@ -1908,6 +1938,7 @@ async function init() {
         const ghostMarker = L.marker([lat, lng + offsetDeg], { icon: markerIcon(divisionKey, stageKey) });
         ghostMarker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
         ghostMarker.bindPopup(popupHtml, popupOptions);
+        ghostMarker.ministryRow = row;
         state.clusterGroups[divisionKey].addLayer(ghostMarker);
       }
 
