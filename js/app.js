@@ -1349,6 +1349,15 @@ function wireMinistryPhotoCarousel() {
   lightbox.querySelector('.lightbox-close').addEventListener('click', close);
   lightbox.querySelector('.lightbox-backdrop').addEventListener('click', close);
 
+  // Only while this lightbox is actually open — otherwise every arrow key
+  // press on the page (scrolling, editing a field elsewhere) would get
+  // eaten by a listener with nothing open to act on.
+  document.addEventListener('keydown', (e) => {
+    if (!lightbox.classList.contains('visible')) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); showPrev(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); showNext(); }
+  });
+
   // Touch drag: axis-locked so an ambiguous or vertical gesture is left
   // alone (nothing to vertically scroll here, but this also matters on
   // iOS specifically — without it, an early horizontal drag can be read as
