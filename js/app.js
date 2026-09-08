@@ -622,6 +622,33 @@ function showMetricsOverlay(metrics, accentColor, labelHtml) {
   state.overlayDismissed = false;
 }
 
+// Shows `name`'s own metrics + flag/name label, with no camera move of its
+// own — shared by the country-polygon click handler (which also flies the
+// map there) and, below, opening any ministry's popup. A pin click no
+// longer dismisses the overlay (see wireMetricsOverlayDismiss), but on its
+// own that just leaves whatever was already showing up — e.g. clicking a
+// Costa Rica pin while Nicaragua's metrics/label were still up from an
+// earlier country click left Nicaragua showing, which is exactly what this
+// closes: every popup open re-syncs the overlay to that ministry's own
+// country, so it always describes what's actually in focus. A no-op for a
+// country somehow not in countriesWithVisiblePins (shouldn't happen for a
+// real ministry's own country, but the map click handler already guards
+// the same lookup, so this mirrors that rather than assuming).
+function showCountryMetricsOverlay(name) {
+  const present = state.countriesWithVisiblePins.get(name);
+  if (!present || !present.size) return;
+  // A country can only ever belong to one division in practice (see the
+  // country click handler's own identical comment on this) — picking the
+  // first is a reasonable fallback rather than a real ambiguity to resolve.
+  const divisionKey = present.values().next().value;
+  const flag = flagEmoji(state.countryIsoByName.get(name));
+  showMetricsOverlay(
+    state.metricsByCountry.get(name) || [],
+    DIVISIONS[divisionKey].pin,
+    `${flag ? `${flag} ` : ''}${escapeHtml(name)}`,
+  );
+}
+
 function hideMetricsOverlay() {
   if (state.overlayDismissed) return;
   state.overlayDismissed = true;
@@ -1832,18 +1859,7 @@ async function init() {
             withSuppressedDismiss(() => {
               map.flyTo(bounds.getCenter(), targetZoom);
             });
-            // A country can only ever belong to one division in practice
-            // (present.size > 1 would mean the same country name maps to
-            // ministry rows filed under two different divisions, which
-            // shouldn't happen) — picking the first is a reasonable
-            // fallback rather than a real ambiguity to resolve.
-            const divisionKey = present.values().next().value;
-            const flag = flagEmoji(state.countryIsoByName.get(name));
-            showMetricsOverlay(
-              state.metricsByCountry.get(name) || [],
-              DIVISIONS[divisionKey].pin,
-              `${flag ? `${flag} ` : ''}${escapeHtml(name)}`,
-            );
+            showCountryMetricsOverlay(name);
           }
         });
       },
@@ -1957,6 +1973,10 @@ async function init() {
       const marker = L.marker([lat, lng], { icon: markerIcon(divisionKey, stageKey) });
       marker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
       marker.bindPopup(popupHtml, popupOptions);
+      // Read back by the map-level 'popupopen' listener below (via
+      // e.popup._source) to re-sync the metrics overlay to this
+      // ministry's own country whenever its popup opens.
+      marker.ministryCountry = countryName;
       state.clusterGroups[divisionKey].addLayer(marker);
 
       if (!state.markersByCountry.has(countryName)) state.markersByCountry.set(countryName, []);
@@ -1970,6 +1990,7 @@ async function init() {
         const ghostMarker = L.marker([lat, lng + offsetDeg], { icon: markerIcon(divisionKey, stageKey) });
         ghostMarker.bindTooltip(row.city, { direction: 'left', offset: [-10, 0], className: 'marker-tooltip' });
         ghostMarker.bindPopup(popupHtml, popupOptions);
+        ghostMarker.ministryCountry = countryName;
         state.clusterGroups[divisionKey].addLayer(ghostMarker);
       }
 
@@ -2338,6 +2359,22 @@ async function init() {
 }
 
 init();
+
+// Keeps the metrics overlay honest about whatever ministry is actually in
+// focus: a pin/cluster click no longer dismisses the overlay (see
+// wireMetricsOverlayDismiss), but left alone that just leaves whatever was
+// already showing up — e.g. a Costa Rica pin clicked while Nicaragua's
+// metrics/label were still up from an earlier country click left Nicaragua
+// showing, next to a Costa Rica popup. Every real marker/ghost marker
+// carries its own country (marker.ministryCountry, set in init()) so any
+// popup opening — a direct pin click, or a programmatic one like
+// flyToCountry's own single-ministry bonus popup — re-syncs the overlay to
+// that country via the same showCountryMetricsOverlay the country-polygon
+// click handler itself uses, without moving the map.
+map.on('popupopen', (e) => {
+  const country = e.popup._source && e.popup._source.ministryCountry;
+  if (country) showCountryMetricsOverlay(country);
+});
 
 // If a popup opens close enough to any edge that part of it would land
 // under the floating header or off the left/right side of the screen, pan
