@@ -619,10 +619,12 @@ h1, h2, h3, .legend-label, .cluster-badge {
   stroke-width: 1;
 }
 
-/* Developing — an unfilled head, so the pair reads as "the same kind of
-   marker, just not solid yet" rather than two unrelated shapes. */
+/* Developing — filled with the division's own muted country color
+   (--pin-fill, set inline per marker in shapeMarkup) rather than left
+   truly open, so the head doesn't look like a hole showing the map
+   underneath — just not solid in the bright pin color yet. */
 .pin-outline circle {
-  fill: none;
+  fill: var(--pin-fill, var(--parchment));
   stroke: var(--pin-color);
   stroke-width: 1.8;
 }

@@ -245,8 +245,12 @@ function normalizeCountryName(name) {
 // of looking like it sprouts from an arbitrary point on the circle's edge.
 // The needle is always the same ink-colored line regardless of stage (see
 // its CSS) — only the head's fill differs between established/developing.
-function shapeMarkup(shape, color) {
-  return `<svg class="pin-shape pin-${shape}" viewBox="0 0 24 24" style="--pin-color:${color}">
+// fillColor is the developing head's fill (the division's own muted
+// country color, so an "open" head reads as filled-but-not-solid-yet
+// rather than a literal hole showing the map underneath) — unused for the
+// established/filled variant, which always fills solid with `color`.
+function shapeMarkup(shape, color, fillColor) {
+  return `<svg class="pin-shape pin-${shape}" viewBox="0 0 24 24" style="--pin-color:${color}; --pin-fill:${fillColor}">
     <g transform="rotate(30 12 8)">
       <line x1="12" y1="14" x2="12" y2="24"/>
       <circle cx="12" cy="8" r="6"/>
@@ -305,7 +309,7 @@ function markerIcon(divisionKey, stageKey) {
   const stage = STAGES[stageKey];
   return L.divIcon({
     className: 'ministry-marker',
-    html: shapeMarkup(stage.shape, div.pin),
+    html: shapeMarkup(stage.shape, div.pin, div.country),
     // Anchored at the needle's tip — (12,24) rotated 30° around the
     // circle's center (12,8) lands at (4, 21.86) in the 24x24 viewBox,
     // scaled to this icon box — where the tack actually marks a location,
@@ -539,7 +543,7 @@ function buildLegend() {
     const li = document.createElement('li');
     li.innerHTML = `
       <span class="legend-stage-row">
-        ${shapeMarkup(stage.shape, 'var(--ink)')}
+        ${shapeMarkup(stage.shape, 'var(--ink)', 'var(--card-bg)')}
         <span class="legend-label">${escapeHtml(stage.label)}</span>
       </span>
     `;
