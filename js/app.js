@@ -2634,6 +2634,29 @@ function countriesInDivision(divisionKey) {
   return names.sort((a, b) => a.localeCompare(b));
 }
 
+// A pin still bundled inside an unopened cluster icon isn't actually on
+// the map (Leaflet.markercluster hides individual markers and shows the
+// cluster badge in their place until the view is zoomed in enough, or the
+// cluster is spiderfied at max zoom) — marker.openPopup() silently no-ops
+// on one in that state, which was quietly skipping some ministries during
+// the tour rather than ever showing them. zoomToShowLayer is
+// Leaflet.markercluster's own built-in fix for exactly this: pans/zooms
+// (spiderfying at max zoom if that's what it takes) until `marker` is
+// genuinely visible, then calls back — a no-op, synchronously-resolved
+// callback if it already was. Wrapped in withSuppressedDismiss like the
+// tour's other real navigational moves, since the zoom side of this (not
+// the plain-pan case) fires 'zoomstart' internally same as flyTo does,
+// which would otherwise dismiss the very country metrics overlay this
+// step is happening underneath.
+function zoomToShowMarker(marker, divisionKey) {
+  const group = state.clusterGroups[divisionKey];
+  return new Promise((resolve) => {
+    withSuppressedDismiss(() => {
+      group.zoomToShowLayer(marker, resolve);
+    });
+  });
+}
+
 // Pans (not flies — this is a short, local nudge, not a real navigational
 // move) so `marker` ends up centered horizontally and sitting just above
 // the playback bar, before its popup opens. A popup opens upward from its
@@ -2677,6 +2700,8 @@ async function runAnimation(config) {
 
       const entries = state.markersByCountry.get(countryName) || [];
       for (const { marker, row } of entries) {
+        await animationCheckpoint();
+        await zoomToShowMarker(marker, config.divisionKey);
         await animationCheckpoint();
         panMarkerToBottomCenter(marker);
         await animationWait(ANIMATION_PAUSE.settle);
