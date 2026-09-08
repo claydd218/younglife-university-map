@@ -236,14 +236,21 @@ function normalizeCountryName(name) {
 // the admin tools.
 
 // A thumbtack silhouette — round head, and the "pin" itself is just a thin
-// line (not a filled triangle, which read as an ice cream cone), angled
-// 30° left of vertical like a tack driven in at a slight angle. The
-// needle is always the same ink-colored line regardless of stage (see
+// line (not a filled triangle, which read as an ice cream cone). Defined
+// straight down from the circle's own true bottom point (12,14) — tangent,
+// no kink — then the head+needle are rotated together as one rigid group,
+// 30° left of vertical, around the circle's own center. Rotating as a
+// group (rather than just drawing the line at an angle from a fixed head)
+// is what keeps the needle meeting the head cleanly at every angle instead
+// of looking like it sprouts from an arbitrary point on the circle's edge.
+// The needle is always the same ink-colored line regardless of stage (see
 // its CSS) — only the head's fill differs between established/developing.
 function shapeMarkup(shape, color) {
   return `<svg class="pin-shape pin-${shape}" viewBox="0 0 24 24" style="--pin-color:${color}">
-    <line x1="12" y1="13" x2="6.2" y2="23"/>
-    <circle cx="12" cy="8" r="6"/>
+    <g transform="rotate(30 12 8)">
+      <line x1="12" y1="14" x2="12" y2="24"/>
+      <circle cx="12" cy="8" r="6"/>
+    </g>
   </svg>`;
 }
 
@@ -299,16 +306,16 @@ function markerIcon(divisionKey, stageKey) {
   return L.divIcon({
     className: 'ministry-marker',
     html: shapeMarkup(stage.shape, div.pin),
-    // Anchored at the needle's tip (12, 23 in the 24x24 viewBox, scaled to
-    // this icon box) — where the tack actually marks a location — not the
-    // icon's center or top-left. The left-leaning needle puts that tip
-    // off-center (x≈6 instead of 11), unlike the old symmetric shapes.
-    // popupAnchor is relative to that same off-center anchor, so it has an
-    // offsetting positive X to land the popup back over the round head's
-    // center instead of the head's own left edge.
+    // Anchored at the needle's tip — (12,24) rotated 30° around the
+    // circle's center (12,8) lands at (4, 21.86) in the 24x24 viewBox,
+    // scaled to this icon box — where the tack actually marks a location,
+    // not the icon's center or top-left. popupAnchor is relative to that
+    // same off-center anchor, with an offsetting positive X to land the
+    // popup back over the round head's center instead of the head's own
+    // left edge.
     iconSize: [22, 28],
-    iconAnchor: [6, 27],
-    popupAnchor: [5, -18],
+    iconAnchor: [4, 26],
+    popupAnchor: [7, -17],
   });
 }
 
