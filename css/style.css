@@ -1,6 +1,6 @@
 :root {
   --parchment: #f1e6cd;
-  --ocean: #6f9fc9;
+  --ocean: #93bddc;
   --ink: #3b2a1a;
   --ink-soft: #6b5a44;
   --card-bg: #f7efdc;
@@ -455,7 +455,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
   line-height: 1.1;
   font-family: 'Pinyon Script', cursive;
   font-size: 18px;
-  color: #5c7267;
+  color: #1f3a52;
   text-shadow: 0 1px 0 rgba(255,255,255,0.5);
   letter-spacing: 0.03em;
 }
