@@ -2650,33 +2650,21 @@ if (window.screen && window.screen.orientation) {
 // metrics, nothing more.
 // ---------------------------------------------------------------------
 
-// Every country in `divisionKey` that actually has a ministry pin, ordered
-// as a real greedy nearest-neighbor proximity chain — start at the
-// northwesternmost country, then repeatedly hop to whichever remaining
-// country is physically closest to the current one. An earlier version
-// used a single blended NW/SE diagonal score (north-south and west-east
-// weighted equally into one number), but that's a synthetic "read the
-// page" axis, not actual proximity — for a division shaped like LAC
-// (a north-south chain of mainland with islands off to one side), it mixed
-// up Caribbean/mainland order in a way that didn't match the geography
-// (confirmed live). This deliberately isn't a true shortest-path/TSP
-// solve (per the original direction — "it can be fuzzy") — just chaining
-// to the nearest unvisited neighbor each step.
-function countriesInDivisionByProximity(divisionKey) {
-  const names = [];
-  for (const [countryName, entries] of state.markersByCountry) {
-    if (entries.length && state.countryDivisionByName.get(countryName) === divisionKey) {
-      names.push(countryName);
-    }
-  }
-  const points = names.map((name) => {
-    let countryLayer;
-    state.geoLayer.eachLayer((layer) => {
-      if (normalizeCountryName(layer.feature.properties.name) === name) countryLayer = layer;
-    });
-    const center = computeMainLandBounds(countryLayer.feature).getCenter();
-    return { name, lat: center.lat, lng: center.lng };
-  });
+// Orders arbitrary lat/lng points (countries, pins, whatever) as a real
+// greedy nearest-neighbor proximity chain — start at the northwesternmost
+// point, then repeatedly hop to whichever remaining point is physically
+// closest to the current one. An earlier version (country-ordering only,
+// before this was pulled out into a shared helper) used a single blended
+// NW/SE diagonal score (north-south and west-east weighted equally into
+// one number), but that's a synthetic "read the page" axis, not actual
+// proximity — for a division shaped like LAC (a north-south chain of
+// mainland with islands off to one side), it mixed up Caribbean/mainland
+// order in a way that didn't match the geography (confirmed live). This
+// deliberately isn't a true shortest-path/TSP solve (per the original
+// direction — "it can be fuzzy") — just chaining to the nearest unvisited
+// neighbor each step. Returns the input objects themselves, reordered —
+// each just needs a `lat`/`lng`.
+function orderByProximity(points) {
   if (!points.length) return [];
   const sqDist = (a, b) => {
     const dLat = a.lat - b.lat;
@@ -2709,7 +2697,27 @@ function countriesInDivisionByProximity(divisionKey) {
     [current] = remaining.splice(nearestIdx, 1);
     ordered.push(current);
   }
-  return ordered.map((p) => p.name);
+  return ordered;
+}
+
+// Every country in `divisionKey` that actually has a ministry pin, ordered
+// by orderByProximity above.
+function countriesInDivisionByProximity(divisionKey) {
+  const names = [];
+  for (const [countryName, entries] of state.markersByCountry) {
+    if (entries.length && state.countryDivisionByName.get(countryName) === divisionKey) {
+      names.push(countryName);
+    }
+  }
+  const points = names.map((name) => {
+    let countryLayer;
+    state.geoLayer.eachLayer((layer) => {
+      if (normalizeCountryName(layer.feature.properties.name) === name) countryLayer = layer;
+    });
+    const center = computeMainLandBounds(countryLayer.feature).getCenter();
+    return { name, lat: center.lat, lng: center.lng };
+  });
+  return orderByProximity(points).map((p) => p.name);
 }
 
 // Each leg's duration scales with how far it actually moves ON SCREEN,
@@ -2952,6 +2960,32 @@ async function tourGoToCountry(name) {
   await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
 }
 
+// Every ministry pin in `countryName`, ordered by the same orderByProximity
+// nearest-neighbor chain used for countries within a division — pins
+// aren't clustered during a tour's country leg (see showTourCountryPinsOnly),
+// so this is exactly what the visitor sees on screen to sweep through.
+function pinsInCountryByProximity(countryName) {
+  const entries = state.markersByCountry.get(countryName) || [];
+  const points = entries.map((entry) => {
+    const latLng = entry.marker.getLatLng();
+    return { entry, lat: latLng.lat, lng: latLng.lng };
+  });
+  return orderByProximity(points).map((p) => p.entry);
+}
+
+// Flies to one pin, as close as the map ever zooms (CONFIG.MAX_ZOOM — a
+// country's own zoom can already be near that for a small country, so
+// this often isn't a huge further zoom-in, just a pan). No popup, no
+// pause — same continuous decel-into-arrival/accel-back-out chaining as
+// every other leg (see tourFlyToAndWait), just a smaller hop. Country
+// metrics stay up throughout; nothing pin-specific shown yet.
+async function tourGoToPin(entry) {
+  const target = entry.marker.getLatLng();
+  const targetZoom = CONFIG.MAX_ZOOM;
+  const duration = tourLegDuration(target, targetZoom);
+  await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
+}
+
 class TourStopSignal extends Error {}
 
 const tourController = { state: 'stopped', loop: false };
@@ -2985,6 +3019,10 @@ async function runTour(divisionKey) {
     for (const countryName of countries) {
       await tourCheckpoint();
       await tourGoToCountry(countryName);
+      for (const pinEntry of pinsInCountryByProximity(countryName)) {
+        await tourCheckpoint();
+        await tourGoToPin(pinEntry);
+      }
     }
 
     await tourCheckpoint();
