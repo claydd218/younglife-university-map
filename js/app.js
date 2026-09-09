@@ -154,7 +154,7 @@ map.addControl(new DirectoryControl());
 // real, reproduced freeze. inertia: false above (see map options)
 // removes that animation entirely, so there's no competing frame-by-
 // frame loop left for this to fight — safe to run live again.
-// True only while one of the ?animate=NAME tour's own pin-level moves
+// True only while one of the ?tour=NAME tour's own pin-level moves
 // (zoomToShowMarker, panMarkerToBottomCenter — both far below) is in
 // flight. Those two are real culprits behind a genuine bug: each is a
 // live, animated pan/zoom that can transiently swing the view across
@@ -681,7 +681,7 @@ function showCountryMetricsOverlay(name) {
 
 // Flies to `name`'s own bounds and shows its metrics — the same two things
 // the country-polygon click handler in init() does for a "present" country,
-// factored out here for runQueryStringAnimation's own scripted tour below
+// factored out here for runQueryStringTour's own scripted tour below
 // (which needs to trigger this without a real click on the polygon).
 // withSuppressedDismiss is required, not optional, even though nothing
 // else is fighting to dismiss the overlay during a scripted tour — flyTo
@@ -777,7 +777,7 @@ function wireMetricsOverlayDismiss() {
 // Exposed so the title easter egg (wireTitleEasterEgg) can trigger the
 // exact same "World" reset — including the movestart-dismiss suppression
 // goToWorld already handles — without duplicating that logic. goToDivisionFn
-// is the same idea, for runQueryStringAnimation's own scripted tour below.
+// is the same idea, for runQueryStringTour's own scripted tour below.
 let goToWorldFn = null;
 let goToDivisionFn = null;
 
@@ -1095,7 +1095,7 @@ function computeMainLandBounds(feature) {
 // "present" country (see goToCountryMetrics's identical comment; this is
 // the directory/search version of the same idea, kept separate rather
 // than reusing goToCountryMetrics directly since that function's flyTo
-// duration is deliberately tuned slow for the ?animate=NAME tour, its
+// duration is deliberately tuned slow for the ?tour=NAME tour, its
 // only other caller — not the snappier feel a real visitor's search
 // result deserves). Returns false (no metrics shown, nothing flown to) if
 // countryName's polygon can't be found.
@@ -1138,7 +1138,7 @@ function flyToCountry(countryName) {
 // The directory's per-area pick — flies/shows metrics same as
 // flyToCountry, but always ends with `marker`'s own popup open, forcing
 // it out of a cluster if needed (zoomToShowMarker, same mechanism the
-// ?animate=NAME tour uses to reveal a clustered pin) rather than
+// ?tour=NAME tour uses to reveal a clustered pin) rather than
 // flyToCountry's own single-ministry convenience case above, which only
 // opens the popup if it's already visible at the plain country zoom — an
 // explicit area pick from search should always land on that exact one.
@@ -1548,7 +1548,7 @@ function wireMinistryPhotoCarousel() {
   function showNext() { slideTo((index + 1) % photos.length, 1); }
   function showPrev() { slideTo((index - 1 + photos.length) % photos.length, -1); }
 
-  // Exposed so runQueryStringAnimation's own scripted tour can drive this
+  // Exposed so runQueryStringTour's own scripted tour can drive this
   // carousel the same way a real viewer's clicks/arrow keys do, without
   // reaching into (or duplicating) this closure's own open/showNext/close.
   // Same window.__ convention this file already uses for other internal
@@ -2501,13 +2501,13 @@ async function init() {
 }
 
 // Chained with .then, not the bare fire-and-forget call this used to be —
-// runQueryStringAnimation (bottom of file) needs everything init() sets up
+// runQueryStringTour (bottom of file) needs everything init() sets up
 // (state.markersByCountry, goToWorldFn/goToDivisionFn, the photo lightbox's
 // window.__ministryLightbox) to actually exist before it can start, which
 // only happens once the whole async function body — not just the
 // synchronous call to it — has finished.
 init().then(() => {
-  if (window.__mapReady) runQueryStringAnimation();
+  if (window.__mapReady) runQueryStringTour();
 });
 
 // Keeps the metrics overlay honest about whatever ministry is actually in
@@ -2673,7 +2673,7 @@ if (window.screen && window.screen.orientation) {
 }
 
 // ---------------------------------------------------------------------
-// ?animate=NAME — an unlisted, ambient auto-tour of one division: World,
+// ?tour=NAME — an unlisted, ambient auto-tour of one division: World,
 // pause; that division, pause; then for each of its countries (that
 // actually has a ministry pin), in turn: fly there and show its metrics,
 // pause; for every ministry pin in that country, in turn: open its popup,
@@ -2979,12 +2979,12 @@ function wireAnimationControls() {
   document.getElementById('animation-stop-btn').addEventListener('click', stopAnimation);
 }
 
-function runQueryStringAnimation() {
-  const name = new URLSearchParams(location.search).get('animate');
+function runQueryStringTour() {
+  const name = new URLSearchParams(location.search).get('tour');
   if (!name) return;
   const config = ANIMATIONS[name];
   if (!config) {
-    console.warn(`?animate=${name} — no such animation. Known: ${Object.keys(ANIMATIONS).join(', ')}`);
+    console.warn(`?tour=${name} — no such tour. Known: ${Object.keys(ANIMATIONS).join(', ')}`);
     return;
   }
   currentAnimationConfig = config;
