@@ -2683,7 +2683,7 @@ function countriesInDivisionByProximity(divisionKey) {
 // to back on 'moveend' (no setTimeout dwell in between) reads as "slow
 // down to a stop, trigger the metrics, immediately speed back up" with
 // no held pause, per the actual direction for this first pass.
-const TOUR_LEG_SECONDS = 1;
+const TOUR_LEG_SECONDS = 5;
 
 // Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
 // flyToBounds — done this way so each leg below can supply its own
