@@ -1040,15 +1040,23 @@ img.popup-photo {
    on the new size. Border/shadow are back on each slide rather than the
    shared viewport, since each now has its own real box to hug. */
 .lightbox-slide {
-  /* inset:0 + margin:auto centers an absolutely-positioned box with an
-     explicit (non-auto) width/height — deliberately not transform-based
-     centering: the pinch-zoom handlers below set this same element's
-     `transform` directly (translate+scale) with no base value to
-     preserve, so centering can't live there too without every pinch
-     handler needing to re-append it. */
-  position: absolute;
-  inset: 0;
-  margin: auto;
+  /* position:fixed with JS-computed left/top (positionSlide) — centered
+     against the window directly, not against .lightbox-viewport. That
+     box is still resized per active photo (for the arrows/close to
+     anchor to — see its own comment), and an earlier version of this
+     rule centered slides against IT via inset:0+margin:auto — which
+     seemed independent of the *other* slide's size, but wasn't: resizing
+     the shared viewport for an incoming photo re-centers anything using
+     margin:auto within it, including the outgoing slide, even though its
+     own width/height never changed. Confirmed live as the outgoing photo
+     visibly sliding sideways mid-fade instead of just fading in place.
+     Computing left/top from the window directly removes every shared
+     dependency between the two slides.
+     Not transform-based centering either: the pinch-zoom handlers below
+     set this same element's `transform` directly (translate+scale) with
+     no base value to preserve, so centering can't live there too without
+     every pinch handler needing to re-append it. */
+  position: fixed;
   display: block;
   object-fit: contain;
   border: 2px solid var(--ink);

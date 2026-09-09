@@ -1423,15 +1423,18 @@ function wireMinistryPhotoCarousel() {
   // Sizes and centers `slide` (already showing `img`, its own content) to
   // img's real aspect ratio within the 92vw/85vh bounds — computed
   // directly from the image, not inferred from CSS — and independently
-  // of the OTHER slide, which is left completely untouched. Also sizes
+  // of the OTHER slide, which is left completely untouched: left/top are
+  // computed against the window directly (slide is position:fixed), not
+  // against .lightbox-viewport or any other shared element, so resizing
+  // this one slide can never shift or resize the other one that's still
+  // mid-fade (see .lightbox-slide's own comment in style.css for the two
+  // different ways that went wrong before landing here). Also sizes
   // .lightbox-viewport to match, purely so the arrows/close (positioned
   // relative to .lightbox-content, which wraps it) anchor to whichever
-  // photo is actually active; the viewport's own size has no bearing on
-  // how either slide renders (see both rules' own comments in style.css
-  // for the two different bugs that came from conflating those). No
-  // transition on any of this — it's instant, so there's nothing to read
-  // as a box visibly growing, and the other slide never being touched
-  // means it just fades in place rather than resizing mid-fade.
+  // photo is actually active — that box holds no visual content of its
+  // own now, just a size for those buttons to key off of. No transition
+  // on any of this — it's instant, so there's nothing to read as a box
+  // visibly growing.
   function positionSlide(slide, img) {
     const maxW = window.innerWidth * 0.92;
     const maxH = window.innerHeight * 0.85;
@@ -1444,6 +1447,8 @@ function wireMinistryPhotoCarousel() {
     }
     slide.style.width = `${w}px`;
     slide.style.height = `${h}px`;
+    slide.style.left = `${(window.innerWidth - w) / 2}px`;
+    slide.style.top = `${(window.innerHeight - h) / 2}px`;
     viewport.style.width = `${w}px`;
     viewport.style.height = `${h}px`;
   }
