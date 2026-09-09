@@ -2746,8 +2746,15 @@ async function tourGoToWorld() {
 }
 
 async function tourGoToDivision(divisionKey) {
-  const bounds = window.__divisionBounds(divisionKey);
-  if (!bounds) return;
+  const rawBounds = window.__divisionBounds(divisionKey);
+  if (!rawBounds) return;
+  // __divisionBounds returns a plain [[south,west],[north,east]] array,
+  // not a real L.LatLngBounds (see its own comment — that's so it
+  // survives the Puppeteer page.evaluate() serialization boundary for the
+  // PDF report, its original caller). map.flyToBounds happily normalizes
+  // that array on its own, but .getCenter() below needs an actual
+  // LatLngBounds instance.
+  const bounds = L.latLngBounds(rawBounds);
   const target = bounds.getCenter();
   const duration = tourLegDuration(target);
   // See tourGoToWorld's own comment on why this fires before the flight,
