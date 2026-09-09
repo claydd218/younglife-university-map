@@ -456,7 +456,10 @@ h1, h2, h3, .legend-label, .cluster-badge {
   font-family: 'Pinyon Script', cursive;
   font-size: 18px;
   color: #1f3a52;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  /* Coastal-glow blue as a soft halo behind the dark text, same color as
+     the coastline glow elsewhere on the map, plus the original subtle
+     white edge underneath it for a little lift off the ocean. */
+  text-shadow: 0 0 6px #bedced, 0 0 6px #bedced, 0 1px 0 rgba(255,255,255,0.5);
   letter-spacing: 0.03em;
 }
 
