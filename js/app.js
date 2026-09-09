@@ -1420,22 +1420,13 @@ function wireMinistryPhotoCarousel() {
 
   function otherSlide() { return activeSlide === slideA ? slideB : slideA; }
 
-  // Sizes and centers `slide` (already showing `img`, its own content) to
-  // img's real aspect ratio within the 92vw/85vh bounds — computed
-  // directly from the image, not inferred from CSS — and independently
-  // of the OTHER slide, which is left completely untouched: left/top are
-  // computed against the window directly (slide is position:fixed), not
-  // against .lightbox-viewport or any other shared element, so resizing
-  // this one slide can never shift or resize the other one that's still
-  // mid-fade (see .lightbox-slide's own comment in style.css for the two
-  // different ways that went wrong before landing here). Also sizes
-  // .lightbox-viewport to match, purely so the arrows/close (positioned
-  // relative to .lightbox-content, which wraps it) anchor to whichever
-  // photo is actually active — that box holds no visual content of its
-  // own now, just a size for those buttons to key off of. No transition
-  // on any of this — it's instant, so there's nothing to read as a box
-  // visibly growing.
-  function positionSlide(slide, img) {
+  // Pure calculation, no DOM writes — the size `img` would render at
+  // within the 92vw/85vh bounds, computed from its own real aspect ratio.
+  // Split out from applySlideSize below so showIndex can compare an
+  // incoming photo's target size against the current one *before*
+  // deciding whether the arrows/close need to hide for the transition at
+  // all (see that comment for why).
+  function computeSlideSize(img) {
     const maxW = window.innerWidth * 0.92;
     const maxH = window.innerHeight * 0.85;
     const ratio = img.naturalWidth / img.naturalHeight;
@@ -1445,12 +1436,29 @@ function wireMinistryPhotoCarousel() {
       h = maxH;
       w = h * ratio;
     }
-    slide.style.width = `${w}px`;
-    slide.style.height = `${h}px`;
-    slide.style.left = `${(window.innerWidth - w) / 2}px`;
-    slide.style.top = `${(window.innerHeight - h) / 2}px`;
-    viewport.style.width = `${w}px`;
-    viewport.style.height = `${h}px`;
+    return { w, h };
+  }
+
+  // Sizes and centers `slide` to `size` (from computeSlideSize) —
+  // independently of the OTHER slide, which is left completely untouched:
+  // left/top are computed against the window directly (slide is
+  // position:fixed), not against .lightbox-viewport or any other shared
+  // element, so resizing this one slide can never shift or resize the
+  // other one that's still mid-fade (see .lightbox-slide's own comment in
+  // style.css for the two different ways that went wrong before landing
+  // here). Also sizes .lightbox-viewport to match, purely so the arrows/
+  // close (positioned relative to .lightbox-content, which wraps it)
+  // anchor to whichever photo is actually active — that box holds no
+  // visual content of its own now, just a size for those buttons to key
+  // off of. No transition on any of this — it's instant, so there's
+  // nothing to read as a box visibly growing.
+  function applySlideSize(slide, size) {
+    slide.style.width = `${size.w}px`;
+    slide.style.height = `${size.h}px`;
+    slide.style.left = `${(window.innerWidth - size.w) / 2}px`;
+    slide.style.top = `${(window.innerHeight - size.h) / 2}px`;
+    viewport.style.width = `${size.w}px`;
+    viewport.style.height = `${size.h}px`;
   }
 
   function renderDots() {
@@ -1482,24 +1490,29 @@ function wireMinistryPhotoCarousel() {
   async function showIndex(i) {
     if (transitioning || i === index || !photos.length) return;
     transitioning = true;
-    // Hidden for the transition's duration (see .lightbox-content's own
-    // comment in style.css) — the box these anchor to resizes per active
-    // photo, so left visible they'd visibly slide to their new position
-    // while the photo faded, a second motion competing with the fade.
-    content.classList.add('transitioning');
     index = i;
     resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
     const incoming = otherSlide();
     incoming.src = urlFor(index);
     await whenLoaded(incoming);
-    positionSlide(incoming, incoming);
+    const size = computeSlideSize(incoming);
+    // Hidden for the transition's duration (see .lightbox-content's own
+    // comment in style.css) — but only when the box is actually about to
+    // resize. Two photos can easily share the same shape (most of a
+    // given ministry's photos usually do), and hiding/showing the
+    // controls for a resize that was never going to happen is just
+    // needless flicker.
+    const sizeChanged = Math.round(size.w) !== Math.round(parseFloat(viewport.style.width))
+      || Math.round(size.h) !== Math.round(parseFloat(viewport.style.height));
+    if (sizeChanged) content.classList.add('transitioning');
+    applySlideSize(incoming, size);
     incoming.classList.add('active');
     activeSlide.classList.remove('active');
     activeSlide = incoming;
     renderDots();
     setTimeout(() => {
       transitioning = false;
-      content.classList.remove('transitioning');
+      if (sizeChanged) content.classList.remove('transitioning');
     }, FADE_MS);
   }
 
@@ -1512,7 +1525,7 @@ function wireMinistryPhotoCarousel() {
     resetPinch();
     slideA.src = urlFor(0);
     await whenLoaded(slideA);
-    positionSlide(slideA, slideA);
+    applySlideSize(slideA, computeSlideSize(slideA));
     slideA.classList.add('active');
     renderDots();
     const multi = photos.length > 1;
