@@ -140,10 +140,14 @@
   <!-- Only ever shown for the ?tour=NAME prototype tour (see
        runQueryStringAnimation in js/app.js) — hidden by default here, not
        wired to any regular-visitor UI yet. -->
-  <div id="animation-controls" class="animation-controls" hidden>
-    <button type="button" id="animation-play-btn" class="animation-control-btn" aria-label="Play">&#9654;</button>
-    <button type="button" id="animation-pause-btn" class="animation-control-btn" aria-label="Pause">&#10074;&#10074;</button>
-    <button type="button" id="animation-stop-btn" class="animation-control-btn" aria-label="Stop">&#9632;</button>
+  <!-- Only ever shown for the ?tour=NAME prototype (see runQueryStringTour
+       in js/app.js) — hidden by default here, not wired to any regular-
+       visitor UI yet. -->
+  <div id="tour-controls" class="tour-controls" hidden>
+    <button type="button" id="tour-play-btn" class="tour-control-btn" aria-label="Play">&#9654;</button>
+    <button type="button" id="tour-pause-btn" class="tour-control-btn" aria-label="Pause">&#10074;&#10074;</button>
+    <button type="button" id="tour-loop-btn" class="tour-control-btn" aria-label="Loop" aria-pressed="false">&#8635;</button>
+    <button type="button" id="tour-close-btn" class="tour-control-btn" aria-label="Close tour">&times;</button>
   </div>
 
   <script src="vendor/leaflet/leaflet.js"></script>

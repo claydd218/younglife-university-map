@@ -316,14 +316,11 @@ h1, h2, h3, .legend-label, .cluster-badge {
   background: var(--parchment);
 }
 
-/* Bottom-center playback bar for the ?animate=NAME prototype tour (see
-   runQueryStringAnimation in js/app.js) — same card/border/shadow
-   treatment as .nav-menu-toggle, just relocated and widened for three
-   buttons in a row. js/app.js's panMarkerToBottomCenter reads this
-   element's own rendered height to keep each tour pin framed just above
-   it, so its height should stay whatever this CSS actually renders, not
-   a separately-hardcoded number in the JS. */
-.animation-controls {
+/* Bottom-center playback bar for the ?tour=NAME prototype (see
+   runQueryStringTour in js/app.js) — same card/border/shadow treatment as
+   .nav-menu-toggle, just relocated and widened for four buttons in a
+   row. */
+.tour-controls {
   position: fixed;
   left: 50%;
   bottom: max(16px, env(safe-area-inset-bottom));
@@ -336,13 +333,22 @@ h1, h2, h3, .legend-label, .cluster-badge {
   border: 1px solid var(--ink);
   border-radius: 8px;
   box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
+  transition: opacity 300ms ease;
 }
 
-.animation-controls[hidden] {
+.tour-controls[hidden] {
   display: none;
 }
 
-.animation-control-btn {
+/* Faded out during idle playback (see TOUR_CONTROLS_IDLE_MS in
+   js/app.js) rather than removed — pointer-events:none so the map
+   underneath is still reachable while they're invisible. */
+.tour-controls.idle-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tour-control-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -357,13 +363,23 @@ h1, h2, h3, .legend-label, .cluster-badge {
   cursor: pointer;
 }
 
-.animation-control-btn:hover:not(:disabled) {
+.tour-control-btn:hover:not(:disabled) {
   background: #fff;
 }
 
-.animation-control-btn:disabled {
+.tour-control-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Loop toggle's own on-state — the accent color already used for a
+   division's own pin (LAC's, since this prototype is LAC-only for now)
+   would be more contextually meaningful, but that's not worth the extra
+   plumbing yet for a single hardcoded prototype tour; a plain highlighted
+   toggle state reads clearly enough on its own. */
+#tour-loop-btn.active {
+  background: var(--ink);
+  color: var(--parchment);
 }
 
 .nav-menu {

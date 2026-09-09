@@ -154,9 +154,10 @@ map.addControl(new DirectoryControl());
 // real, reproduced freeze. inertia: false above (see map options)
 // removes that animation entirely, so there's no competing frame-by-
 // frame loop left for this to fight — safe to run live again.
-// True only while one of the ?tour=NAME tour's own pin-level moves
-// (zoomToShowMarker, panMarkerToBottomCenter — both far below) is in
-// flight. Those two are real culprits behind a genuine bug: each is a
+// True only while one of a few specific scripted moves is in flight —
+// zoomToShowMarker (the search directory's per-area pick, revealing a
+// clustered pin) and tourFlyToAndWait (the ?tour=NAME tour's own legs),
+// both far below. Those are real culprits behind a genuine bug: each is a
 // live, animated pan/zoom that can transiently swing the view across
 // SOUTH_LIMIT_LAT/the north edge mid-flight even when its own FINAL
 // resting position is fine (e.g. zooming in on a clustered pin near the
@@ -165,14 +166,15 @@ map.addControl(new DirectoryControl());
 // just the settled end state, that mid-flight crossing was enough to
 // trigger a correction *during* the animation, which read as the view
 // overshooting south and then visibly snapping back. Confirmed live.
-// Suppressing the correction while a tour move is animating, then
+// Suppressing the correction while one of these moves is animating, then
 // re-enabling it and running one explicit check once that move has
-// actually settled (see both functions below), fixes the final resting
+// actually settled (see each one's own code), fixes the final resting
 // position exactly the same way without any of the mid-flight fighting.
-// Deliberately NOT used for goToWorld/goToDivision/goToCountryMetrics —
-// those are also how a real visitor moves the map (nav menu, country
-// clicks), where per-frame correction during a drag is the actual
-// intended behavior (see this function's own header comment below).
+// Deliberately NOT used for goToWorld/goToDivision or a real country-
+// polygon click — those are also how a real visitor moves the map (nav
+// menu, clicking a country), where per-frame correction during a drag is
+// the actual intended behavior (see this function's own header comment
+// below).
 let suppressMapClamp = false;
 
 const SOUTH_LIMIT_LAT = -71;
@@ -679,33 +681,6 @@ function showCountryMetricsOverlay(name) {
   );
 }
 
-// Flies to `name`'s own bounds and shows its metrics — the same two things
-// the country-polygon click handler in init() does for a "present" country,
-// factored out here for runQueryStringTour's own scripted tour below
-// (which needs to trigger this without a real click on the polygon).
-// withSuppressedDismiss is required, not optional, even though nothing
-// else is fighting to dismiss the overlay during a scripted tour — flyTo
-// itself always fires 'zoomstart' internally (confirmed against Leaflet's
-// own source), which is one of wireMetricsOverlayDismiss's two real
-// dismiss triggers, so an unwrapped flyTo here would immediately hide the
-// very overlay this function just asked to show.
-function goToCountryMetrics(name) {
-  let countryLayer;
-  state.geoLayer.eachLayer((layer) => {
-    if (normalizeCountryName(layer.feature.properties.name) === name) countryLayer = layer;
-  });
-  if (!countryLayer) return;
-  const bounds = computeMainLandBounds(countryLayer.feature);
-  const targetZoom = map.getBoundsZoom(bounds) - 0.5;
-  withSuppressedDismiss(() => {
-    // duration only matters here for the tour (see TOUR_MOVE_DURATION's own
-    // comment) — this function has no other caller, so it's safe to set
-    // globally rather than needing a per-call override.
-    map.flyTo(bounds.getCenter(), targetZoom, { duration: TOUR_MOVE_DURATION });
-  });
-  showCountryMetricsOverlay(name);
-}
-
 function hideMetricsOverlay() {
   if (state.overlayDismissed) return;
   state.overlayDismissed = true;
@@ -1092,13 +1067,12 @@ function computeMainLandBounds(feature) {
 
 // Flies to `countryName`'s own bounds and shows its metrics overlay — the
 // same two things the country-polygon click handler in init() does for a
-// "present" country (see goToCountryMetrics's identical comment; this is
-// the directory/search version of the same idea, kept separate rather
-// than reusing goToCountryMetrics directly since that function's flyTo
-// duration is deliberately tuned slow for the ?tour=NAME tour, its
-// only other caller — not the snappier feel a real visitor's search
-// result deserves). Returns false (no metrics shown, nothing flown to) if
-// countryName's polygon can't be found.
+// "present" country; this is the directory/search version of the same
+// idea, kept separate rather than sharing code with the ?tour=NAME tour's
+// own tourGoToCountry (far below), whose flyTo duration is deliberately
+// tuned to the tour's own pacing, not the snappier feel a real visitor's
+// search result deserves. Returns false (no metrics shown, nothing flown
+// to) if countryName's polygon can't be found.
 function flyToCountryBounds(countryName) {
   let countryLayer;
   state.geoLayer.eachLayer((layer) => {
@@ -1141,6 +1115,42 @@ function flyToCountry(countryName) {
 // ?tour=NAME tour uses to reveal a clustered pin) rather than
 // flyToCountry's own single-ministry convenience case above, which only
 // opens the popup if it's already visible at the plain country zoom — an
+// explicit area pick from search should always land on that exact one.
+// A pin still bundled inside an unopened cluster icon isn't actually on
+// the map (Leaflet.markercluster hides individual markers and shows the
+// cluster badge in their place until the view is zoomed in enough, or the
+// cluster is spiderfied at max zoom) — marker.openPopup() silently no-ops
+// on one in that state. group.zoomToShowLayer is Leaflet.markercluster's
+// own built-in fix for exactly this: pans/zooms (spiderfying at max zoom
+// if that's what it takes) until `marker` is genuinely visible, then
+// calls back — a no-op, synchronously-resolved callback if it already
+// was. Wrapped in withSuppressedDismiss since the zoom side of this (not
+// the plain-pan case) fires 'zoomstart' internally same as flyTo does,
+// which would otherwise dismiss the very country/area metrics overlay
+// this is happening underneath. Also wrapped in suppressMapClamp (see its
+// own comment above, next to clampSouth) — a zoom deep enough to reveal a
+// clustered pin can transiently cross the map's own south/north viewing
+// limits mid-flight even when its settled end state is fine.
+function zoomToShowMarker(marker, divisionKey) {
+  const group = state.clusterGroups[divisionKey];
+  return new Promise((resolve) => {
+    suppressMapClamp = true;
+    withSuppressedDismiss(() => {
+      group.zoomToShowLayer(marker, () => {
+        suppressMapClamp = false;
+        clampSouth();
+        clampNorth();
+        resolve();
+      });
+    });
+  });
+}
+
+// The directory's per-area pick — flies/shows metrics same as
+// flyToCountry, but always ends with `marker`'s own popup open, forcing
+// it out of a cluster if needed (zoomToShowMarker above) rather than
+// flyToCountry's own single-ministry convenience case, which only opens
+// the popup if it's already visible at the plain country zoom — an
 // explicit area pick from search should always land on that exact one.
 function flyToArea(countryName, marker, divisionKey) {
   if (!flyToCountryBounds(countryName)) return;
@@ -1515,7 +1525,7 @@ function wireMinistryPhotoCarousel() {
       // controls already moved to their new position but still fully
       // visible, reading as "jump, then fade" instead of "fade, then
       // jump out of sight."
-      await animationSleep(HIDE_MS);
+      await new Promise((resolve) => setTimeout(resolve, HIDE_MS));
     }
     applySlideSize(incoming, size);
     incoming.classList.add('active');
@@ -2619,324 +2629,265 @@ if (window.screen && window.screen.orientation) {
   window.screen.orientation.addEventListener('change', refreshMapSizeSoon);
 }
 
+
 // ---------------------------------------------------------------------
-// ?tour=NAME — an unlisted, ambient auto-tour of one division: World,
-// pause; that division, pause; then for each of its countries (that
-// actually has a ministry pin), in turn: fly there and show its metrics,
-// pause; for every ministry pin in that country, in turn: open its popup,
-// pause, and if it has photos, cycle through all of them full-screen
-// before closing back up and moving to the next pin. Once every country's
-// done, loops back to World and starts over — this is a prototype for
-// trying the idea out live (per explicit request) before building the
-// real thing: an admin-curated version with its own per-tour config,
-// named tours, hideable divisions, and a public menu to pick one. Nothing
-// here is meant to survive that rewrite as-is; ANIMATIONS below is a
-// stand-in for what will eventually be admin-authored data.
-//
-// Deliberately loops forever with no way to stop it short of reloading
-// without the query string — fine for trying the idea out; the real
-// version will make looping a per-tour choice.
+// ?tour=NAME — step 1 of the real tour feature (replaces the earlier
+// ?animate=NAME prototype entirely; nothing here is a continuation of
+// that code). For now this is still query-string-only and hardcoded to
+// one division (LAC) — the eventual version starts from wherever the
+// visitor already is (world/division/country) and is driven by the same
+// tour-controls bar that's always present once a metrics view is
+// showing, per the actual plan. Also doesn't touch any ministry pins
+// yet — each leg just flies to a division/country and shows its
+// metrics, nothing more.
 // ---------------------------------------------------------------------
 
-// TEMP DEBUG — narrowed to Nicaragua only while chasing the intermittent
-// zoom-out-to-hemisphere bug live (fast loop back to the same country
-// instead of waiting through all of LAC each time). Revert to the full
-// division once diagnosed.
-const ANIMATIONS = {
-  lac: { divisionKey: 'latin_america_caribbean', countries: ['Nicaragua'] },
-};
-
-// Milliseconds to sit on each step before moving to the next. Every hold
-// except `photo` is 0 — the tour now paces itself entirely through the
-// pan/zoom animation durations below (TOUR_MOVE_DURATION) rather than
-// dwelling on a static view, so movement is continuous instead of
-// move-then-pause-then-move. `photo` is a real dwell time (there's no
-// camera movement to pace against while a photo is on screen) and stays as
-// a deliberate wait.
-const ANIMATION_PAUSE = {
-  world: 0,
-  division: 0,
-  country: 0,
-  pin: 0,
-  photo: 2500,
-  settle: 0,
-};
-
-// Seconds for the tour's own pan/zoom moves — explicit and slower than
-// Leaflet's defaults (flyTo's own adaptive duration, panBy's 0.25s) so the
-// camera reads as a deliberate, smooth glide instead of a snap, now that
-// ANIMATION_PAUSE no longer holds still between steps to sell the motion.
-// Only applied to moves the tour itself triggers (goToCountryMetrics here,
-// panMarkerToBottomCenter below) — NOT goToWorldFn/goToDivisionFn, which
-// are shared with the real nav menu and the title easter egg and shouldn't
-// change speed for every visitor because of this prototype.
-const TOUR_MOVE_DURATION = 2.5; // country-level flyTo
-const TOUR_PAN_DURATION = 1.4; // panMarkerToBottomCenter's panBy
-
-function animationSleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Thrown from animationCheckpoint to unwind runAnimation's whole call
-// stack in one motion when Stop is pressed — the tour is nested several
-// loops deep (division -> country -> pin -> photo) by the time a viewer
-// might stop it, and a thrown signal caught once at the top of
-// runAnimation is far simpler than threading a "was I stopped?" check
-// through every one of those loops by hand.
-class AnimationStopSignal extends Error {}
-
-// 'playing' | 'paused' | 'stopped' — 'stopped' doubles as "never started".
-// Read/written by animationCheckpoint and the three control buttons below;
-// nothing else in the tour touches it directly.
-const animationController = { state: 'stopped' };
-
-// Every await point in the tour is (indirectly, via animationWait) a call
-// to this — blocks in place while paused, and throws to unwind entirely
-// once stopped, so Play/Pause/Stop take effect at the next step boundary
-// without every step needing its own bespoke handling.
-async function animationCheckpoint() {
-  while (animationController.state === 'paused') {
-    await animationSleep(150);
-  }
-  if (animationController.state === 'stopped') throw new AnimationStopSignal();
-}
-
-// The tour's own replacement for a plain sleep — chopped into small
-// chunks (rather than one long setTimeout) specifically so Pause/Stop
-// pressed mid-wait takes effect within ~100ms instead of only being
-// noticed once the full multi-second pause has already elapsed.
-async function animationWait(ms) {
-  const stepMs = 100;
-  let elapsed = 0;
-  while (elapsed < ms) {
-    await animationCheckpoint();
-    const chunk = Math.min(stepMs, ms - elapsed);
-    await animationSleep(chunk);
-    elapsed += chunk;
-  }
-  await animationCheckpoint();
-}
-
-// Every country in `divisionKey` that actually has a ministry pin (an
-// empty country has nothing for the tour to show or say), alphabetized
-// for a stable, predictable order run to run.
-function countriesInDivision(divisionKey) {
+// Every country in `divisionKey` that actually has a ministry pin,
+// ordered as a fuzzy "read the page" sweep — north-to-south the primary
+// axis (like lines on a page), west-to-east the secondary one (left to
+// right along each line), blended into one score rather than strict
+// row-banding, since a real division's countries don't line up in neat
+// rows. This deliberately isn't a true shortest-path tour (per explicit
+// direction — "it can be fuzzy") — just a reasonable NW-first, SE-last
+// approximation of proximity order.
+function countriesInDivisionByProximity(divisionKey) {
   const names = [];
   for (const [countryName, entries] of state.markersByCountry) {
     if (entries.length && state.countryDivisionByName.get(countryName) === divisionKey) {
       names.push(countryName);
     }
   }
-  return names.sort((a, b) => a.localeCompare(b));
-}
-
-// A pin still bundled inside an unopened cluster icon isn't actually on
-// the map (Leaflet.markercluster hides individual markers and shows the
-// cluster badge in their place until the view is zoomed in enough, or the
-// cluster is spiderfied at max zoom) — marker.openPopup() silently no-ops
-// on one in that state, which was quietly skipping some ministries during
-// the tour rather than ever showing them. zoomToShowLayer is
-// Leaflet.markercluster's own built-in fix for exactly this: pans/zooms
-// (spiderfying at max zoom if that's what it takes) until `marker` is
-// genuinely visible, then calls back — a no-op, synchronously-resolved
-// callback if it already was. Wrapped in withSuppressedDismiss like the
-// tour's other real navigational moves, since the zoom side of this (not
-// the plain-pan case) fires 'zoomstart' internally same as flyTo does,
-// which would otherwise dismiss the very country metrics overlay this
-// step is happening underneath. Also wrapped in suppressMapClamp (see its
-// own comment above, next to clampSouth) for the same reason
-// panMarkerToBottomCenter below is — a zoom deep enough to reveal a
-// clustered pin can transiently cross the map's own south/north viewing
-// limits mid-flight even when its settled end state is fine.
-function zoomToShowMarker(marker, divisionKey) {
-  const group = state.clusterGroups[divisionKey];
-  return new Promise((resolve) => {
-    suppressMapClamp = true;
-    withSuppressedDismiss(() => {
-      group.zoomToShowLayer(marker, () => {
-        suppressMapClamp = false;
-        clampSouth();
-        clampNorth();
-        resolve();
-      });
+  const points = names.map((name) => {
+    let countryLayer;
+    state.geoLayer.eachLayer((layer) => {
+      if (normalizeCountryName(layer.feature.properties.name) === name) countryLayer = layer;
     });
+    const center = computeMainLandBounds(countryLayer.feature).getCenter();
+    return { name, lat: center.lat, lng: center.lng };
   });
+  const lats = points.map((p) => p.lat);
+  const lngs = points.map((p) => p.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latSpan = maxLat - minLat || 1;
+  const lngSpan = maxLng - minLng || 1;
+  const score = (p) => (1 - (p.lat - minLat) / latSpan) + (p.lng - minLng) / lngSpan;
+  return points.sort((a, b) => score(a) - score(b)).map((p) => p.name);
 }
 
-// Pans (not flies — this is a short, local nudge, not a real navigational
-// move) so `marker` ends up centered horizontally and sitting just above
-// the playback bar, before its popup opens. A popup opens upward from its
-// marker, so parking the marker itself near the bottom leaves the popup
-// the whole upper two-thirds of the screen to open into, predictably,
-// rather than wherever the country-level flyTo happened to leave it —
-// which could be anywhere from top to bottom of the viewport depending on
-// where in that country this particular ministry sits.
-//
-// Not withSuppressedDismiss-wrapped like the tour's other moves — panBy
-// only ever fires 'movestart' (confirmed against Leaflet's own source,
-// same research behind wireMetricsOverlayDismiss switching to dragstart/
-// zoomstart), never 'dragstart' or 'zoomstart', so it was never going to
-// dismiss the overlay in the first place. IS wrapped in suppressMapClamp
-// (see its own comment above, next to clampSouth) though: a marker
-// sitting below the bottom-center target needs a pan that reveals more of
-// what's south of it, and for a pin far enough south to begin with (Chile,
-// Argentina), that reveal can cross SOUTH_LIMIT_LAT mid-pan — confirmed
-// live as a real bug, the view visibly overshooting south and snapping
-// back, since clampSouth reacts to every single 'move' tick during the
-// animation, not just its settled end. Suppressing the correction while
-// this pan is animating and running one explicit clamp check once it
-// actually settles (TOUR_PAN_DURATION seconds; the timeout below covers
-// that with a little to spare) fixes the final resting position the same
-// way, without fighting the pan mid-flight to get there.
-function panMarkerToBottomCenter(marker) {
-  const controls = document.getElementById('animation-controls');
-  const controlsHeight = controls.getBoundingClientRect().height;
-  const bottomMargin = controlsHeight + 24; // breathing room above the bar
-  const size = map.getSize();
-  const pt = map.latLngToContainerPoint(marker.getLatLng());
-  const desiredX = size.x / 2;
-  const desiredY = size.y - bottomMargin;
-  suppressMapClamp = true;
-  map.panBy([pt.x - desiredX, pt.y - desiredY], { animate: true, duration: TOUR_PAN_DURATION });
+// Every leg of the tour (world, a division, a country) is one continuous
+// flyTo of this length — Leaflet's own flyTo easing already decelerates
+// into arrival and accelerates out of departure, so chaining these back
+// to back on 'moveend' (no setTimeout dwell in between) reads as "slow
+// down to a stop, trigger the metrics, immediately speed back up" with
+// no held pause, per the actual direction for this first pass.
+const TOUR_LEG_SECONDS = 1;
+
+// Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
+// flyToBounds — done this way so each leg below can supply its own
+// target) and resolves once the flight has genuinely settled ('moveend'),
+// not before — showing a leg's metrics before the camera has actually
+// arrived would name a place the view hasn't reached yet. Suppressed
+// against both the metrics-overlay auto-dismiss (flyTo always fires
+// 'zoomstart' internally) and the south/north per-frame clamp (a flight
+// this fast can transiently cross those limits mid-flight even though its
+// final resting position is fine) — the same two safety patterns proven
+// out on the ?animate=NAME prototype this replaces.
+function tourFlyToAndWait(flyFn) {
   return new Promise((resolve) => {
-    setTimeout(() => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
       suppressMapClamp = false;
       clampSouth();
       clampNorth();
       resolve();
-    }, TOUR_PAN_DURATION * 1000 + 100);
+    };
+    suppressMapClamp = true;
+    withSuppressedDismiss(flyFn);
+    map.once('moveend', finish);
+    // Hard ceiling in case 'moveend' never fires cleanly — e.g. the very
+    // first tourGoToWorld() call, if the map already happens to be sitting
+    // exactly at the world view: flyTo to an unchanged target may not
+    // actually move anything, and it's not guaranteed Leaflet still fires
+    // 'moveend' for that no-op case. Without this, that single case would
+    // hang the whole tour forever on a promise that never resolves — same
+    // reasoning as withSuppressedDismiss's own hard-ceiling timer above.
+    setTimeout(finish, TOUR_LEG_SECONDS * 1000 + 300);
   });
 }
 
-async function runAnimation(config) {
-  const countries = config.countries || countriesInDivision(config.divisionKey);
-  for (;;) {
-    await animationCheckpoint();
-    goToWorldFn();
-    await animationWait(ANIMATION_PAUSE.world);
+async function tourGoToWorld() {
+  await tourFlyToAndWait(() => map.flyTo(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM, { duration: TOUR_LEG_SECONDS }));
+  showMetricsOverlay(state.worldMetrics, null);
+}
 
-    await animationCheckpoint();
-    goToDivisionFn(config.divisionKey);
-    await animationWait(ANIMATION_PAUSE.division);
+async function tourGoToDivision(divisionKey) {
+  const bounds = window.__divisionBounds(divisionKey);
+  if (!bounds) return;
+  await tourFlyToAndWait(() => map.flyToBounds(bounds, {
+    paddingTopLeft: [40, 170],
+    paddingBottomRight: [40, 40],
+    duration: TOUR_LEG_SECONDS,
+  }));
+  showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
+}
 
-    for (const countryName of countries) {
-      await animationCheckpoint();
-      goToCountryMetrics(countryName);
-      await animationWait(ANIMATION_PAUSE.country);
+async function tourGoToCountry(name) {
+  let countryLayer;
+  state.geoLayer.eachLayer((layer) => {
+    if (normalizeCountryName(layer.feature.properties.name) === name) countryLayer = layer;
+  });
+  if (!countryLayer) return;
+  const bounds = computeMainLandBounds(countryLayer.feature);
+  const targetZoom = map.getBoundsZoom(bounds) - 0.5;
+  await tourFlyToAndWait(() => map.flyTo(bounds.getCenter(), targetZoom, { duration: TOUR_LEG_SECONDS }));
+  showCountryMetricsOverlay(name);
+}
 
-      const entries = state.markersByCountry.get(countryName) || [];
-      for (const { marker, row } of entries) {
-        // Pan to bottom-center FIRST, using the marker's current projected
-        // position — this works even while the marker is off-screen (pure
-        // lat/lng-to-pixel math, no dependency on it being individually
-        // rendered). Doing this before zoomToShowMarker means the marker is
-        // usually already in view by the time zoomToShowLayer runs, so it
-        // takes its synchronous "already visible" fast path instead of
-        // doing its own independent pan/zoom — confirmed live as the cause
-        // of a double-motion "overshoot": the previous pin's own
-        // bottom-center pan pushes the NEXT pin off-screen, so
-        // zoomToShowLayer saw boundsContains:false and did its own recenter
-        // pan, immediately followed by our own pan shoving it back down to
-        // the bottom — two separately-eased pans in a row read as an
-        // overshoot-and-correct. Only re-run the bottom-center pan
-        // afterward if zoomToShowMarker actually changed the zoom (a
-        // genuinely clustered pin needing to zoom in) — that changes the
-        // marker's screen position enough to need re-centering.
-        await animationCheckpoint();
-        const zoomBeforeShow = map.getZoom();
-        await panMarkerToBottomCenter(marker);
-        await animationCheckpoint();
-        await zoomToShowMarker(marker, config.divisionKey);
-        if (map.getZoom() !== zoomBeforeShow) {
-          await animationCheckpoint();
-          await panMarkerToBottomCenter(marker);
-        }
-        await animationWait(ANIMATION_PAUSE.settle);
-        marker.openPopup();
-        await animationWait(ANIMATION_PAUSE.pin);
+class TourStopSignal extends Error {}
 
-        const photos = (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
-        if (photos.length) {
-          await animationCheckpoint();
-          await window.__ministryLightbox.open(photos);
-          for (let i = 0; i < photos.length; i++) {
-            await animationWait(ANIMATION_PAUSE.photo);
-            if (i < photos.length - 1) window.__ministryLightbox.showNext();
-          }
-          window.__ministryLightbox.close();
-          await animationWait(ANIMATION_PAUSE.settle);
-        }
+const tourController = { state: 'stopped', loop: false };
 
-        map.closePopup();
-        await animationWait(ANIMATION_PAUSE.settle);
-      }
-    }
+// Every await point in the tour is (indirectly) a call to this — blocks
+// in place while paused, and throws to unwind the whole runTour call back
+// to playTour's own catch once stopped. Only checked between legs, not
+// mid-flight — Pause/Close take effect once the current leg settles, not
+// instantly; fine for a ~1s leg.
+async function tourCheckpoint() {
+  while (tourController.state === 'paused') {
+    await new Promise((resolve) => setTimeout(resolve, 150));
   }
+  if (tourController.state === 'stopped') throw new TourStopSignal();
 }
 
-// The one in-flight runAnimation() call, if any — lets playAnimation tell
-// "paused, just flip the flag back" apart from "fully stopped, a fresh
-// call is needed to start again from the top."
-let animationRunPromise = null;
-let currentAnimationConfig = null;
+// Every pass ends back at World — the same place it started — rather
+// than stopping wherever the last country happened to leave off. Doing
+// that unconditionally (loop on or off) is what makes looping trivial:
+// the next pass just continues on from Division again with no special
+// jump-back case, and a non-repeating tour gets a clean, deliberate
+// landing spot instead of trailing off at an arbitrary country.
+async function runTour(divisionKey) {
+  await tourCheckpoint();
+  await tourGoToWorld();
+  for (;;) {
+    await tourCheckpoint();
+    await tourGoToDivision(divisionKey);
 
-function updateAnimationControlsUI() {
-  const playing = animationController.state === 'playing';
-  const paused = animationController.state === 'paused';
-  document.getElementById('animation-play-btn').disabled = playing;
-  document.getElementById('animation-pause-btn').disabled = !playing;
-  document.getElementById('animation-stop-btn').disabled = !playing && !paused;
+    const countries = countriesInDivisionByProximity(divisionKey);
+    for (const countryName of countries) {
+      await tourCheckpoint();
+      await tourGoToCountry(countryName);
+    }
+
+    await tourCheckpoint();
+    await tourGoToWorld();
+
+    if (!tourController.loop) break;
+  }
+  tourController.state = 'stopped';
+  updateTourControlsUI();
+  showTourControlsNow(); // reveal for the finished state, even if idle-hidden mid-tour
 }
 
-function playAnimation() {
-  if (animationController.state === 'paused') {
-    animationController.state = 'playing';
-    updateAnimationControlsUI();
+let tourRunPromise = null;
+let currentTourDivisionKey = null;
+
+function updateTourControlsUI() {
+  const playing = tourController.state === 'playing';
+  document.getElementById('tour-play-btn').disabled = playing;
+  document.getElementById('tour-pause-btn').disabled = !playing;
+  const loopBtn = document.getElementById('tour-loop-btn');
+  loopBtn.classList.toggle('active', tourController.loop);
+  loopBtn.setAttribute('aria-pressed', String(tourController.loop));
+}
+
+// "A couple of seconds" of no interaction fades the controls out during
+// active playback, so they're not sitting over the view for the whole
+// tour — brought back by any mouse movement (see the listener in
+// runQueryStringTour) or once the tour actually stops (paused or
+// finished), so they're never hidden while there's something to press.
+const TOUR_CONTROLS_IDLE_MS = 2000;
+let tourControlsIdleTimer = null;
+
+function showTourControlsNow() {
+  clearTimeout(tourControlsIdleTimer);
+  document.getElementById('tour-controls').classList.remove('idle-hidden');
+}
+
+function scheduleTourControlsHide() {
+  clearTimeout(tourControlsIdleTimer);
+  tourControlsIdleTimer = setTimeout(() => {
+    document.getElementById('tour-controls').classList.add('idle-hidden');
+  }, TOUR_CONTROLS_IDLE_MS);
+}
+
+function playTour() {
+  if (tourController.state === 'paused') {
+    tourController.state = 'playing';
+    updateTourControlsUI();
+    scheduleTourControlsHide();
     return;
   }
-  if (animationRunPromise || !currentAnimationConfig) return; // already running, or nothing to run
-  animationController.state = 'playing';
-  updateAnimationControlsUI();
-  animationRunPromise = runAnimation(currentAnimationConfig)
+  if (tourRunPromise || !currentTourDivisionKey) return;
+  tourController.state = 'playing';
+  updateTourControlsUI();
+  scheduleTourControlsHide();
+  tourRunPromise = runTour(currentTourDivisionKey)
     .catch((err) => {
-      if (!(err instanceof AnimationStopSignal)) console.error(err);
+      if (!(err instanceof TourStopSignal)) console.error(err);
     })
     .finally(() => {
-      animationRunPromise = null;
+      tourRunPromise = null;
     });
 }
 
-function pauseAnimation() {
-  if (animationController.state !== 'playing') return;
-  animationController.state = 'paused';
-  updateAnimationControlsUI();
+function pauseTour() {
+  if (tourController.state !== 'playing') return;
+  tourController.state = 'paused';
+  updateTourControlsUI();
+  showTourControlsNow(); // stay visible while paused — nothing to auto-hide toward
 }
 
-function stopAnimation() {
-  // The in-flight runAnimation (if any) unwinds on its own via
-  // AnimationStopSignal the next time animationCheckpoint runs — nothing
-  // else to do here but flip the state it's watching for.
-  animationController.state = 'stopped';
-  updateAnimationControlsUI();
+function toggleTourLoop() {
+  tourController.loop = !tourController.loop;
+  updateTourControlsUI();
 }
 
-function wireAnimationControls() {
-  document.getElementById('animation-play-btn').addEventListener('click', playAnimation);
-  document.getElementById('animation-pause-btn').addEventListener('click', pauseAnimation);
-  document.getElementById('animation-stop-btn').addEventListener('click', stopAnimation);
+function closeTour() {
+  tourController.state = 'stopped';
+  clearTimeout(tourControlsIdleTimer);
+  document.getElementById('tour-controls').hidden = true;
+  updateTourControlsUI();
+}
+
+function wireTourControls() {
+  document.getElementById('tour-play-btn').addEventListener('click', playTour);
+  document.getElementById('tour-pause-btn').addEventListener('click', pauseTour);
+  document.getElementById('tour-loop-btn').addEventListener('click', toggleTourLoop);
+  document.getElementById('tour-close-btn').addEventListener('click', closeTour);
+  document.addEventListener('mousemove', () => {
+    showTourControlsNow();
+    if (tourController.state === 'playing') scheduleTourControlsHide();
+  });
 }
 
 function runQueryStringTour() {
   const name = new URLSearchParams(location.search).get('tour');
   if (!name) return;
-  const config = ANIMATIONS[name];
-  if (!config) {
-    console.warn(`?tour=${name} — no such tour. Known: ${Object.keys(ANIMATIONS).join(', ')}`);
+  // Step 1: only 'lac' exists, hardcoded to the Latin America & Caribbean
+  // division. Later steps generalize this to start from wherever the
+  // visitor already is, per the real plan.
+  if (name !== 'lac') {
+    console.warn(`?tour=${name} — no such tour yet. Known: lac`);
     return;
   }
-  currentAnimationConfig = config;
-  document.getElementById('animation-controls').hidden = false;
-  wireAnimationControls();
-  updateAnimationControlsUI();
-  playAnimation();
+  currentTourDivisionKey = 'latin_america_caribbean';
+  document.getElementById('tour-controls').hidden = false;
+  wireTourControls();
+  updateTourControlsUI();
+  playTour();
 }
