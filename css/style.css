@@ -113,7 +113,8 @@ h1, h2, h3, .legend-label, .cluster-badge {
   font-size: 26px;
   letter-spacing: 0.06em;
   color: var(--ink);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  /* Same coastal-glow blue halo as the ocean labels (.ocean-label span). */
+  text-shadow: 0 0 8px #bedced, 0 0 8px #bedced, 0 0 12px #bedced, 0 1px 0 rgba(255,255,255,0.4);
 }
 
 /* The title is split into two nowrap halves (see index.html) with a plain,
@@ -227,7 +228,9 @@ h1, h2, h3, .legend-label, .cluster-badge {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-align: center;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  /* Same coastal-glow blue halo as the ocean labels (.ocean-label span)
+     and the main site title now share. */
+  text-shadow: 0 0 8px #bedced, 0 0 8px #bedced, 0 0 12px #bedced, 0 1px 0 rgba(255,255,255,0.5);
   /* Same color as the main site title (.site-header h1), not the
      division's own accent — the metric boxes below still use the accent
      (see renderMetrics), just not this label itself anymore. */
