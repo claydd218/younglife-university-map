@@ -1391,6 +1391,7 @@ function wireMinistryPhotoCarousel() {
   const prevBtn = lightbox.querySelector('.lightbox-prev');
   const nextBtn = lightbox.querySelector('.lightbox-next');
   const FADE_MS = 500;
+  const HIDE_MS = 120; // matches .lightbox-close/.lightbox-nav/.lightbox-dots's own opacity transition in style.css
 
   let photos = [];
   let index = 0;
@@ -1504,7 +1505,18 @@ function wireMinistryPhotoCarousel() {
     // needless flicker.
     const sizeChanged = Math.round(size.w) !== Math.round(parseFloat(viewport.style.width))
       || Math.round(size.h) !== Math.round(parseFloat(viewport.style.height));
-    if (sizeChanged) content.classList.add('transitioning');
+    if (sizeChanged) {
+      content.classList.add('transitioning');
+      // Actually wait for the controls to fade out (matches
+      // .lightbox-close/.lightbox-nav/.lightbox-dots's own 120ms opacity
+      // transition in style.css) before resizing anything below —
+      // without this, the resize ran in the very same tick as adding the
+      // class, so the browser painted at least one frame with the
+      // controls already moved to their new position but still fully
+      // visible, reading as "jump, then fade" instead of "fade, then
+      // jump out of sight."
+      await animationSleep(HIDE_MS);
+    }
     applySlideSize(incoming, size);
     incoming.classList.add('active');
     activeSlide.classList.remove('active');
