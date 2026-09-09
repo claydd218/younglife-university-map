@@ -2780,14 +2780,17 @@ function tourPinLegDuration(targetLatLng, targetZoom) {
   return Math.min(TOUR_PIN_MAX_LEG_SECONDS, Math.max(TOUR_PIN_MIN_LEG_SECONDS, units * TOUR_PIN_SPEED_SCALE));
 }
 
-// Country-to-country hops, sped up from the general World/Division pace
-// (confirmed live as feeling too slow once pins made the rest of the tour
-// brisker by comparison) — its own faster scale and tighter clamp, same
-// pattern as the pin-specific one above. World/Division legs still use
-// the original tourLegDuration/TOUR_SPEED_SCALE.
-const TOUR_COUNTRY_SPEED_SCALE = 2.5;
-const TOUR_COUNTRY_MIN_LEG_SECONDS = 1.5;
-const TOUR_COUNTRY_MAX_LEG_SECONDS = 6;
+// Country-to-country and division-level hops, sped up from the original
+// World/Division pace (confirmed live, twice — first pass at 2.5/1.5s/6s
+// still felt slow once pins made the rest of the tour brisker by
+// comparison, especially division legs which hadn't been touched at all
+// yet) — own faster scale and tighter clamp, same pattern as the
+// pin-specific one above. World legs (tourGoToWorld) still use the
+// original tourLegDuration/TOUR_SPEED_SCALE — only country/division use
+// this one.
+const TOUR_COUNTRY_SPEED_SCALE = 1.8;
+const TOUR_COUNTRY_MIN_LEG_SECONDS = 1;
+const TOUR_COUNTRY_MAX_LEG_SECONDS = 4.5;
 
 function tourCountryLegDuration(targetLatLng, targetZoom) {
   const units = tourFlightPixelUnits(targetLatLng, targetZoom);
@@ -2989,7 +2992,7 @@ async function tourGoToDivision(divisionKey) {
   // Approximate — flyToBounds below computes its own fitted zoom (with
   // padding) internally; this is only close enough to feed the pixel-based
   // duration estimate, not meant to match flyToBounds' actual result.
-  const duration = tourLegDuration(target, map.getBoundsZoom(bounds));
+  const duration = tourCountryLegDuration(target, map.getBoundsZoom(bounds));
   // See tourGoToWorld's own comment on why this fires before the flight,
   // not after.
   showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
