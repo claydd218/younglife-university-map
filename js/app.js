@@ -3003,21 +3003,48 @@ async function tourGoToDivision(divisionKey) {
   }), duration);
 }
 
-async function tourGoToCountry(name) {
-  showTourCountryPinsOnly(name);
+// Shared bounds/zoom lookup for a country — used both when first arriving
+// (tourGoToCountry) and when zooming back out to the same country's
+// overview after visiting its pins (tourGoToCountryOverview).
+function countryBoundsAndZoom(name) {
   let countryLayer;
   state.geoLayer.eachLayer((layer) => {
     if (normalizeCountryName(layer.feature.properties.name) === name) countryLayer = layer;
   });
-  if (!countryLayer) return;
+  if (!countryLayer) return null;
   const bounds = computeMainLandBounds(countryLayer.feature);
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
-  const target = bounds.getCenter();
-  const duration = tourCountryLegDuration(target, targetZoom);
-  // See tourGoToWorld's own comment on why this fires before the flight,
-  // not after.
+  return { targetZoom, target: bounds.getCenter() };
+}
+
+async function tourGoToCountry(name) {
+  showTourCountryPinsOnly(name);
+  const info = countryBoundsAndZoom(name);
+  if (!info) return;
+  const duration = tourCountryLegDuration(info.target, info.targetZoom);
+  await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
+  // Shown on arrival here — unlike every other leg (see tourGoToWorld's
+  // own comment on why those fire on departure). This flight is now
+  // preceded by a zoom-out to the PREVIOUS country's own overview (see
+  // tourGoToCountryOverview) rather than jumping straight from that
+  // country's last pin, so showing the new country's label right as this
+  // flight departs would label a view the visitor is still looking away
+  // from — confirmed live as reading better once it appears exactly when
+  // the zoom actually settles on the country it names.
   showCountryMetricsOverlay(name);
-  await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
+}
+
+// After visiting all of a country's pins, zoom back out to that same
+// country's own overview before moving on to the next one, instead of
+// jumping straight from the last pin to the next country — confirmed
+// live as the better flow. Metrics/label aren't touched at all here:
+// still the same country the pins just came from, so whatever's already
+// showing just stays up throughout.
+async function tourGoToCountryOverview(name) {
+  const info = countryBoundsAndZoom(name);
+  if (!info) return;
+  const duration = tourCountryLegDuration(info.target, info.targetZoom);
+  await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
 }
 
 // Every ministry pin in `countryName`, ordered by the same orderByProximity
@@ -3104,6 +3131,8 @@ async function runTour(divisionKey) {
         await tourCheckpoint();
         await tourGoToPin(pinEntry);
       }
+      await tourCheckpoint();
+      await tourGoToCountryOverview(countryName);
     }
 
     await tourCheckpoint();
