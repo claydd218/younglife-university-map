@@ -1390,7 +1390,7 @@ function wireMinistryPhotoCarousel() {
   const dotsEl = lightbox.querySelector('.lightbox-dots');
   const prevBtn = lightbox.querySelector('.lightbox-prev');
   const nextBtn = lightbox.querySelector('.lightbox-next');
-  const FADE_MS = 3000; // TEMP: slowed down for visual debugging, revert to 220
+  const FADE_MS = 500;
 
   let photos = [];
   let index = 0;
@@ -1482,6 +1482,11 @@ function wireMinistryPhotoCarousel() {
   async function showIndex(i) {
     if (transitioning || i === index || !photos.length) return;
     transitioning = true;
+    // Hidden for the transition's duration (see .lightbox-content's own
+    // comment in style.css) — the box these anchor to resizes per active
+    // photo, so left visible they'd visibly slide to their new position
+    // while the photo faded, a second motion competing with the fade.
+    content.classList.add('transitioning');
     index = i;
     resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
     const incoming = otherSlide();
@@ -1492,7 +1497,10 @@ function wireMinistryPhotoCarousel() {
     activeSlide.classList.remove('active');
     activeSlide = incoming;
     renderDots();
-    setTimeout(() => { transitioning = false; }, FADE_MS);
+    setTimeout(() => {
+      transitioning = false;
+      content.classList.remove('transitioning');
+    }, FADE_MS);
   }
 
   async function open(photoList) {

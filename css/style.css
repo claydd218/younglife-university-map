@@ -1062,7 +1062,7 @@ img.popup-photo {
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   opacity: 0;
-  transition: opacity 3000ms ease; /* TEMP: slowed down for visual debugging, revert to 220ms */
+  transition: opacity 500ms ease;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -1070,6 +1070,26 @@ img.popup-photo {
 
 .lightbox-slide.active {
   opacity: 1;
+}
+
+/* Hidden for the duration of a photo transition (see showIndex in
+   wireMinistryPhotoCarousel, which toggles .transitioning on
+   .lightbox-content) — the box these anchor to resizes per active photo,
+   so leaving them visible mid-transition meant watching them slide to
+   their new position while the photo faded, competing for attention with
+   the fade itself. Clearing them out first, then bringing them back once
+   the new photo has settled, reads as one clean motion instead of two. */
+.lightbox-content.transitioning .lightbox-close,
+.lightbox-content.transitioning .lightbox-nav,
+.lightbox-content.transitioning .lightbox-dots {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lightbox-close,
+.lightbox-nav,
+.lightbox-dots {
+  transition: opacity 120ms ease;
 }
 
 .lightbox-close,
