@@ -1374,33 +1374,28 @@ function wirePhotoPreview() {
 // it — same click-to-toggle pattern as wirePhotoPreview above, but on
 // click rather than hover on desktop too: hover-triggered popups here read
 // as too jarring for a fullscreen overlay.
-// Navigation is iOS Photos-style: dots instead of a "1 / 3" counter, and a
-// real drag-follow swipe on touch. Unlike a single sliding image, the
-// outgoing and incoming photos need to be visible together while they
-// move — so this keeps a 3-up "track" (prev/current/next) always loaded
-// side by side and slides the whole track by one slide-width; arrows and
-// dots animate the same way a swipe does, and the track then resets
-// invisibly back to center with fresh neighbors loaded for the new
-// position (the standard technique for an apparently-infinite carousel).
+// Navigation is iOS Photos-style dots instead of a "1 / 3" counter, plus
+// arrows and arrow keys. Two alternating slides (data-slide="a"/"b")
+// crossfade between photos rather than sliding a shared box — see
+// .lightbox-viewport's own comment in style.css for why (no box means no
+// letterboxing around a photo that doesn't match the others' shape). The
+// tradeoff: no drag-swipe gesture between photos, since that needs every
+// slide to share one box to slide together.
 function wireMinistryPhotoCarousel() {
   const lightbox = document.getElementById('ministry-lightbox');
   const content = lightbox.querySelector('.lightbox-content');
-  const viewport = lightbox.querySelector('.lightbox-viewport');
-  const track = lightbox.querySelector('.lightbox-track');
-  const slidePrev = track.querySelector('[data-slide="prev"]');
-  const slideCurrent = track.querySelector('[data-slide="current"]');
-  const slideNext = track.querySelector('[data-slide="next"]');
+  const slideA = lightbox.querySelector('[data-slide="a"]');
+  const slideB = lightbox.querySelector('[data-slide="b"]');
   const dotsEl = lightbox.querySelector('.lightbox-dots');
   const prevBtn = lightbox.querySelector('.lightbox-prev');
   const nextBtn = lightbox.querySelector('.lightbox-next');
-  const SLIDE_MS = 220;
-  const SWIPE_FRACTION = 0.18; // of one slide's own width
-  const REST_TRANSFORM = 'translateX(-33.3333%)';
+  const FADE_MS = 220;
 
   let photos = [];
   let index = 0;
-  let activeImg = null; // the img currently open, for click-to-toggle
-  let sliding = false;
+  let activeImg = null; // the popup <img> currently open, for click-to-toggle
+  let activeSlide = slideA; // whichever of slideA/slideB is on screen right now
+  let transitioning = false;
 
   function urlFor(i) { return CONFIG.IMAGES_DIR + photos[i]; }
 
@@ -1422,30 +1417,7 @@ function wireMinistryPhotoCarousel() {
     });
   }
 
-  // Loads the current-index photo into the middle slide and waits for it
-  // to actually be ready before returning — callers only touch the
-  // transform once this resolves. As long as every caller only mutates a
-  // slide while it's off-screen (see loadNeighbors below), that rules out
-  // the reset ever landing on a slide that still shows what it had
-  // before, which otherwise flashes the outgoing photo right as the new
-  // one should already be in place.
-  async function loadCurrentSlide() {
-    resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
-    slideCurrent.src = urlFor(index);
-    await whenLoaded(slideCurrent);
-  }
-
-  // Prev/next aren't visible at rest, so — unlike the current slide —
-  // there's no flash risk in just setting their src and letting them
-  // decode in the background. Only meaningful with 2+ photos; the single-
-  // photo case never reaches these (swiping/arrows are disabled below
-  // whenever photos.length < 2).
-  function loadNeighbors() {
-    const n = photos.length;
-    if (n <= 1) return;
-    slidePrev.src = urlFor((index - 1 + n) % n);
-    slideNext.src = urlFor((index + 1) % n);
-  }
+  function otherSlide() { return activeSlide === slideA ? slideB : slideA; }
 
   function renderDots() {
     dotsEl.innerHTML = '';
@@ -1459,38 +1431,45 @@ function wireMinistryPhotoCarousel() {
       dot.setAttribute('aria-label', `Photo ${i + 1} of ${photos.length}`);
       dot.addEventListener('click', (e) => {
         e.stopPropagation();
-        goToDot(i);
+        showIndex(i);
       });
       dotsEl.appendChild(dot);
     });
   }
 
-  // A dot for the immediate neighbor slides there like a swipe would; any
-  // other dot has no adjacent slide already loaded to slide through, so it
-  // jumps straight there instead of faking a multi-slide animation. The
-  // track never moves for this path (it's already at rest), so the swap
-  // just needs the decode-before-showing rule below, same as everywhere
-  // else.
-  async function goToDot(i) {
-    if (i === index || sliding) return;
-    const n = photos.length;
-    if ((index + 1) % n === i) { showNext(); return; }
-    if ((index - 1 + n) % n === i) { showPrev(); return; }
-    sliding = true;
+  // Crossfades from whichever slide is currently active to photo `i` —
+  // loaded into the other (currently hidden, opacity:0) slide first, so
+  // nothing is ever visible mid-decode, then swaps which one carries the
+  // .active (opacity:1) class. No shared box/track to move between
+  // photos of different shapes — see .lightbox-viewport's own comment for
+  // why that's deliberate. Every navigation path (arrows, dots, keyboard)
+  // goes through this one function, unlike the old adjacent-vs-far
+  // distinction the swipe-track version needed.
+  async function showIndex(i) {
+    if (transitioning || i === index || !photos.length) return;
+    transitioning = true;
     index = i;
-    await loadCurrentSlide();
-    loadNeighbors();
+    resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
+    const incoming = otherSlide();
+    incoming.src = urlFor(index);
+    await whenLoaded(incoming);
+    incoming.classList.add('active');
+    activeSlide.classList.remove('active');
+    activeSlide = incoming;
     renderDots();
-    sliding = false;
+    setTimeout(() => { transitioning = false; }, FADE_MS);
   }
 
   async function open(photoList) {
     photos = photoList;
     index = 0;
-    track.style.transition = 'none';
-    track.style.transform = REST_TRANSFORM;
-    await loadCurrentSlide();
-    loadNeighbors();
+    activeSlide = slideA;
+    slideB.classList.remove('active');
+    slideB.removeAttribute('src');
+    resetPinch();
+    slideA.src = urlFor(0);
+    await whenLoaded(slideA);
+    slideA.classList.add('active');
     renderDots();
     const multi = photos.length > 1;
     prevBtn.hidden = !multi;
@@ -1503,50 +1482,8 @@ function wireMinistryPhotoCarousel() {
     activeImg = null;
   }
 
-  // Slides the whole track by one slide-width in `dir`'s direction — the
-  // photo landing there is already loaded right next to the current one,
-  // so both are visible moving together — then snaps the track back to
-  // center with transition:none and loads fresh neighbors for the new
-  // position, invisibly to the viewer. Reused by the arrows, dots, and a
-  // released swipe alike, so every path animates the same way — a swipe
-  // that's already partway through this motion just continues from
-  // wherever the drag left off, since a CSS transition animates from an
-  // element's current rendered position regardless of what put it there.
-  function slideTo(newIndex, dir) {
-    if (sliding || newIndex === index || photos.length < 2) return;
-    sliding = true;
-
-    track.style.transition = `transform ${SLIDE_MS}ms ease`;
-    // Forces the browser to commit the transition (and the drag's current
-    // position, if this follows a swipe) before the transform below
-    // changes — without it, some engines (Safari especially) coalesce the
-    // two style writes and jump straight to the end position instead of
-    // animating, which read as the photo "flashing" out rather than
-    // sliding.
-    void track.offsetWidth;
-    track.style.transform = dir === 1 ? 'translateX(-66.6667%)' : 'translateX(0%)';
-
-    setTimeout(async () => {
-      index = newIndex;
-      // The middle slide is off-screen right now (the track is still
-      // slid out), so it's safe to load + decode the new current photo
-      // into it before anything is visible there — only once that's
-      // actually ready does the reset happen, so the middle slide is
-      // never shown mid-decode with the previous photo still under it.
-      await loadCurrentSlide();
-      track.style.transition = 'none';
-      track.style.transform = REST_TRANSFORM;
-      // The now-adjacent slides are off-screen again post-reset, so this
-      // is likewise safe — the reverse would flash them mid-slide, before
-      // the reset, while they're still the ones on screen.
-      loadNeighbors();
-      renderDots();
-      sliding = false;
-    }, SLIDE_MS);
-  }
-
-  function showNext() { slideTo((index + 1) % photos.length, 1); }
-  function showPrev() { slideTo((index - 1 + photos.length) % photos.length, -1); }
+  function showNext() { showIndex((index + 1) % photos.length); }
+  function showPrev() { showIndex((index - 1 + photos.length) % photos.length); }
 
   // Exposed so runQueryStringTour's own scripted tour can drive this
   // carousel the same way a real viewer's clicks/arrow keys do, without
@@ -1583,27 +1520,15 @@ function wireMinistryPhotoCarousel() {
     else showNext();
   }, true);
 
-  // Touch drag: axis-locked so an ambiguous or vertical gesture is left
-  // alone (nothing to vertically scroll here, but this also matters on
-  // iOS specifically — without it, an early horizontal drag can be read as
-  // the browser's own edge-swipe-back gesture before preventDefault below
-  // gets a chance to claim it).
-  let dragging = false;
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let axis = null; // 'x' | 'y' | null
-
   // Two-finger pinch on the current photo — scales it up live and pans as
   // the fingers' midpoint moves, then always springs back to 1x/centered
   // on release rather than staying zoomed; there's no persistent pan-
   // while-zoomed mode to keep in bounds (or clamp panning within), so
   // this is just a transform tied directly to the two touches plus a CSS
-  // transition back. Kept separate from the single-finger drag state
-  // above: a touchstart with 2 touches switches straight to pinch mode
-  // (cancelling any in-progress swipe rather than fighting it), and
-  // touchmove branches on the CURRENT touch count every time rather than
-  // on which gesture started the sequence, since a second finger can
-  // land mid-swipe.
+  // transition back. (Single-finger swipe-to-navigate was removed along
+  // with the shared sliding box it depended on — see .lightbox-viewport's
+  // own comment — so this is the only touch gesture left here; arrows/
+  // dots/keyboard cover navigation instead.)
   let pinching = false;
   let pinchStartDist = 0;
   let pinchStartMidX = 0;
@@ -1619,103 +1544,56 @@ function wireMinistryPhotoCarousel() {
 
   function resetPinch() {
     pinching = false;
-    slideCurrent.style.transition = '';
-    slideCurrent.style.transform = '';
+    activeSlide.style.transition = '';
+    activeSlide.style.transform = '';
   }
 
   content.addEventListener('touchstart', (e) => {
-    if (sliding) return;
-    if (e.touches.length === 2) {
-      dragging = false;
-      pinching = true;
-      pinchStartDist = touchDistance(e.touches);
-      const mid = touchMidpoint(e.touches);
-      pinchStartMidX = mid.x;
-      pinchStartMidY = mid.y;
-      const rect = slideCurrent.getBoundingClientRect();
-      slideCurrent.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
-      slideCurrent.style.transition = 'none';
-      return;
-    }
-    if (photos.length < 2) return;
-    dragging = true;
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-    axis = null;
-    track.style.transition = 'none';
+    if (transitioning || e.touches.length !== 2) return;
+    pinching = true;
+    pinchStartDist = touchDistance(e.touches);
+    const mid = touchMidpoint(e.touches);
+    pinchStartMidX = mid.x;
+    pinchStartMidY = mid.y;
+    const rect = activeSlide.getBoundingClientRect();
+    activeSlide.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
+    activeSlide.style.transition = 'none';
   }, { passive: true });
 
   content.addEventListener('touchmove', (e) => {
-    if (pinching) {
-      if (e.touches.length < 2) return;
-      e.preventDefault(); // also keeps the browser's own page-pinch-zoom from firing alongside this
-      const scale = Math.min(PINCH_MAX_SCALE, Math.max(1, touchDistance(e.touches) / pinchStartDist));
-      const mid = touchMidpoint(e.touches);
-      const dx = mid.x - pinchStartMidX;
-      const dy = mid.y - pinchStartMidY;
-      slideCurrent.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-      return;
-    }
-    if (!dragging) return;
-    const dx = e.touches[0].clientX - touchStartX;
-    const dy = e.touches[0].clientY - touchStartY;
-    if (!axis) {
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-      axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-    }
-    if (axis !== 'x') return;
-    e.preventDefault();
-    track.style.transform = `translateX(calc(-33.3333% + ${dx}px))`;
+    if (!pinching || e.touches.length < 2) return;
+    e.preventDefault(); // also keeps the browser's own page-pinch-zoom from firing alongside this
+    const scale = Math.min(PINCH_MAX_SCALE, Math.max(1, touchDistance(e.touches) / pinchStartDist));
+    const mid = touchMidpoint(e.touches);
+    const dx = mid.x - pinchStartMidX;
+    const dy = mid.y - pinchStartMidY;
+    activeSlide.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
   }, { passive: false });
 
   content.addEventListener('touchend', (e) => {
-    if (pinching) {
-      if (e.touches.length > 0) return; // wait for every finger to lift
-      slideCurrent.style.transition = `transform ${SLIDE_MS}ms ease`;
-      // Forces the browser to commit the transition before the transform
-      // below changes — same reasoning as the identical line in slideTo:
-      // without it, writing both in the same tick coalesces into no
-      // visible animation on some engines instead of springing back.
-      void slideCurrent.offsetWidth;
-      slideCurrent.style.transform = 'scale(1)';
-      pinching = false;
-      return;
-    }
-    if (!dragging) return;
-    if (axis === 'x') {
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const width = track.getBoundingClientRect().width / 3 || 1;
-      if (Math.abs(dx) > width * SWIPE_FRACTION) {
-        dx < 0 ? showNext() : showPrev();
-      } else {
-        track.style.transition = `transform ${SLIDE_MS}ms ease`;
-        void track.offsetWidth;
-        track.style.transform = REST_TRANSFORM;
-      }
-    }
-    dragging = false;
-    axis = null;
+    if (!pinching || e.touches.length > 0) return; // wait for every finger to lift
+    activeSlide.style.transition = `transform ${FADE_MS}ms ease`;
+    // Forces the browser to commit the transition before the transform
+    // below changes — without it, some engines coalesce the two style
+    // writes and jump straight to the end instead of animating the
+    // spring-back.
+    void activeSlide.offsetWidth;
+    activeSlide.style.transform = 'scale(1)';
+    pinching = false;
   });
 
   // iOS fires touchcancel instead of touchend whenever the system steals a
   // gesture mid-stream — the edge-swipe-back gesture, a Control Center
-  // pull, an incoming call, etc. Without this, pinching/dragging above
-  // would stay stuck true forever (nothing else ever resets them), which
-  // silently breaks all further touch input on this lightbox until the
-  // page is reloaded — no fancy springback needed here, just snap
-  // everything back immediately since the gesture genuinely didn't finish.
+  // pull, an incoming call, etc. Without this, pinching above would stay
+  // stuck true forever (nothing else ever resets it), which silently
+  // breaks all further touch input on this lightbox until the page is
+  // reloaded — no fancy springback needed here, just snap back
+  // immediately since the gesture genuinely didn't finish.
   content.addEventListener('touchcancel', () => {
-    if (pinching) {
-      slideCurrent.style.transition = '';
-      slideCurrent.style.transform = '';
-      pinching = false;
-    }
-    if (dragging) {
-      track.style.transition = '';
-      track.style.transform = REST_TRANSFORM;
-      dragging = false;
-    }
-    axis = null;
+    if (!pinching) return;
+    activeSlide.style.transition = '';
+    activeSlide.style.transform = '';
+    pinching = false;
   });
 
   function photosFromImg(img) {

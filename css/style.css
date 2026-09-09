@@ -972,31 +972,29 @@ img.popup-photo {
   display: flex;
 }
 
-/* Fixed-size window rather than sized to the current photo — a sliding
-   track needs every slide to share one box so the outgoing and incoming
-   photos line up edge-to-edge while they move together. Each photo
-   letterboxes inside it via object-fit on .lightbox-slide.
-   Held at one constant 4:3 ratio (the recommended upload shape — see
-   js/config.js) rather than resizing to match whichever photo is current.
-   That per-photo resize used to animate (width/height transition) so a
-   ratio change mid-slide wouldn't just snap — but the animation itself
-   read as a bare dark box visibly growing/shrinking before the photo
-   caught up, which was worse than the snap it replaced. A fixed box means
-   an unusually-shaped photo just sits letterboxed (same as it always did
-   while resizing was still catching up), with nothing left to animate. */
+/* No fixed box at all — each photo is sized to its own natural shape
+   (capped at 92vw/85vh) rather than sharing one box with the others. Two
+   slides (data-slide="a"/"b") stack in the same grid cell so the
+   container's own size auto-fits whichever is currently larger; crossing
+   from one photo to another crossfades their opacity (see
+   wireMinistryPhotoCarousel) instead of sliding a shared box, which — with
+   no shared box to hold a background — means there's never a dark
+   letterbox/frame visible around a photo that doesn't match the others'
+   shape, just the lightbox's own backdrop showing through same as
+   everywhere else outside the photo. The tradeoff: no swipe/drag gesture
+   between photos, since that needs every slide to share one box to slide
+   together — arrows (shown on every pointer type now, touch included),
+   dots, and arrow keys cover navigation instead. */
 .lightbox-viewport {
   position: relative;
-  width: min(92vw, calc(85vh * 4 / 3), 1200px);
-  height: min(85vh, calc(92vw * 3 / 4), 900px);
-  overflow: hidden;
-  border: 2px solid var(--ink);
-  box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
-  background: rgba(10, 8, 4, 0.96);
+  display: grid;
+  touch-action: none;
 }
 
-/* Every YouTube/Vimeo embed is the same fixed 16:9, so the box just holds
-   that ratio directly — same size-to-fit reasoning as .lightbox-viewport's
-   own fixed 4:3 (biggest N:M box within the 92vw/85vh/900px caps). */
+/* Every YouTube/Vimeo embed is the same fixed 16:9, so — unlike the photo
+   lightbox's .lightbox-viewport, sized per-photo with no fixed ratio —
+   this box just holds that ratio directly (biggest 16:9 box within the
+   92vw/85vh/900px caps). */
 .video-lightbox-content {
   width: min(92vw, calc(85vh * 16 / 9), calc(900px * 16 / 9));
 }
@@ -1016,41 +1014,42 @@ img.popup-photo {
   border: 0;
 }
 
-/* Three slides — prev/current/next — always loaded and sitting side by
-   side, so an outgoing and incoming photo are both visible while the
-   whole track slides. Rests at translateX(-33.3333%) so the middle
-   ("current") slide fills the viewport; JS drives this transform directly
-   during drags and slide transitions (transition toggled on/off per
-   phase — see wireMinistryPhotoCarousel). */
-.lightbox-track {
-  display: flex;
-  width: 300%;
-  height: 100%;
-  transform: translateX(-33.3333%);
-  /* pan-y leaves vertical touch scrolling to the browser but keeps
-     horizontal drags from also being read as a page/back gesture before
-     our own handler can claim them. */
-  touch-action: pan-y;
-}
-
+/* Both slides share one grid cell (see .lightbox-viewport's own comment)
+   so the container auto-sizes to whichever is current largest, and each
+   is sized to its own natural shape (object-fit is moot at these bounds
+   but kept as a safety net) rather than stretched into a shared box.
+   Framed individually — border/shadow right on the image — since there's
+   no shared box left to frame instead. Opacity is what crossfades between
+   them (see showIndex/open in wireMinistryPhotoCarousel); the inactive
+   one sits at opacity:0 in the same cell until it becomes current. */
 .lightbox-slide {
-  flex: 0 0 33.3333%;
-  width: 33.3333%;
-  height: 100%;
+  grid-area: 1 / 1;
   display: block;
+  max-width: 92vw;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
   object-fit: contain;
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: opacity 220ms ease;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 }
 
+.lightbox-slide.active {
+  opacity: 1;
+}
+
 .lightbox-close,
 .lightbox-nav {
   position: absolute;
-  /* The image gets a JS-driven transform during swipes/slides, which
-     creates its own stacking context — without an explicit z-index here,
-     that (later in DOM order) would paint above these buttons instead of
-     under them. */
+  /* The active image gets a JS-driven transform during a pinch-zoom,
+     which creates its own stacking context — without an explicit z-index
+     here, that (later in DOM order) would paint above these buttons
+     instead of under them. */
   z-index: 2;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.5);
@@ -1088,13 +1087,6 @@ img.popup-photo {
    source order — so JS setting prevBtn/nextBtn.hidden on a single-photo
    ministry did nothing without this explicit override. */
 .lightbox-nav[hidden] { display: none; }
-
-/* Touch swipe already covers navigation wherever a touch input is present
-   (even alongside a mouse, e.g. touchscreen laptops), so the arrows are
-   only useful — and only shown — where swiping isn't an option. */
-@media (any-pointer: coarse) {
-  .lightbox-nav { display: none; }
-}
 
 .lightbox-dots {
   position: absolute;
