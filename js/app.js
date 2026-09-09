@@ -17,6 +17,11 @@ const state = {
   // whatever styleCountryFeature returned at creation time, before
   // countriesWithVisiblePins was populated.
   geoLayerGhosts: [],
+  // The glow pane's own SVG renderer (Leaflet auto-creates a separate one
+  // per distinct pane) — kept so the tour can widen its padding too, same
+  // as map.options.renderer for the main country layer (see
+  // coastalGlowOptions and setTourRenderPadding).
+  coastalGlowRenderer: null,
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
   openCountryTooltipLayer: null, // the one country layer whose tooltip is open, if any
@@ -1985,8 +1990,20 @@ async function init() {
     map.getPane('coastalGlowPane').style.zIndex = 380;
     map.getPane('coastalGlowPane').style.filter = 'blur(7px)';
     map.getPane('coastalGlowPane').style.pointerEvents = 'none';
+    // Leaflet auto-creates a separate SVG renderer per distinct pane, and
+    // that auto-created one falls back to the class default padding (0.1 —
+    // barely past the viewport edge), not the 1.5 the main country layer
+    // was deliberately given (see the map's own renderer: L.svg({padding:
+    // 1.5}) option — same "fast movement outruns the pre-rendered buffer,
+    // leaving blank space until release" failure mode, just easier to miss
+    // here since it's a second, separate renderer instance). Matching that
+    // padding explicitly fixes it for this pane too, and keeps a handle
+    // around (state.coastalGlowRenderer) so the tour can widen it further
+    // for the duration of a tour (see setTourRenderPadding).
+    state.coastalGlowRenderer = L.svg({ pane: 'coastalGlowPane', padding: 1.5 });
     const coastalGlowOptions = {
       pane: 'coastalGlowPane',
+      renderer: state.coastalGlowRenderer,
       interactive: false,
       style: () => ({ fillColor: '#bedced', fillOpacity: 1, color: '#bedced', weight: 8, opacity: 1 }),
     };
@@ -2840,6 +2857,29 @@ async function tourGoToCountry(name) {
   await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
 }
 
+// Both the main country layer's SVG renderer (padding 1.5) and the
+// coastal-glow pane's own separate renderer only recompute their pre-
+// rendered buffer at 'moveend', sized around wherever the map is at that
+// moment — plenty for a manual drag, but a tour leg can fly much further
+// in one motion than a drag ever does, easily outrunning even a generous
+// buffer and leaving a blank gap until the flight settles (confirmed
+// live). An earlier attempt to fix this by forcing a redraw mid-flight
+// backfired badly — it fought Leaflet's own zoom-animation transform math
+// and produced jerky motion and wrong landing positions (reverted; see
+// git history). This is the safer approach: widen the padding for the
+// whole tour before it starts, so every leg's landing spot pre-renders a
+// wide enough radius that the next flight's destination is typically
+// already inside it by the time that flight begins — no mid-flight
+// interference with Leaflet's own animation at all, just a bigger radius
+// computed the normal way, at the normal time (moveend).
+const TOUR_RENDER_PADDING = 4;
+const DEFAULT_RENDER_PADDING = 1.5;
+
+function setTourRenderPadding(padding) {
+  if (map.options.renderer) map.options.renderer.options.padding = padding;
+  if (state.coastalGlowRenderer) state.coastalGlowRenderer.options.padding = padding;
+}
+
 class TourStopSignal extends Error {}
 
 const tourController = { state: 'stopped', loop: false };
@@ -2928,12 +2968,14 @@ function playTour() {
   tourController.state = 'playing';
   updateTourControlsUI();
   scheduleTourControlsHide();
+  setTourRenderPadding(TOUR_RENDER_PADDING);
   tourRunPromise = runTour(currentTourDivisionKey)
     .catch((err) => {
       if (!(err instanceof TourStopSignal)) console.error(err);
     })
     .finally(() => {
       tourRunPromise = null;
+      setTourRenderPadding(DEFAULT_RENDER_PADDING);
     });
 }
 
