@@ -2677,25 +2677,36 @@ function countriesInDivisionByProximity(divisionKey) {
   return points.sort((a, b) => score(a) - score(b)).map((p) => p.name);
 }
 
-// Every leg of the tour (world, a division, a country) is one continuous
-// flyTo of this length — Leaflet's own flyTo easing already decelerates
-// into arrival and accelerates out of departure, so chaining these back
-// to back on 'moveend' (no setTimeout dwell in between) reads as "slow
-// down to a stop, trigger the metrics, immediately speed back up" with
-// no held pause, per the actual direction for this first pass.
-const TOUR_LEG_SECONDS = 5;
+// Each leg's duration scales with the actual great-circle distance it
+// covers (map.distance, which the target's own projection already
+// accounts for), not a fixed time regardless of whether it's hopping to
+// a neighboring country or flying clear across the division — a short
+// hop reads as rushed at the same duration a cross-division flight needs,
+// and a cross-division flight at a short hop's duration would be a blur.
+// Clamped on both ends: a very short hop still reads as a deliberate
+// move rather than a jump-cut, and a very long one doesn't drag on
+// forever.
+const TOUR_KM_PER_SECOND = 600;
+const TOUR_MIN_LEG_SECONDS = 2;
+const TOUR_MAX_LEG_SECONDS = 8;
+
+function tourLegDuration(targetLatLng) {
+  const km = map.distance(map.getCenter(), targetLatLng) / 1000;
+  return Math.min(TOUR_MAX_LEG_SECONDS, Math.max(TOUR_MIN_LEG_SECONDS, km / TOUR_KM_PER_SECOND));
+}
 
 // Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
-// flyToBounds — done this way so each leg below can supply its own
-// target) and resolves once the flight has genuinely settled ('moveend'),
-// not before — showing a leg's metrics before the camera has actually
-// arrived would name a place the view hasn't reached yet. Suppressed
-// against both the metrics-overlay auto-dismiss (flyTo always fires
-// 'zoomstart' internally) and the south/north per-frame clamp (a flight
-// this fast can transiently cross those limits mid-flight even though its
-// final resting position is fine) — the same two safety patterns proven
-// out on the ?animate=NAME prototype this replaces.
-function tourFlyToAndWait(flyFn) {
+// flyToBounds using `duration` — done this way so each leg below can
+// supply its own target/duration) and resolves once the flight has
+// genuinely settled ('moveend'), not before — showing a leg's metrics
+// before the camera has actually arrived would name a place the view
+// hasn't reached yet. Suppressed against both the metrics-overlay auto-
+// dismiss (flyTo always fires 'zoomstart' internally) and the south/
+// north per-frame clamp (a flight this fast can transiently cross those
+// limits mid-flight even though its final resting position is fine) —
+// the same two safety patterns proven out on the ?animate=NAME prototype
+// this replaces.
+function tourFlyToAndWait(flyFn, duration) {
   return new Promise((resolve) => {
     let done = false;
     const finish = () => {
@@ -2716,23 +2727,27 @@ function tourFlyToAndWait(flyFn) {
     // 'moveend' for that no-op case. Without this, that single case would
     // hang the whole tour forever on a promise that never resolves — same
     // reasoning as withSuppressedDismiss's own hard-ceiling timer above.
-    setTimeout(finish, TOUR_LEG_SECONDS * 1000 + 300);
+    setTimeout(finish, duration * 1000 + 300);
   });
 }
 
 async function tourGoToWorld() {
-  await tourFlyToAndWait(() => map.flyTo(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM, { duration: TOUR_LEG_SECONDS }));
+  const target = L.latLng(CONFIG.MAP_CENTER);
+  const duration = tourLegDuration(target);
+  await tourFlyToAndWait(() => map.flyTo(target, CONFIG.MAP_ZOOM, { duration }), duration);
   showMetricsOverlay(state.worldMetrics, null);
 }
 
 async function tourGoToDivision(divisionKey) {
   const bounds = window.__divisionBounds(divisionKey);
   if (!bounds) return;
+  const target = bounds.getCenter();
+  const duration = tourLegDuration(target);
   await tourFlyToAndWait(() => map.flyToBounds(bounds, {
     paddingTopLeft: [40, 170],
     paddingBottomRight: [40, 40],
-    duration: TOUR_LEG_SECONDS,
-  }));
+    duration,
+  }), duration);
   showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
 }
 
@@ -2744,7 +2759,9 @@ async function tourGoToCountry(name) {
   if (!countryLayer) return;
   const bounds = computeMainLandBounds(countryLayer.feature);
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
-  await tourFlyToAndWait(() => map.flyTo(bounds.getCenter(), targetZoom, { duration: TOUR_LEG_SECONDS }));
+  const target = bounds.getCenter();
+  const duration = tourLegDuration(target);
+  await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
   showCountryMetricsOverlay(name);
 }
 
