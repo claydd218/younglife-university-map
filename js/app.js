@@ -1987,8 +1987,8 @@ async function init() {
     map.getPane('coastalGlowPane').style.filter = 'blur(7px)';
     map.getPane('coastalGlowPane').style.pointerEvents = 'none';
     // Kept as a handle (state.coastalGlowRenderer) so the tour's mid-flight
-    // nudge (see nudgeRenderersDuringFlight) can reach it directly, same as
-    // map.options.renderer for the main country layer — Leaflet otherwise
+    // redraw watcher (see watchTourFlightForRedraw) can reach it directly,
+    // same as map.options.renderer for the main country layer — Leaflet otherwise
     // auto-creates one renderer per distinct pane with no way to get a
     // reference back to it.
     state.coastalGlowRenderer = L.svg({ pane: 'coastalGlowPane', padding: 1.5 });
@@ -2810,20 +2810,29 @@ function tourLegDuration(targetLatLng, targetZoom) {
 // user who isn't looking at the tab doesn't notice missed resets, and
 // rAF resumes and catches up as soon as they refocus.
 const TOUR_ZOOM_DRIFT_THRESHOLD = 1; // zoom levels ≈ 2x stretch before it's worth paying for a reset
-
-function nudgeRenderersDuringFlight() {
-  const renderer = map.options.renderer;
-  if (renderer && renderer._reset) renderer._reset();
-  if (state.coastalGlowRenderer) state.coastalGlowRenderer._reset();
-}
+// The glow pane is already blurred, so a somewhat larger stretch on it is
+// much less noticeable than the same stretch on the crisp border layer —
+// giving it a looser threshold measurably cuts total reset cost (it's
+// roughly half the ~35-65ms combined cost) for a "touch more" smoothness,
+// confirmed as still worth asking for even after the switch off a flat
+// timer.
+const TOUR_GLOW_DRIFT_THRESHOLD = 2;
 
 function watchTourFlightForRedraw() {
   const renderer = map.options.renderer;
+  const glowRenderer = state.coastalGlowRenderer;
   let running = true;
   function tick() {
     if (!running) return;
-    if (renderer && Math.abs(map.getZoom() - renderer._zoom) > TOUR_ZOOM_DRIFT_THRESHOLD) {
-      nudgeRenderersDuringFlight();
+    const zoom = map.getZoom();
+    // Each renderer's own drift, checked and reset independently — the
+    // glow pane resets on its own, looser cadence (see
+    // TOUR_GLOW_DRIFT_THRESHOLD's comment), not tied to the main layer's.
+    if (renderer && renderer._reset && Math.abs(zoom - renderer._zoom) > TOUR_ZOOM_DRIFT_THRESHOLD) {
+      renderer._reset();
+    }
+    if (glowRenderer && Math.abs(zoom - glowRenderer._zoom) > TOUR_GLOW_DRIFT_THRESHOLD) {
+      glowRenderer._reset();
     }
     requestAnimationFrame(tick);
   }
