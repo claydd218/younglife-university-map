@@ -972,31 +972,35 @@ img.popup-photo {
   display: flex;
 }
 
-/* No fixed box at all — each photo is sized to its own natural shape
-   (capped at 92vw/85vh) rather than sharing one box with the others. Two
-   slides (data-slide="a"/"b") stack in the same grid cell so the
-   container's own size auto-fits whichever is currently larger; crossing
-   from one photo to another crossfades their opacity (see
-   wireMinistryPhotoCarousel) instead of sliding a shared box, which — with
-   no shared box to hold a background — means there's never a dark
-   letterbox/frame visible around a photo that doesn't match the others'
-   shape, just the lightbox's own backdrop showing through same as
-   everywhere else outside the photo. The tradeoff: no swipe/drag gesture
-   between photos, since that needs every slide to share one box to slide
-   together — arrows (shown on every pointer type now, touch included),
-   dots, and arrow keys cover navigation instead. */
+/* No fixed box at all — sized to match whichever photo is actually active
+   (capped at 92vw/85vh), not shared with the others. width/height are set
+   directly by JS (sizeViewport in wireMinistryPhotoCarousel) from that
+   photo's own natural dimensions, not left to CSS to infer.
+   An earlier version stacked both slides in one CSS grid cell and let the
+   grid auto-size to "whichever is larger" — which sounds equivalent but
+   isn't: both images stay in the DOM through a crossfade, so the box
+   sized to whichever of the two happened to be dimensionally bigger, not
+   whichever one was actually visible. Confirmed live two ways: a portrait
+   photo next to a wider one fell back to left-aligned instead of centered
+   (grid's stretch-alignment quirk for an item too small to fill its
+   cell), and — even after centering was patched in — the arrows/close
+   button (positioned relative to this box) stayed misaligned relative to
+   whatever was actually on screen, since the box itself could still be
+   sized to the *other*, invisible slide. Explicit JS sizing tied to the
+   one photo that's actually active removes the ambiguity these were
+   patching over.
+   Crossfading opacity (see showIndex/open) instead of sliding a shared
+   box is still deliberate — with no shared box to hold a background,
+   there's never a dark letterbox/frame around a photo that doesn't match
+   the others' shape, just the lightbox's own backdrop showing through
+   same as everywhere else outside the photo. The tradeoff: no swipe/drag
+   gesture between photos, since that needs every slide to share one box
+   to slide together — arrows (shown on every pointer type now, touch
+   included), dots, and arrow keys cover navigation instead. */
 .lightbox-viewport {
   position: relative;
-  display: grid;
-  /* Grid's default stretch alignment only centers an item that can fully
-     stretch to fill its cell — one capped below the cell's own size by
-     its own max-width/max-height (a portrait photo sharing a cell with a
-     wider landscape one, say) falls back to start (left) alignment
-     instead, confirmed live: a portrait photo sat flush left while a
-     landscape one beside it filled the cell and looked centered by
-     coincidence. Centering both axes explicitly covers every shape. */
-  justify-items: center;
-  align-items: center;
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   touch-action: none;
 }
 
@@ -1023,24 +1027,21 @@ img.popup-photo {
   border: 0;
 }
 
-/* Both slides share one grid cell (see .lightbox-viewport's own comment)
-   so the container auto-sizes to whichever is current largest, and each
-   is sized to its own natural shape (object-fit is moot at these bounds
-   but kept as a safety net) rather than stretched into a shared box.
-   Framed individually — border/shadow right on the image — since there's
-   no shared box left to frame instead. Opacity is what crossfades between
-   them (see showIndex/open in wireMinistryPhotoCarousel); the inactive
-   one sits at opacity:0 in the same cell until it becomes current. */
+/* Both slides stack via absolute positioning, each filling whatever size
+   .lightbox-viewport currently is (set by JS to match the active photo —
+   see that rule's own comment). object-fit:contain rather than assuming
+   a perfect match: the outgoing slide, mid-fade-out, is still whatever
+   shape it was before the box resized to the new incoming photo, so it
+   briefly letterboxes inside the new box rather than warping to fill it.
+   Border/shadow live on the viewport now, not here, since the viewport is
+   the one true box both slides share. */
 .lightbox-slide {
-  grid-area: 1 / 1;
+  position: absolute;
+  inset: 0;
   display: block;
-  max-width: 92vw;
-  max-height: 85vh;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
-  border: 2px solid var(--ink);
-  box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   opacity: 0;
   transition: opacity 220ms ease;
   -webkit-user-select: none;

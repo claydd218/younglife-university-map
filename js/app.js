@@ -1384,6 +1384,7 @@ function wirePhotoPreview() {
 function wireMinistryPhotoCarousel() {
   const lightbox = document.getElementById('ministry-lightbox');
   const content = lightbox.querySelector('.lightbox-content');
+  const viewport = lightbox.querySelector('.lightbox-viewport');
   const slideA = lightbox.querySelector('[data-slide="a"]');
   const slideB = lightbox.querySelector('[data-slide="b"]');
   const dotsEl = lightbox.querySelector('.lightbox-dots');
@@ -1419,6 +1420,31 @@ function wireMinistryPhotoCarousel() {
 
   function otherSlide() { return activeSlide === slideA ? slideB : slideA; }
 
+  // Sets .lightbox-viewport's own pixel size to fit `img`'s real aspect
+  // ratio within the 92vw/85vh bounds — computed directly from the image
+  // that's actually about to be shown, not inferred from CSS. An earlier
+  // version let two overlapping same-cell CSS grid items imply the box's
+  // size instead, which could size it to whichever of the two images was
+  // dimensionally larger, not whichever was actually visible — confirmed
+  // live as the source of both a photo failing to center and the arrows/
+  // close button sitting misaligned relative to what was on screen. No
+  // transition on this — it's instant, so there's nothing to read as a
+  // black box visibly growing (see .lightbox-viewport's own comment on
+  // the earlier design this replaced entirely).
+  function sizeViewport(img) {
+    const maxW = window.innerWidth * 0.92;
+    const maxH = window.innerHeight * 0.85;
+    const ratio = img.naturalWidth / img.naturalHeight;
+    let w = maxW;
+    let h = w / ratio;
+    if (h > maxH) {
+      h = maxH;
+      w = h * ratio;
+    }
+    viewport.style.width = `${w}px`;
+    viewport.style.height = `${h}px`;
+  }
+
   function renderDots() {
     dotsEl.innerHTML = '';
     const multi = photos.length > 1;
@@ -1453,6 +1479,7 @@ function wireMinistryPhotoCarousel() {
     const incoming = otherSlide();
     incoming.src = urlFor(index);
     await whenLoaded(incoming);
+    sizeViewport(incoming);
     incoming.classList.add('active');
     activeSlide.classList.remove('active');
     activeSlide = incoming;
@@ -1469,6 +1496,7 @@ function wireMinistryPhotoCarousel() {
     resetPinch();
     slideA.src = urlFor(0);
     await whenLoaded(slideA);
+    sizeViewport(slideA);
     slideA.classList.add('active');
     renderDots();
     const multi = photos.length > 1;
