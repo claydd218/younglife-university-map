@@ -2737,7 +2737,7 @@ function tourFlightPixelUnits(targetLatLng, targetZoom) {
     const s1 = i ? -1 : 1;
     const s2 = i ? w1 : w0;
     const t1 = w1 * w1 - w0 * w0 + s1 * rho2 * rho2 * u1 * u1;
-    const b = t1 / (2 * s2 * rho2 * s1);
+    const b = t1 / (2 * s2 * rho2 * u1);
     const sq = Math.sqrt(b * b + 1) - b;
     return sq < 1e-9 ? -18 : Math.log(sq);
   }
