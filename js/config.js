@@ -72,7 +72,7 @@ const DIVISIONS = {
   africa: {
     label: 'Africa',
     country: '#efd173',
-    pin: '#c98500',
+    pin: '#c99e00',
   },
   middle_east_central_asia: {
     label: 'Middle East & Central Asia',
