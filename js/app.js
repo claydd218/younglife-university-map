@@ -2795,28 +2795,50 @@ function tourLegDuration(targetLatLng, targetZoom) {
 // method Leaflet's own code already calls, not a hand-assembled partial
 // version of it. Confirmed live: correct landing position, no jerkiness.
 //
-// 400ms was chosen empirically — each combined reset (main + glow
-// renderer) costs ~35-65ms of main-thread time, so resetting much more
-// often than that starts eating into frame budget and can itself cause
-// dropped frames; much less often and the stretch factor climbs back
-// into visibly-blocky territory. Uses setInterval, not
-// requestAnimationFrame, deliberately — rAF fully stops in a backgrounded
-// tab/window, which would stall the reset (and let blockiness return)
-// exactly when a user alt-tabs away mid-tour; setInterval keeps firing.
+// A flat 400ms timer (the first working version of this) resets on a
+// fixed schedule regardless of whether the stretch factor actually needs
+// it yet — flyTo's own easing is slow at the start and end of a leg and
+// fast in the middle, so a fixed interval resets more than necessary
+// during the slow parts (each a ~35-65ms hitch) while being the right
+// cadence only for the fast middle. Checking the actual drift every
+// animation frame (cheap — just a getZoom() comparison) and only paying
+// for the expensive _reset() once drift crosses a threshold cuts the
+// total number of resets for the same worst-case stretch factor, since
+// it stops resetting during the parts of the flight that don't need it.
+// requestAnimationFrame does stop firing in a backgrounded tab/window,
+// but unlike the fixed-timer version that's not a real downside here — a
+// user who isn't looking at the tab doesn't notice missed resets, and
+// rAF resumes and catches up as soon as they refocus.
+const TOUR_ZOOM_DRIFT_THRESHOLD = 1; // zoom levels ≈ 2x stretch before it's worth paying for a reset
+
 function nudgeRenderersDuringFlight() {
   const renderer = map.options.renderer;
   if (renderer && renderer._reset) renderer._reset();
   if (state.coastalGlowRenderer) state.coastalGlowRenderer._reset();
 }
 
+function watchTourFlightForRedraw() {
+  const renderer = map.options.renderer;
+  let running = true;
+  function tick() {
+    if (!running) return;
+    if (renderer && Math.abs(map.getZoom() - renderer._zoom) > TOUR_ZOOM_DRIFT_THRESHOLD) {
+      nudgeRenderersDuringFlight();
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+  return () => { running = false; };
+}
+
 function tourFlyToAndWait(flyFn, duration) {
   return new Promise((resolve) => {
     let done = false;
-    const redrawNudgeInterval = setInterval(nudgeRenderersDuringFlight, 400);
+    const stopRedrawWatcher = watchTourFlightForRedraw();
     const finish = () => {
       if (done) return;
       done = true;
-      clearInterval(redrawNudgeInterval);
+      stopRedrawWatcher();
       suppressMapClamp = false;
       clampSouth();
       clampNorth();
@@ -3015,6 +3037,13 @@ function playTour() {
     })
     .finally(() => {
       tourRunPromise = null;
+      // Belt-and-suspenders alongside the restoreTourClustering() calls
+      // already in tourGoToWorld/tourGoToDivision/closeTour — this one
+      // covers the case those don't: an actual error (not a normal
+      // TourStopSignal) partway through a country leg, which would
+      // otherwise skip past all of them and leave clustering hidden with
+      // no tour left running to ever fix it.
+      restoreTourClustering();
     });
 }
 
