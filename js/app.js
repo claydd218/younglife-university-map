@@ -2792,31 +2792,34 @@ function tourFlyToAndWait(flyFn, duration) {
 // within a country, clustering them first (only to immediately explode
 // back apart) seemed pointless — and clusters not visibly expanding/
 // collapsing mid-flight was the original complaint anyway. So at country
-// zoom during a tour, skip clustering entirely: hide the whole division's
-// cluster group and show only that one country's markers, plain, on their
-// own layer. World/division views still cluster normally.
+// zoom during a tour, skip clustering entirely and hide every OTHER pin
+// worldwide too — not just this division's — confirmed live as the better
+// feel: show only the target country's markers, plain, on their own
+// layer. World/division views still cluster normally, everywhere.
 let tourCountryLayer = null;
 
-function showTourCountryPinsOnly(divisionKey, countryName) {
-  restoreTourClustering(divisionKey);
-  const clusterGroup = state.clusterGroups[divisionKey];
-  if (clusterGroup && map.hasLayer(clusterGroup)) map.removeLayer(clusterGroup);
+function showTourCountryPinsOnly(countryName) {
+  restoreTourClustering();
+  for (const group of Object.values(state.clusterGroups)) {
+    if (map.hasLayer(group)) map.removeLayer(group);
+  }
   const entries = state.markersByCountry.get(countryName) || [];
   tourCountryLayer = L.layerGroup(entries.map((e) => e.marker));
   tourCountryLayer.addTo(map);
 }
 
-function restoreTourClustering(divisionKey) {
+function restoreTourClustering() {
   if (tourCountryLayer) {
     map.removeLayer(tourCountryLayer);
     tourCountryLayer = null;
   }
-  const clusterGroup = state.clusterGroups[divisionKey];
-  if (clusterGroup && !map.hasLayer(clusterGroup)) clusterGroup.addTo(map);
+  for (const group of Object.values(state.clusterGroups)) {
+    if (!map.hasLayer(group)) group.addTo(map);
+  }
 }
 
 async function tourGoToWorld() {
-  restoreTourClustering(currentTourDivisionKey);
+  restoreTourClustering();
   const target = L.latLng(CONFIG.MAP_CENTER);
   const duration = tourLegDuration(target, CONFIG.MAP_ZOOM);
   // Shown as the flight departs, not once it arrives — confirmed live:
@@ -2828,7 +2831,7 @@ async function tourGoToWorld() {
 }
 
 async function tourGoToDivision(divisionKey) {
-  restoreTourClustering(divisionKey);
+  restoreTourClustering();
   const rawBounds = window.__divisionBounds(divisionKey);
   if (!rawBounds) return;
   // __divisionBounds returns a plain [[south,west],[north,east]] array,
@@ -2854,7 +2857,7 @@ async function tourGoToDivision(divisionKey) {
 }
 
 async function tourGoToCountry(name) {
-  showTourCountryPinsOnly(currentTourDivisionKey, name);
+  showTourCountryPinsOnly(name);
   let countryLayer;
   state.geoLayer.eachLayer((layer) => {
     if (normalizeCountryName(layer.feature.properties.name) === name) countryLayer = layer;
@@ -2987,7 +2990,7 @@ function closeTour() {
   // In case this fires mid-country-leg, when clustering is swapped out for
   // that one country's plain pins — otherwise closing there would leave
   // the rest of the division's pins invisible for good.
-  restoreTourClustering(currentTourDivisionKey);
+  restoreTourClustering();
 }
 
 function wireTourControls() {
