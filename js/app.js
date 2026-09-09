@@ -2677,22 +2677,49 @@ function countriesInDivisionByProximity(divisionKey) {
   return points.sort((a, b) => score(a) - score(b)).map((p) => p.name);
 }
 
-// Each leg's duration scales with the actual great-circle distance it
-// covers (map.distance, which the target's own projection already
-// accounts for), not a fixed time regardless of whether it's hopping to
-// a neighboring country or flying clear across the division — a short
-// hop reads as rushed at the same duration a cross-division flight needs,
-// and a cross-division flight at a short hop's duration would be a blur.
-// Clamped on both ends: a very short hop still reads as a deliberate
-// move rather than a jump-cut, and a very long one doesn't drag on
-// forever.
-const TOUR_KM_PER_SECOND = 600;
+// Each leg's duration scales with how far it actually moves ON SCREEN,
+// not real-world km — the same km distance can be a tiny nudge or a huge
+// sweep depending on zoom level (confirmed live: had to watch it to see
+// why distance-based timing felt wrong — e.g. the world-to-LAC leg covers
+// enormous km but only modest screen space, while hopping between two
+// adjacent small countries at high zoom can sweep across most of the
+// viewport). This reimplements the exact pixel+zoom "flight duration" unit
+// Leaflet's own flyTo computes internally (see vendor/leaflet/leaflet.js's
+// flyTo — this is its van Wijk zoom/pan formula) so our clamped, scaled
+// duration is grounded in the same math Leaflet uses when it picks a
+// natural duration on its own (there, the unscaled unit times 0.8 becomes
+// the ms duration). Clamped on both ends: a very short hop still reads as
+// a deliberate move rather than a jump-cut, and a very long one doesn't
+// drag on forever.
+const TOUR_SPEED_SCALE = 4; // ~5x slower than Leaflet's own natural pixel-based pace (0.8 * 5 ≈ 4)
 const TOUR_MIN_LEG_SECONDS = 2;
 const TOUR_MAX_LEG_SECONDS = 8;
 
-function tourLegDuration(targetLatLng) {
-  const km = map.distance(map.getCenter(), targetLatLng) / 1000;
-  return Math.min(TOUR_MAX_LEG_SECONDS, Math.max(TOUR_MIN_LEG_SECONDS, km / TOUR_KM_PER_SECOND));
+function tourFlightPixelUnits(targetLatLng, targetZoom) {
+  const size = map.getSize();
+  const w0 = Math.max(size.x, size.y);
+  const currentZoom = map.getZoom();
+  const zoom = targetZoom === undefined ? currentZoom : targetZoom;
+  const w1 = w0 * map.getZoomScale(currentZoom, zoom);
+  const from = map.project(map.getCenter());
+  const to = map.project(targetLatLng);
+  const u1 = from.distanceTo(to) || 1;
+  const rho = 1.42;
+  const rho2 = rho * rho;
+  function r(i) {
+    const s1 = i ? -1 : 1;
+    const s2 = i ? w1 : w0;
+    const t1 = w1 * w1 - w0 * w0 + s1 * rho2 * rho2 * u1 * u1;
+    const b = t1 / (2 * s2 * rho2 * s1);
+    const sq = Math.sqrt(b * b + 1) - b;
+    return sq < 1e-9 ? -18 : Math.log(sq);
+  }
+  return (r(1) - r(0)) / rho;
+}
+
+function tourLegDuration(targetLatLng, targetZoom) {
+  const units = tourFlightPixelUnits(targetLatLng, targetZoom);
+  return Math.min(TOUR_MAX_LEG_SECONDS, Math.max(TOUR_MIN_LEG_SECONDS, units * TOUR_SPEED_SCALE));
 }
 
 // Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
@@ -2736,7 +2763,7 @@ function tourFlyToAndWait(flyFn, duration) {
 
 async function tourGoToWorld() {
   const target = L.latLng(CONFIG.MAP_CENTER);
-  const duration = tourLegDuration(target);
+  const duration = tourLegDuration(target, CONFIG.MAP_ZOOM);
   // Shown as the flight departs, not once it arrives — confirmed live:
   // triggering it on arrival read as a step behind, since the camera was
   // already moving toward (and had just reached) the destination while
@@ -2756,7 +2783,10 @@ async function tourGoToDivision(divisionKey) {
   // LatLngBounds instance.
   const bounds = L.latLngBounds(rawBounds);
   const target = bounds.getCenter();
-  const duration = tourLegDuration(target);
+  // Approximate — flyToBounds below computes its own fitted zoom (with
+  // padding) internally; this is only close enough to feed the pixel-based
+  // duration estimate, not meant to match flyToBounds' actual result.
+  const duration = tourLegDuration(target, map.getBoundsZoom(bounds));
   // See tourGoToWorld's own comment on why this fires before the flight,
   // not after.
   showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
@@ -2776,7 +2806,7 @@ async function tourGoToCountry(name) {
   const bounds = computeMainLandBounds(countryLayer.feature);
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
   const target = bounds.getCenter();
-  const duration = tourLegDuration(target);
+  const duration = tourLegDuration(target, targetZoom);
   // See tourGoToWorld's own comment on why this fires before the flight,
   // not after.
   showCountryMetricsOverlay(name);
