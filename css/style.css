@@ -988,6 +988,15 @@ img.popup-photo {
 .lightbox-viewport {
   position: relative;
   display: grid;
+  /* Grid's default stretch alignment only centers an item that can fully
+     stretch to fill its cell — one capped below the cell's own size by
+     its own max-width/max-height (a portrait photo sharing a cell with a
+     wider landscape one, say) falls back to start (left) alignment
+     instead, confirmed live: a portrait photo sat flush left while a
+     landscape one beside it filled the cell and looked centered by
+     coincidence. Centering both axes explicitly covers every shape. */
+  justify-items: center;
+  align-items: center;
   touch-action: none;
 }
 
