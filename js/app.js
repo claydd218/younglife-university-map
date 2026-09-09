@@ -2642,14 +2642,18 @@ if (window.screen && window.screen.orientation) {
 // metrics, nothing more.
 // ---------------------------------------------------------------------
 
-// Every country in `divisionKey` that actually has a ministry pin,
-// ordered as a fuzzy "read the page" sweep — north-to-south the primary
-// axis (like lines on a page), west-to-east the secondary one (left to
-// right along each line), blended into one score rather than strict
-// row-banding, since a real division's countries don't line up in neat
-// rows. This deliberately isn't a true shortest-path tour (per explicit
-// direction — "it can be fuzzy") — just a reasonable NW-first, SE-last
-// approximation of proximity order.
+// Every country in `divisionKey` that actually has a ministry pin, ordered
+// as a real greedy nearest-neighbor proximity chain — start at the
+// northwesternmost country, then repeatedly hop to whichever remaining
+// country is physically closest to the current one. An earlier version
+// used a single blended NW/SE diagonal score (north-south and west-east
+// weighted equally into one number), but that's a synthetic "read the
+// page" axis, not actual proximity — for a division shaped like LAC
+// (a north-south chain of mainland with islands off to one side), it mixed
+// up Caribbean/mainland order in a way that didn't match the geography
+// (confirmed live). This deliberately isn't a true shortest-path/TSP
+// solve (per the original direction — "it can be fuzzy") — just chaining
+// to the nearest unvisited neighbor each step.
 function countriesInDivisionByProximity(divisionKey) {
   const names = [];
   for (const [countryName, entries] of state.markersByCountry) {
@@ -2665,16 +2669,39 @@ function countriesInDivisionByProximity(divisionKey) {
     const center = computeMainLandBounds(countryLayer.feature).getCenter();
     return { name, lat: center.lat, lng: center.lng };
   });
-  const lats = points.map((p) => p.lat);
-  const lngs = points.map((p) => p.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const latSpan = maxLat - minLat || 1;
-  const lngSpan = maxLng - minLng || 1;
-  const score = (p) => (1 - (p.lat - minLat) / latSpan) + (p.lng - minLng) / lngSpan;
-  return points.sort((a, b) => score(a) - score(b)).map((p) => p.name);
+  if (!points.length) return [];
+  const sqDist = (a, b) => {
+    const dLat = a.lat - b.lat;
+    const dLng = a.lng - b.lng;
+    return dLat * dLat + dLng * dLng;
+  };
+  let startIdx = 0;
+  let bestStartScore = Infinity;
+  points.forEach((p, i) => {
+    const score = -p.lat + p.lng; // north first, west first
+    if (score < bestStartScore) {
+      bestStartScore = score;
+      startIdx = i;
+    }
+  });
+  const remaining = points.slice();
+  const [start] = remaining.splice(startIdx, 1);
+  const ordered = [start];
+  let current = start;
+  while (remaining.length) {
+    let nearestIdx = 0;
+    let nearestDist = Infinity;
+    remaining.forEach((p, i) => {
+      const d = sqDist(current, p);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestIdx = i;
+      }
+    });
+    [current] = remaining.splice(nearestIdx, 1);
+    ordered.push(current);
+  }
+  return ordered.map((p) => p.name);
 }
 
 // Each leg's duration scales with how far it actually moves ON SCREEN,
