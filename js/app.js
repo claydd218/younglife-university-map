@@ -2780,6 +2780,20 @@ function tourPinLegDuration(targetLatLng, targetZoom) {
   return Math.min(TOUR_PIN_MAX_LEG_SECONDS, Math.max(TOUR_PIN_MIN_LEG_SECONDS, units * TOUR_PIN_SPEED_SCALE));
 }
 
+// Country-to-country hops, sped up from the general World/Division pace
+// (confirmed live as feeling too slow once pins made the rest of the tour
+// brisker by comparison) — its own faster scale and tighter clamp, same
+// pattern as the pin-specific one above. World/Division legs still use
+// the original tourLegDuration/TOUR_SPEED_SCALE.
+const TOUR_COUNTRY_SPEED_SCALE = 2.5;
+const TOUR_COUNTRY_MIN_LEG_SECONDS = 1.5;
+const TOUR_COUNTRY_MAX_LEG_SECONDS = 6;
+
+function tourCountryLegDuration(targetLatLng, targetZoom) {
+  const units = tourFlightPixelUnits(targetLatLng, targetZoom);
+  return Math.min(TOUR_COUNTRY_MAX_LEG_SECONDS, Math.max(TOUR_COUNTRY_MIN_LEG_SECONDS, units * TOUR_COUNTRY_SPEED_SCALE));
+}
+
 // Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
 // flyToBounds using `duration` — done this way so each leg below can
 // supply its own target/duration) and resolves once the flight has
@@ -2968,7 +2982,7 @@ async function tourGoToCountry(name) {
   const bounds = computeMainLandBounds(countryLayer.feature);
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
   const target = bounds.getCenter();
-  const duration = tourLegDuration(target, targetZoom);
+  const duration = tourCountryLegDuration(target, targetZoom);
   // See tourGoToWorld's own comment on why this fires before the flight,
   // not after.
   showCountryMetricsOverlay(name);
