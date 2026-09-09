@@ -363,6 +363,20 @@ function clusterIconFactory(divisionKey) {
   };
 }
 
+// Fires a plain background fetch for `url` so it's already sitting in the
+// browser's HTTP cache by the time something actually needs to display
+// it — a `new Image()` never gets attached to the DOM, so this has no
+// visible effect on its own, it just warms the cache. Used below so every
+// ministry's own popup-thumbnail photo (the same URL buildPopupHtml's own
+// <img> will request) starts downloading the moment the map loads,
+// instead of only starting once a visitor actually opens that popup —
+// confirmed live as the fix for a visible parchment-placeholder-then-
+// photo-pops-in flash on first open.
+function preloadImage(url) {
+  const img = new Image();
+  img.src = url;
+}
+
 function buildPopupHtml(row, divisionKey) {
   const div = DIVISIONS[divisionKey];
   const flag = flagEmoji(state.countryIsoByName.get(normalizeCountryName(row.country)));
@@ -419,6 +433,7 @@ function buildPopupHtml(row, divisionKey) {
     : '';
 
   const photos = (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+  if (photos.length) preloadImage(CONFIG.IMAGES_DIR + photos[0]);
   // The enlarge badge is the only hint that a popup photo is tappable (and,
   // for multi-photo ministries, that there's a carousel behind it) — no
   // hover state to lean on here since this has to read on touch too.
