@@ -2967,40 +2967,63 @@ function restoreTourClustering() {
 
 async function tourGoToWorld() {
   restoreTourClustering();
+  // Hidden as this flight departs (leaving the division/last country
+  // behind) rather than swapping straight to world metrics — confirmed
+  // live as reading better with a beat of nothing showing while actually
+  // in transit, same reasoning as tourGoToCountry's own hide-on-departure.
+  hideMetricsOverlay();
   const target = L.latLng(CONFIG.MAP_CENTER);
   const duration = tourLegDuration(target, CONFIG.MAP_ZOOM);
-  // Shown as the flight departs, not once it arrives — confirmed live:
-  // triggering it on arrival read as a step behind, since the camera was
-  // already moving toward (and had just reached) the destination while
-  // the old label was still up describing where it left from.
-  showMetricsOverlay(state.worldMetrics, null);
   await tourFlyToAndWait(() => map.flyTo(target, CONFIG.MAP_ZOOM, { duration }), duration);
+  showMetricsOverlay(state.worldMetrics, null);
 }
 
-async function tourGoToDivision(divisionKey) {
-  restoreTourClustering();
+// __divisionBounds returns a plain [[south,west],[north,east]] array, not
+// a real L.LatLngBounds (see its own comment — that's so it survives the
+// Puppeteer page.evaluate() serialization boundary for the PDF report,
+// its original caller). map.flyToBounds happily normalizes that array on
+// its own, but .getCenter() needs an actual LatLngBounds instance.
+// Shared by tourGoToDivision and tourGoToDivisionOverview.
+function tourFlyToDivisionBounds(divisionKey) {
   const rawBounds = window.__divisionBounds(divisionKey);
-  if (!rawBounds) return;
-  // __divisionBounds returns a plain [[south,west],[north,east]] array,
-  // not a real L.LatLngBounds (see its own comment — that's so it
-  // survives the Puppeteer page.evaluate() serialization boundary for the
-  // PDF report, its original caller). map.flyToBounds happily normalizes
-  // that array on its own, but .getCenter() below needs an actual
-  // LatLngBounds instance.
+  if (!rawBounds) return null;
   const bounds = L.latLngBounds(rawBounds);
   const target = bounds.getCenter();
   // Approximate — flyToBounds below computes its own fitted zoom (with
   // padding) internally; this is only close enough to feed the pixel-based
   // duration estimate, not meant to match flyToBounds' actual result.
   const duration = tourCountryLegDuration(target, map.getBoundsZoom(bounds));
-  // See tourGoToWorld's own comment on why this fires before the flight,
-  // not after.
-  showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
-  await tourFlyToAndWait(() => map.flyToBounds(bounds, {
+  return tourFlyToAndWait(() => map.flyToBounds(bounds, {
     paddingTopLeft: [40, 170],
     paddingBottomRight: [40, 40],
     duration,
   }), duration);
+}
+
+async function tourGoToDivision(divisionKey) {
+  restoreTourClustering();
+  // See tourGoToWorld's own comment on why this fires before the flight,
+  // not after — this is the one leaving World, not a country/division, so
+  // it keeps the original show-on-departure behavior.
+  showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
+  await tourFlyToDivisionBounds(divisionKey);
+}
+
+// After the division's last country (pins + country overview) is done,
+// zoom back out to the WHOLE division before leaving for World — same
+// shape as tourGoToCountryOverview one level up. Unlike that one, this
+// does switch the label eventually (to the division's own metrics) — the
+// point of this step is showing everything the tour just covered
+// together, not lingering on the last country specifically — but not
+// until arrival: showing "division" metrics while the camera's still
+// tightly zoomed into that last country would be the same label/view
+// mismatch already confirmed to read badly for country labels. Every
+// pin (not just the last country's) is un-hidden right away, though —
+// explicitly asked to happen before this zoom-out, not gated to arrival.
+async function tourGoToDivisionOverview(divisionKey) {
+  restoreTourClustering();
+  await tourFlyToDivisionBounds(divisionKey);
+  showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
 }
 
 // Shared bounds/zoom lookup for a country — used both when first arriving
@@ -3019,18 +3042,18 @@ function countryBoundsAndZoom(name) {
 
 async function tourGoToCountry(name) {
   showTourCountryPinsOnly(name);
+  // Hidden as this flight departs — leaving the division's own metrics
+  // (the first country in a division) or the previous country's overview
+  // (every country after) behind, same reasoning as tourGoToWorld's own
+  // hide-on-departure. Shown again only once this flight actually settles
+  // on the country it names (confirmed live as reading better than
+  // showing it right as departure begins, while the visitor's still
+  // looking at wherever they're leaving).
+  hideMetricsOverlay();
   const info = countryBoundsAndZoom(name);
   if (!info) return;
   const duration = tourCountryLegDuration(info.target, info.targetZoom);
   await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
-  // Shown on arrival here — unlike every other leg (see tourGoToWorld's
-  // own comment on why those fire on departure). This flight is now
-  // preceded by a zoom-out to the PREVIOUS country's own overview (see
-  // tourGoToCountryOverview) rather than jumping straight from that
-  // country's last pin, so showing the new country's label right as this
-  // flight departs would label a view the visitor is still looking away
-  // from — confirmed live as reading better once it appears exactly when
-  // the zoom actually settles on the country it names.
   showCountryMetricsOverlay(name);
 }
 
@@ -3134,6 +3157,9 @@ async function runTour(divisionKey) {
       await tourCheckpoint();
       await tourGoToCountryOverview(countryName);
     }
+
+    await tourCheckpoint();
+    await tourGoToDivisionOverview(divisionKey);
 
     await tourCheckpoint();
     await tourGoToWorld();
