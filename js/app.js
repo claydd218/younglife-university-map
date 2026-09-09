@@ -2698,14 +2698,17 @@ function tourLegDuration(targetLatLng) {
 // Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
 // flyToBounds using `duration` — done this way so each leg below can
 // supply its own target/duration) and resolves once the flight has
-// genuinely settled ('moveend'), not before — showing a leg's metrics
-// before the camera has actually arrived would name a place the view
-// hasn't reached yet. Suppressed against both the metrics-overlay auto-
-// dismiss (flyTo always fires 'zoomstart' internally) and the south/
-// north per-frame clamp (a flight this fast can transiently cross those
-// limits mid-flight even though its final resting position is fine) —
-// the same two safety patterns proven out on the ?animate=NAME prototype
-// this replaces.
+// genuinely settled ('moveend'). Each caller shows its own metrics
+// *before* calling this, as the flight departs rather than once it
+// arrives — confirmed live as the better feel: showing them on arrival
+// instead read as a step behind, since the camera was already moving
+// toward (and had just reached) the destination while the old label was
+// still up describing where it left from. Suppressed against both the
+// metrics-overlay auto-dismiss (flyTo always fires 'zoomstart'
+// internally) and the south/north per-frame clamp (a flight this fast
+// can transiently cross those limits mid-flight even though its final
+// resting position is fine) — the same two safety patterns proven out on
+// the ?animate=NAME prototype this replaces.
 function tourFlyToAndWait(flyFn, duration) {
   return new Promise((resolve) => {
     let done = false;
@@ -2734,8 +2737,12 @@ function tourFlyToAndWait(flyFn, duration) {
 async function tourGoToWorld() {
   const target = L.latLng(CONFIG.MAP_CENTER);
   const duration = tourLegDuration(target);
-  await tourFlyToAndWait(() => map.flyTo(target, CONFIG.MAP_ZOOM, { duration }), duration);
+  // Shown as the flight departs, not once it arrives — confirmed live:
+  // triggering it on arrival read as a step behind, since the camera was
+  // already moving toward (and had just reached) the destination while
+  // the old label was still up describing where it left from.
   showMetricsOverlay(state.worldMetrics, null);
+  await tourFlyToAndWait(() => map.flyTo(target, CONFIG.MAP_ZOOM, { duration }), duration);
 }
 
 async function tourGoToDivision(divisionKey) {
@@ -2743,12 +2750,14 @@ async function tourGoToDivision(divisionKey) {
   if (!bounds) return;
   const target = bounds.getCenter();
   const duration = tourLegDuration(target);
+  // See tourGoToWorld's own comment on why this fires before the flight,
+  // not after.
+  showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
   await tourFlyToAndWait(() => map.flyToBounds(bounds, {
     paddingTopLeft: [40, 170],
     paddingBottomRight: [40, 40],
     duration,
   }), duration);
-  showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
 }
 
 async function tourGoToCountry(name) {
@@ -2761,8 +2770,10 @@ async function tourGoToCountry(name) {
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
   const target = bounds.getCenter();
   const duration = tourLegDuration(target);
-  await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
+  // See tourGoToWorld's own comment on why this fires before the flight,
+  // not after.
   showCountryMetricsOverlay(name);
+  await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
 }
 
 class TourStopSignal extends Error {}
