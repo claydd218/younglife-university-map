@@ -257,7 +257,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
   align-items: center;
   gap: 2px;
   padding: 8px 10px;
-  background: rgba(247, 239, 220, 0.92);
+  background: rgba(247, 239, 220, 0.97);
   border: 1px solid var(--ink);
   box-shadow: 1px 1px 4px rgba(0,0,0,0.2);
 }
