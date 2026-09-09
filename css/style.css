@@ -93,6 +93,9 @@ h1, h2, h3, .legend-label, .cluster-badge {
   right: 0;
   height: 108px;
   background: linear-gradient(to bottom, rgba(169, 203, 227, 0.92) 0%, rgba(169, 203, 227, 0) 100%);
+  /* TEMP: hidden to check whether this is still pulling its weight now
+     that the title/subtitle have their own coastal-glow text-shadow. */
+  display: none;
 }
 
 @media (max-width: 950px) {
