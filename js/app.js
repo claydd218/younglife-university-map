@@ -17,11 +17,6 @@ const state = {
   // whatever styleCountryFeature returned at creation time, before
   // countriesWithVisiblePins was populated.
   geoLayerGhosts: [],
-  // The glow pane's own SVG renderer (Leaflet auto-creates a separate one
-  // per distinct pane) — kept so the tour's mid-flight redraw nudge (see
-  // nudgeSvgRedrawDuringFlight) can reach it directly, same as
-  // map.options.renderer for the main country layer.
-  coastalGlowRenderer: null,
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
   openCountryTooltipLayer: null, // the one country layer whose tooltip is open, if any
@@ -1990,19 +1985,8 @@ async function init() {
     map.getPane('coastalGlowPane').style.zIndex = 380;
     map.getPane('coastalGlowPane').style.filter = 'blur(7px)';
     map.getPane('coastalGlowPane').style.pointerEvents = 'none';
-    // Leaflet auto-creates a separate SVG renderer per distinct pane, and
-    // that auto-created one falls back to the class default padding (0.1 —
-    // barely past the viewport edge), not the 1.5 the main country layer
-    // was deliberately given (see its own renderer: L.svg({padding: 1.5})
-    // comment above, in the map's own options — same "fast movement
-    // outruns the pre-rendered buffer, leaving blank space until release"
-    // failure mode, just easier to miss here since it's a second, separate
-    // renderer instance). Matching that padding explicitly here fixes it
-    // for this pane too.
-    state.coastalGlowRenderer = L.svg({ pane: 'coastalGlowPane', padding: 1.5 });
     const coastalGlowOptions = {
       pane: 'coastalGlowPane',
-      renderer: state.coastalGlowRenderer,
       interactive: false,
       style: () => ({ fillColor: '#bedced', fillOpacity: 1, color: '#bedced', weight: 8, opacity: 1 }),
     };
@@ -2765,32 +2749,6 @@ function tourLegDuration(targetLatLng, targetZoom) {
   return Math.min(TOUR_MAX_LEG_SECONDS, Math.max(TOUR_MIN_LEG_SECONDS, units * TOUR_SPEED_SCALE));
 }
 
-// Both the main country layer's SVG renderer (padding 1.5 — see its own
-// comment on the map's renderer option) and the coastal-glow pane's own
-// separate renderer (see coastalGlowRenderer's comment) only recompute
-// their pre-rendered buffer on 'moveend' — fine for a normal drag/zoom,
-// which stays inside that buffer, but a tour leg can fly clear across a
-// division or the whole world in a few seconds, easily outrunning even a
-// generous one. Left alone, that shows as a blank gap (just background
-// color, confirmed live) that only "flashes in" once the flight settles.
-// Marker clusters have the same moveend-only refresh habit (Leaflet.
-// markercluster's own doing, not this renderer). Nudging both — on an
-// interval, not by firing a real 'moveend' event (which would also
-// resolve this same flight's own tourFlyToAndWait early, and confuse
-// every other moveend-driven bit of clamp/dismiss logic) — keeps them
-// tracking the moving viewport throughout the flight, not just at the end.
-function nudgeMapRedrawDuringFlight() {
-  for (const renderer of [map.options.renderer, state.coastalGlowRenderer]) {
-    if (renderer && renderer._update) {
-      renderer._update();
-      renderer.fire('update');
-    }
-  }
-  for (const group of Object.values(state.clusterGroups)) {
-    if (group && typeof group.refreshClusters === 'function') group.refreshClusters();
-  }
-}
-
 // Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
 // flyToBounds using `duration` — done this way so each leg below can
 // supply its own target/duration) and resolves once the flight has
@@ -2808,11 +2766,9 @@ function nudgeMapRedrawDuringFlight() {
 function tourFlyToAndWait(flyFn, duration) {
   return new Promise((resolve) => {
     let done = false;
-    const redrawNudgeInterval = setInterval(nudgeMapRedrawDuringFlight, 150);
     const finish = () => {
       if (done) return;
       done = true;
-      clearInterval(redrawNudgeInterval);
       suppressMapClamp = false;
       clampSouth();
       clampNorth();
