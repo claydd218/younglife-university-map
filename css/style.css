@@ -1062,7 +1062,7 @@ img.popup-photo {
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   opacity: 0;
-  transition: opacity 220ms ease;
+  transition: opacity 3000ms ease; /* TEMP: slowed down for visual debugging, revert to 220ms */
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;

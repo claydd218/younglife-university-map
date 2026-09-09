@@ -1390,7 +1390,7 @@ function wireMinistryPhotoCarousel() {
   const dotsEl = lightbox.querySelector('.lightbox-dots');
   const prevBtn = lightbox.querySelector('.lightbox-prev');
   const nextBtn = lightbox.querySelector('.lightbox-next');
-  const FADE_MS = 220;
+  const FADE_MS = 3000; // TEMP: slowed down for visual debugging, revert to 220
 
   let photos = [];
   let index = 0;
