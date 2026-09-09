@@ -2765,6 +2765,21 @@ function tourLegDuration(targetLatLng, targetZoom) {
   return Math.min(TOUR_MAX_LEG_SECONDS, Math.max(TOUR_MIN_LEG_SECONDS, units * TOUR_SPEED_SCALE));
 }
 
+// Pin-to-pin hops are much shorter than any other leg (within one already-
+// zoomed-in country), so reusing tourLegDuration's own MIN/MAX clamp meant
+// almost every pin hop bottomed out at the general 2s floor — slower than
+// it needed to feel for what's meant to be a brisk sweep through a
+// country's pins, not a deliberate cross-country flight. Its own, faster
+// scale and tighter clamp instead.
+const TOUR_PIN_SPEED_SCALE = 1.5;
+const TOUR_PIN_MIN_LEG_SECONDS = 0.6;
+const TOUR_PIN_MAX_LEG_SECONDS = 2.5;
+
+function tourPinLegDuration(targetLatLng, targetZoom) {
+  const units = tourFlightPixelUnits(targetLatLng, targetZoom);
+  return Math.min(TOUR_PIN_MAX_LEG_SECONDS, Math.max(TOUR_PIN_MIN_LEG_SECONDS, units * TOUR_PIN_SPEED_SCALE));
+}
+
 // Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
 // flyToBounds using `duration` — done this way so each leg below can
 // supply its own target/duration) and resolves once the flight has
@@ -2979,11 +2994,32 @@ function pinsInCountryByProximity(countryName) {
 // pause — same continuous decel-into-arrival/accel-back-out chaining as
 // every other leg (see tourFlyToAndWait), just a smaller hop. Country
 // metrics stay up throughout; nothing pin-specific shown yet.
+// Landing spot for a pin visit isn't the pin's own lat/lng — that would
+// center it in the middle of the screen, right where a future info card
+// popping up over it would want to sit. Instead, fly to a point shifted
+// far enough north (at the target zoom) that the pin itself ends up
+// low-center on screen, just above the tour-controls bar, leaving the
+// rest of the viewport free for that card. Computed via
+// project/unproject at the target zoom rather than a fixed lat/lng
+// offset, since the same screen-pixel gap means a different real-world
+// distance depending on zoom.
+function tourPinLandingLatLng(target, targetZoom) {
+  const mapSize = map.getSize();
+  const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
+  const desiredScreenY = controlsRect.top - 24; // 24px clearance above the controls bar
+  const targetPoint = map.project(target, targetZoom);
+  const centerPoint = targetPoint.add([0, mapSize.y / 2 - desiredScreenY]);
+  return map.unproject(centerPoint, targetZoom);
+}
+
 async function tourGoToPin(entry) {
   const target = entry.marker.getLatLng();
   const targetZoom = CONFIG.MAX_ZOOM;
-  const duration = tourLegDuration(target, targetZoom);
-  await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
+  const duration = tourPinLegDuration(target, targetZoom);
+  await tourFlyToAndWait(() => {
+    const landing = tourPinLandingLatLng(target, targetZoom);
+    map.flyTo(landing, targetZoom, { duration });
+  }, duration);
 }
 
 class TourStopSignal extends Error {}
