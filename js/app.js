@@ -17,6 +17,7 @@ const state = {
   // whatever styleCountryFeature returned at creation time, before
   // countriesWithVisiblePins was populated.
   geoLayerGhosts: [],
+  coastalGlowRenderer: null, // the glow pane's own SVG renderer — see its own comment
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
   openCountryTooltipLayer: null, // the one country layer whose tooltip is open, if any
@@ -1985,8 +1986,15 @@ async function init() {
     map.getPane('coastalGlowPane').style.zIndex = 380;
     map.getPane('coastalGlowPane').style.filter = 'blur(7px)';
     map.getPane('coastalGlowPane').style.pointerEvents = 'none';
+    // Kept as a handle (state.coastalGlowRenderer) so the tour's mid-flight
+    // nudge (see nudgeRenderersDuringFlight) can reach it directly, same as
+    // map.options.renderer for the main country layer — Leaflet otherwise
+    // auto-creates one renderer per distinct pane with no way to get a
+    // reference back to it.
+    state.coastalGlowRenderer = L.svg({ pane: 'coastalGlowPane', padding: 1.5 });
     const coastalGlowOptions = {
       pane: 'coastalGlowPane',
+      renderer: state.coastalGlowRenderer,
       interactive: false,
       style: () => ({ fillColor: '#bedced', fillOpacity: 1, color: '#bedced', weight: 8, opacity: 1 }),
     };
@@ -2763,12 +2771,52 @@ function tourLegDuration(targetLatLng, targetZoom) {
 // can transiently cross those limits mid-flight even though its final
 // resting position is fine) — the same two safety patterns proven out on
 // the ?animate=NAME prototype this replaces.
+// Leaflet's SVG renderer animates a big zoom change by taking the vector
+// rendering as it stood at the START of the flight and stretching the
+// whole thing via a CSS transform — fine for a normal single-level zoom
+// (~2x stretch), but a tour leg can span 4+ zoom levels in one flight,
+// needing a stretch upwards of 16x+ (confirmed live: caught it mid-flight
+// with the browser's own computed `transform: scale(16.43)`), which is
+// exactly what makes borders look blocky/staircased and the coastal glow
+// vanish entirely. Periodically calling the renderer's own `_reset()` —
+// the exact method Leaflet itself calls on a full view reset: recompute
+// the buffer, reset the CSS transform to identity relative to the
+// now-current zoom, and reproject every path — keeps that stretch factor
+// small the whole flight instead of letting it balloon (measured live:
+// with a reset every 400ms, zoom drift between resets stays ~0.2-0.3
+// levels, i.e. under 1.3x, instead of 16x+ with no resets at all).
+//
+// An earlier attempt at this exact idea broke the tour (jerky zoom, wrong
+// landing spot) because it only replicated HALF of `_reset()` — it called
+// `_update()` and fired the 'update' event (which redraws paths) but never
+// reset the container's own CSS transform, so the stale transform from
+// before kept compounding on top of freshly-reprojected paths. Calling
+// the renderer's real, complete `_reset()` avoids that: it's the same
+// method Leaflet's own code already calls, not a hand-assembled partial
+// version of it. Confirmed live: correct landing position, no jerkiness.
+//
+// 400ms was chosen empirically — each combined reset (main + glow
+// renderer) costs ~35-65ms of main-thread time, so resetting much more
+// often than that starts eating into frame budget and can itself cause
+// dropped frames; much less often and the stretch factor climbs back
+// into visibly-blocky territory. Uses setInterval, not
+// requestAnimationFrame, deliberately — rAF fully stops in a backgrounded
+// tab/window, which would stall the reset (and let blockiness return)
+// exactly when a user alt-tabs away mid-tour; setInterval keeps firing.
+function nudgeRenderersDuringFlight() {
+  const renderer = map.options.renderer;
+  if (renderer && renderer._reset) renderer._reset();
+  if (state.coastalGlowRenderer) state.coastalGlowRenderer._reset();
+}
+
 function tourFlyToAndWait(flyFn, duration) {
   return new Promise((resolve) => {
     let done = false;
+    const redrawNudgeInterval = setInterval(nudgeRenderersDuringFlight, 400);
     const finish = () => {
       if (done) return;
       done = true;
+      clearInterval(redrawNudgeInterval);
       suppressMapClamp = false;
       clampSouth();
       clampNorth();
