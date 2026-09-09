@@ -2855,6 +2855,29 @@ const TOUR_ZOOM_DRIFT_THRESHOLD = 1; // zoom levels ≈ 2x stretch before it's w
 // timer.
 const TOUR_GLOW_DRIFT_THRESHOLD = 2;
 
+// Zoom drift alone missed a real case: a pin-to-pin hop starts and ends at
+// the exact same zoom (both CONFIG.MAX_ZOOM), so the zoom-drift check
+// above never fires even once during the whole flight — but at zoom 10, a
+// modest real-world distance between two pins can still span many
+// viewport-widths in screen pixels, outrunning the renderer's pre-
+// rendered buffer just from panning, with no zoom change involved at all
+// (confirmed live — "the map does refresh at extreme zooms, notably when
+// the pin distance is great and high zoomed"). This is the exact same
+// buffer-outrun failure the padding:1.5 renderer option was originally
+// there to prevent for manual drags — just large enough here that a fixed
+// padding alone isn't enough either. Tracking pan distance from each
+// renderer's own last-reset center (projected at the current zoom) and
+// resetting once it crosses a fraction of the viewport size catches this
+// independently of whatever the zoom-drift check is doing.
+const TOUR_PAN_DRIFT_FRACTION = 0.75; // fraction of the smaller viewport dimension
+
+function renderRendererDriftPx(renderer, zoom) {
+  if (!renderer || !renderer._center) return 0;
+  const currentPoint = map.project(map.getCenter(), zoom);
+  const refPoint = map.project(renderer._center, zoom);
+  return currentPoint.distanceTo(refPoint);
+}
+
 function watchTourFlightForRedraw() {
   const renderer = map.options.renderer;
   const glowRenderer = state.coastalGlowRenderer;
@@ -2862,14 +2885,19 @@ function watchTourFlightForRedraw() {
   function tick() {
     if (!running) return;
     const zoom = map.getZoom();
+    const panThreshold = Math.min(map.getSize().x, map.getSize().y) * TOUR_PAN_DRIFT_FRACTION;
     // Each renderer's own drift, checked and reset independently — the
     // glow pane resets on its own, looser cadence (see
     // TOUR_GLOW_DRIFT_THRESHOLD's comment), not tied to the main layer's.
-    if (renderer && renderer._reset && Math.abs(zoom - renderer._zoom) > TOUR_ZOOM_DRIFT_THRESHOLD) {
-      renderer._reset();
+    if (renderer && renderer._reset) {
+      const zoomDrift = Math.abs(zoom - renderer._zoom);
+      const panDrift = renderRendererDriftPx(renderer, zoom);
+      if (zoomDrift > TOUR_ZOOM_DRIFT_THRESHOLD || panDrift > panThreshold) renderer._reset();
     }
-    if (glowRenderer && Math.abs(zoom - glowRenderer._zoom) > TOUR_GLOW_DRIFT_THRESHOLD) {
-      glowRenderer._reset();
+    if (glowRenderer) {
+      const zoomDrift = Math.abs(zoom - glowRenderer._zoom);
+      const panDrift = renderRendererDriftPx(glowRenderer, zoom);
+      if (zoomDrift > TOUR_GLOW_DRIFT_THRESHOLD || panDrift > panThreshold) glowRenderer._reset();
     }
     requestAnimationFrame(tick);
   }
