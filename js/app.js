@@ -377,6 +377,33 @@ function preloadImage(url) {
   img.src = url;
 }
 
+// Same cache-warming idea as preloadImage above, but for a staff photo,
+// whose filename (unlike a ministry's own photos, named explicitly in
+// ministries.csv) is only ever a guess — slug + whichever of
+// CONFIG.IMAGE_EXTENSIONS actually exists, the same cascade photoTag's
+// own onerror chain (window.__imgFallback) runs the first time a real
+// <img> for this staff member is displayed. Replays that same cascade
+// here, silently, via a detached Image() with no DOM attachment, so
+// whichever extension actually exists is already cached by the time a
+// popup needs to show it — same reasoning as preloadImage, just with the
+// extension unknown upfront instead of given.
+// The same staff member can appear across multiple ministries (their own
+// home entry, plus wherever else they're assigned) — each of those rows'
+// own buildPopupHtml call would otherwise kick off the same cascade
+// again. Deduped here rather than at each call site.
+const staffPhotoPreloadStarted = new Set();
+
+function preloadStaffPhoto(slug, extIdx = 0) {
+  if (extIdx === 0) {
+    if (staffPhotoPreloadStarted.has(slug)) return;
+    staffPhotoPreloadStarted.add(slug);
+  }
+  if (extIdx >= CONFIG.IMAGE_EXTENSIONS.length) return;
+  const img = new Image();
+  img.onerror = () => preloadStaffPhoto(slug, extIdx + 1);
+  img.src = `${CONFIG.IMAGES_DIR}${slug}.${CONFIG.IMAGE_EXTENSIONS[extIdx]}`;
+}
+
 function buildPopupHtml(row, divisionKey) {
   const div = DIVISIONS[divisionKey];
   const flag = flagEmoji(state.countryIsoByName.get(normalizeCountryName(row.country)));
@@ -406,6 +433,7 @@ function buildPopupHtml(row, divisionKey) {
   const staffHtml = staff.length
     ? `<ul class="popup-staff">${staff
         .map((s) => {
+          preloadStaffPhoto(slugify(s.name));
           const photo = photoTag({
             slug: slugify(s.name),
             altText: s.name,
