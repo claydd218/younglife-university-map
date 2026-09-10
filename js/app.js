@@ -3173,6 +3173,9 @@ async function tourCheckpoint() {
 // the next pass just continues on from Division again with no special
 // jump-back case, and a non-repeating tour gets a clean, deliberate
 // landing spot instead of trailing off at an arbitrary country.
+// TESTING ONLY — see its one use in runTour below.
+const TOUR_TESTING_MAX_COUNTRIES = 3;
+
 // divisionKeys is an array, not a single key — a "World Tour" (every
 // division) and a single-division tour are the exact same code, just a
 // different-length list. Divisions flow straight from one to the next
@@ -3192,7 +3195,11 @@ async function runTour(divisionKeys) {
       await tourCheckpoint();
       await tourGoToDivision(divisionKey);
 
-      const countries = countriesInDivisionByProximity(divisionKey);
+      // TESTING ONLY — caps each division to its first few countries so a
+      // full run (especially a World Tour) is fast to iterate on. Remove
+      // this slice (or raise/lower TOUR_TESTING_MAX_COUNTRIES) once the
+      // tour's actually ready to cover every country for real.
+      const countries = countriesInDivisionByProximity(divisionKey).slice(0, TOUR_TESTING_MAX_COUNTRIES);
       for (const countryName of countries) {
         await tourCheckpoint();
         await tourGoToCountry(countryName);
