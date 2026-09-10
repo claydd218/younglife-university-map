@@ -2131,6 +2131,12 @@ async function init() {
         // the end of the tour). Our marker counts are small enough that
         // this perf optimization isn't worth that correctness bug.
         removeOutsideVisibleBounds: false,
+        // Leaflet.markercluster's default spiderfy/unspiderfy (and its
+        // own add/remove-marker animations) ease the legs out over a
+        // short animation — with only 2-3 pins in a cluster, that read as
+        // a few visible "pops" before settling rather than a smooth fan.
+        // Off for an instant spiderfy instead.
+        animate: false,
       });
     }
 
