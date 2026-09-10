@@ -3370,7 +3370,17 @@ function countryBoundsAndZoom(name) {
 // the division's, on the final zoom-out (tourGoToDivisionOverview).
 const TOUR_LABEL_REVEAL_FRACTION = 0.65;
 
-async function tourGoToCountry(name) {
+// landing/landingZoom let runTour aim this flight straight at the
+// country's first pin instead of the country's own bounds center —
+// TESTING: with no dwell between arriving at a country and starting its
+// first pin (see runTour), flying to the country center and then
+// immediately flying again to the first pin meant two separate decel-
+// then-accel curves back to back, reading as a stutter. Flying directly
+// to where the first pin lands removes that — one continuous flight
+// instead of two chained ones. Falls back to the country's own bounds
+// center/zoom when there's no override (a country with no pins, or any
+// other caller).
+async function tourGoToCountry(name, landing, landingZoom) {
   showTourCountryPinsOnly(name);
   // Hidden as this flight departs — leaving the division's own metrics
   // (the first country in a division) or the previous country's overview
@@ -3379,9 +3389,11 @@ async function tourGoToCountry(name) {
   hideMetricsOverlay();
   const info = countryBoundsAndZoom(name);
   if (!info) return;
-  const duration = tourCountryLegDuration(info.target, info.targetZoom);
+  const target = landing || info.target;
+  const targetZoom = landingZoom === undefined ? info.targetZoom : landingZoom;
+  const duration = tourCountryLegDuration(target, targetZoom);
   setTimeout(() => showCountryMetricsOverlay(name), duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
-  await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
+  await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
 }
 
 // After visiting all of a country's pins, zoom back out to the country's
@@ -3554,15 +3566,6 @@ const TOUR_PIN_TRANSITION_DWELL_SECONDS = 1;
 // quicker read (just a name/country, not a photo).
 const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 
-// Every pass ends back at World — the same place it started — rather
-// than stopping wherever the last country happened to leave off. Doing
-// that unconditionally (loop on or off) is what makes looping trivial:
-// the next pass just continues on from Division again with no special
-// jump-back case, and a non-repeating tour gets a clean, deliberate
-// landing spot instead of trailing off at an arbitrary country.
-// TESTING ONLY — see its one use in runTour below.
-const TOUR_TESTING_MAX_COUNTRIES = 2;
-
 // TESTING ONLY — see its one use in tourGoToPin above. true while
 // evaluating pin flight/landing motion in isolation, with the header/
 // carousel card skipped entirely (not just its photos); flip back to
@@ -3589,19 +3592,9 @@ async function runTour(divisionKeys) {
       await tourGoToDivision(divisionKey);
       await tourDwell(TOUR_DWELL_SECONDS);
 
-      // TESTING ONLY — caps each division to its first few countries so a
-      // full run (especially a World Tour) is fast to iterate on. Remove
-      // this slice (or raise/lower TOUR_TESTING_MAX_COUNTRIES) once the
-      // tour's actually ready to cover every country for real.
-      const countries = countriesInDivisionByProximity(divisionKey).slice(0, TOUR_TESTING_MAX_COUNTRIES);
+      const countries = countriesInDivisionByProximity(divisionKey);
       for (const countryName of countries) {
         await tourCheckpoint();
-        await tourGoToCountry(countryName);
-        // Straight into the first pin, no dwell — unlike arriving at a
-        // division or a country's own overview, this isn't a place the
-        // tour actually lingers; it's just a waypoint on the way to the
-        // pins, so waiting here read as a dead beat before the tour
-        // actually gets moving again.
         // One step in from tourGoToCountry's own zoom, not the same
         // level — close enough to read individual pins a little more
         // clearly while cycling through them, without zooming in as far
@@ -3610,12 +3603,25 @@ async function runTour(divisionKeys) {
         const pinZoom = countryInfo
           ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
           : CONFIG.MAX_ZOOM;
-        for (const pinEntry of pinsInCountryByProximity(countryName)) {
+        const pins = pinsInCountryByProximity(countryName);
+        // TESTING: aims tourGoToCountry's own flight straight at the
+        // first pin (see its own comment) instead of the country's
+        // bounds center — one continuous flight, no back-to-back decel/
+        // accel. A country with no pins just falls back to its own
+        // bounds center/zoom (tourGoToCountry's default).
+        const firstPinLanding = pins.length
+          ? tourPinLandingLatLng(pins[0].marker.getLatLng(), pinZoom)
+          : undefined;
+        await tourGoToCountry(countryName, firstPinLanding, pins.length ? pinZoom : undefined);
+        for (const pinEntry of pins) {
           await tourCheckpoint();
           await tourGoToPin(pinEntry, pinZoom);
         }
-        await tourCheckpoint();
-        await tourGoToCountryOverview(countryName);
+        // TESTING: no zoom-out-to-country-level stop between countries —
+        // straight from the last pin into the next country (or, if this
+        // was the last one, straight into tourGoToDivisionOverview
+        // below). tourGoToCountryOverview is still defined but
+        // deliberately not called here for now.
       }
 
       await tourCheckpoint();
