@@ -3215,9 +3215,14 @@ async function runTour(divisionKeys) {
 
     if (!tourController.loop) break;
   }
-  tourController.state = 'stopped';
-  updateTourControlsUI();
-  showTourControlsNow(); // reveal for the finished state, even if idle-hidden mid-tour
+  // Reaching the end of a non-looping run is its own kind of stop — same
+  // stopTour() the Stop button calls, reused rather than duplicated.
+  // Redundant with the leg that just ran (tourGoToDivisionOverview/
+  // tourGoToWorld already landed here and already restored clustering),
+  // but that just means its own flyTo/flyToBounds call is a fast near
+  // no-op — harmless, same as other already-tolerated no-op flights
+  // elsewhere in the tour.
+  stopTour();
 }
 
 let tourRunPromise = null;
@@ -3270,7 +3275,7 @@ function playTour() {
     .finally(() => {
       tourRunPromise = null;
       // Belt-and-suspenders alongside the restoreTourClustering() calls
-      // already in tourGoToWorld/tourGoToDivision/closeTour — this one
+      // already in tourGoToWorld/tourGoToDivision/stopTour — this one
       // covers the case those don't: an actual error (not a normal
       // TourStopSignal) partway through a country leg, which would
       // otherwise skip past all of them and leave clustering hidden with
@@ -3291,21 +3296,32 @@ function toggleTourLoop() {
   updateTourControlsUI();
 }
 
-function closeTour() {
+// Hides the controls, un-hides every pin/cluster (in case this fires
+// mid-country-leg, when clustering is swapped out for just that one
+// country's plain pins — otherwise stopping there would leave the rest
+// of the division's pins invisible for good), and zooms out to a clean
+// landing spot: the division being toured, or World for a multi-division
+// World Tour — reusing the exact same goToDivisionFn/goToWorldFn the
+// site's own nav-menu uses, so this ends up in exactly the state a
+// regular visitor would if they'd navigated there normally (same
+// metrics shown, same animated flyTo/flyToBounds).
+function stopTour() {
   tourController.state = 'stopped';
   clearTimeout(tourControlsIdleTimer);
   document.getElementById('tour-controls').hidden = true;
   updateTourControlsUI();
-  // In case this fires mid-country-leg, when clustering is swapped out for
-  // that one country's plain pins — otherwise closing there would leave
-  // the rest of the division's pins invisible for good.
   restoreTourClustering();
+  if (currentTourDivisionKeys && currentTourDivisionKeys.length === 1) {
+    if (goToDivisionFn) goToDivisionFn(currentTourDivisionKeys[0]);
+  } else if (goToWorldFn) {
+    goToWorldFn();
+  }
 }
 
 // Switches to a different tour (a single division, or every division for
 // a World Tour) from the tour-picker menu, whether or not one's already
 // playing. If one is, this stops it and waits for its own runTour promise
-// to actually settle (same checkpoint-based unwind closeTour uses — takes
+// to actually settle (same checkpoint-based unwind stopTour uses — takes
 // effect once the current leg finishes, not instantly) before starting
 // the new selection; playTour's own tourRunPromise guard would otherwise
 // silently no-op a call made while the old run is still unwinding.
@@ -3325,7 +3341,7 @@ function wireTourControls() {
   document.getElementById('tour-play-btn').addEventListener('click', playTour);
   document.getElementById('tour-pause-btn').addEventListener('click', pauseTour);
   document.getElementById('tour-loop-btn').addEventListener('click', toggleTourLoop);
-  document.getElementById('tour-close-btn').addEventListener('click', closeTour);
+  document.getElementById('tour-stop-btn').addEventListener('click', stopTour);
   document.addEventListener('mousemove', () => {
     showTourControlsNow();
     if (tourController.state === 'playing') scheduleTourControlsHide();
