@@ -2206,15 +2206,28 @@ async function init() {
     // loosely-spaced pins, but a wild, disorienting jump for two ministries
     // right on top of each other (tested interactively with a tunable
     // slider, first landing on 3, then 2, then down to just 1 — still felt
-    // like too much of a jump per tap even at 2). spiderfyOnMaxZoom above
-    // still fans out any pins that stay clustered after hitting the cap,
-    // so nothing's ever unreachable — it may just take a couple more taps.
-    const CLUSTER_CLICK_MAX_ZOOM_STEP = 1;
+    // like too much of a jump per tap even at 2, at least once already
+    // fairly zoomed in). spiderfyOnMaxZoom above still fans out any pins
+    // that stay clustered after hitting the cap, so nothing's ever
+    // unreachable — it may just take a couple more taps.
+    //
+    // Dynamic rather than one flat step: zoomed pretty far out (world/
+    // division-ish), a cluster's members are still spread across a wide
+    // area, so a single extra level barely moves toward separating them —
+    // 2 covers more of that ground in one tap. Already fairly zoomed in
+    // (country-ish or tighter), the same 2 levels reads as too big a jump
+    // given how much closer everything already is, so it drops to 1.
+    const CLUSTER_CLICK_ZOOM_STEP_THRESHOLD = 6; // below this current zoom = "pretty far out"
+    const CLUSTER_CLICK_MAX_ZOOM_STEP_FAR = 2;
+    const CLUSTER_CLICK_MAX_ZOOM_STEP_NEAR = 1;
     for (const group of Object.values(state.clusterGroups)) {
       group.on('clusterclick', (e) => {
         const cluster = e.layer;
         const idealZoom = map.getBoundsZoom(cluster.getBounds());
-        const cap = map.getZoom() + CLUSTER_CLICK_MAX_ZOOM_STEP;
+        const step = map.getZoom() < CLUSTER_CLICK_ZOOM_STEP_THRESHOLD
+          ? CLUSTER_CLICK_MAX_ZOOM_STEP_FAR
+          : CLUSTER_CLICK_MAX_ZOOM_STEP_NEAR;
+        const cap = map.getZoom() + step;
         // Suppressed like a nav-menu move — zooming into a cluster is
         // still browsing the same selection, not leaving it, so it
         // shouldn't dismiss the metrics overlay (see
