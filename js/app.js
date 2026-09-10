@@ -1692,6 +1692,22 @@ function wireMinistryPhotoCarousel() {
     return { x: mapRect.left + pt.x, y: mapRect.top + pt.y };
   }
 
+  // Offset (in px) from .lightbox-content's own actual current center —
+  // measured live via getBoundingClientRect, not assumed from window.
+  // innerWidth/innerHeight — to `point`. Assuming the flex-centered
+  // resting position equals window.innerWidth/2 read wrong on the first
+  // pass (the animation consistently grew in from the right instead of
+  // from the pin), almost certainly some layout factor (scrollbar,
+  // visual-viewport quirk, or similar) putting the two out of sync;
+  // measuring the box's real rect sidesteps that assumption entirely.
+  function contentOffsetTo(point) {
+    const rect = content.getBoundingClientRect();
+    return {
+      dx: point.x - (rect.left + rect.width / 2),
+      dy: point.y - (rect.top + rect.height / 2),
+    };
+  }
+
   // Tour-only entry point (see tourGoToPin) — opens exactly like open()
   // above (same header/photo/no-photo handling), then plays a one-off
   // grow-from-`latLng` animation on .lightbox-content via the Web
@@ -1705,9 +1721,7 @@ function wireMinistryPhotoCarousel() {
   // unit, same as if the whole card were physically emerging from the pin.
   async function openFromPoint(photoList, headerHtml, latLng) {
     await open(photoList, headerHtml);
-    const { x, y } = screenPointForLatLng(latLng);
-    const dx = x - window.innerWidth / 2;
-    const dy = y - window.innerHeight / 2;
+    const { dx, dy } = contentOffsetTo(screenPointForLatLng(latLng));
     const anim = content.animate([
       { transform: `translate(${dx}px, ${dy}px) scale(0.04)`, opacity: 0 },
       { transform: 'translate(0, 0) scale(1)', opacity: 1 },
@@ -1722,9 +1736,7 @@ function wireMinistryPhotoCarousel() {
   // pin's screen position isn't fixed) — tourGoToPin always passes the
   // same pin's current position both times, so this still lands on it.
   async function closeToPoint(latLng) {
-    const { x, y } = screenPointForLatLng(latLng);
-    const dx = x - window.innerWidth / 2;
-    const dy = y - window.innerHeight / 2;
+    const { dx, dy } = contentOffsetTo(screenPointForLatLng(latLng));
     const anim = content.animate([
       { transform: 'translate(0, 0) scale(1)', opacity: 1 },
       { transform: `translate(${dx}px, ${dy}px) scale(0.04)`, opacity: 0 },
@@ -3372,17 +3384,23 @@ async function tourGoToCountry(name) {
   await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
 }
 
-// After visiting all of a country's pins, zoom back out to that same
-// country's own overview before moving on to the next one, instead of
-// jumping straight from the last pin to the next country — confirmed
-// live as the better flow. Metrics/label aren't touched at all here:
+// After visiting all of a country's pins, zoom back out to the country's
+// own zoom level before moving on to the next one, instead of jumping
+// straight from the last pin to the next country. A pure zoom, not a
+// pan-and-zoom: stays centered wherever the last pin left the camera
+// rather than re-centering on the country's own bounds — the point is
+// just to back out of the last pin's closer-in zoom (see the pinZoom
+// step-in in runTour), not to re-survey the whole country again (that's
+// what tourGoToDivisionOverview already does, once, after every country
+// in the division is done). Metrics/label aren't touched at all here:
 // still the same country the pins just came from, so whatever's already
 // showing just stays up throughout.
 async function tourGoToCountryOverview(name) {
   const info = countryBoundsAndZoom(name);
   if (!info) return;
-  const duration = tourCountryLegDuration(info.target, info.targetZoom);
-  await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
+  const target = map.getCenter();
+  const duration = tourCountryLegDuration(target, info.targetZoom);
+  await tourFlyToAndWait(() => map.flyTo(target, info.targetZoom, { duration }), duration);
 }
 
 // Every ministry pin in `countryName`, ordered by the same orderByProximity
@@ -3407,14 +3425,14 @@ function tourPinHeaderHtml(row) {
   return `${flag ? `${flag} ` : ''}${escapeHtml(row.city)}${row.city === row.country ? '' : `, ${escapeHtml(row.country)}`}`;
 }
 
-// Flies to one pin, but stays at the country's own zoom (targetZoom,
-// passed down from countryBoundsAndZoom — the same one tourGoToCountry
-// itself lands at) rather than zooming in further to CONFIG.MAX_ZOOM —
-// pin-to-pin hops within a country now read as a pan across a view that
-// still shows the country's outline, not a tight zoom-in per pin. Pins
-// aren't clustered during this phase (see showTourCountryPinsOnly), so
-// two close together can end up visually tight at this wider zoom —
-// accepted tradeoff for keeping the country's shape in view throughout.
+// Flies to one pin at targetZoom (passed down from runTour — one step in
+// from the country's own zoom, see its own comment there) rather than
+// zooming in further to CONFIG.MAX_ZOOM — pin-to-pin hops within a
+// country now read as a pan across a view that still shows most of the
+// country's outline, not a tight zoom-in per pin. Pins aren't clustered
+// during this phase (see showTourCountryPinsOnly), so two close together
+// can end up visually tight at this wider zoom — accepted tradeoff for
+// keeping the country's shape in view throughout.
 // Lands right on the pin's own lat/lng, centered — unlike the old
 // popup-card version, there's no card to leave screen room for anymore
 // (see below), so it doesn't need shifting off-center.
@@ -3548,17 +3566,21 @@ async function runTour(divisionKeys) {
         await tourCheckpoint();
         await tourGoToCountry(countryName);
         await tourDwell(TOUR_DWELL_SECONDS);
-        // Same zoom tourGoToCountry itself just landed at — pin-to-pin
-        // hops stay there instead of zooming in further (see
-        // tourGoToPin's own comment on why).
+        // One step in from tourGoToCountry's own zoom, not the same
+        // level — close enough to read individual pins a little more
+        // clearly while cycling through them, without zooming in as far
+        // as CONFIG.MAX_ZOOM (see tourGoToPin's own comment on that).
         const countryInfo = countryBoundsAndZoom(countryName);
-        const pinZoom = countryInfo ? countryInfo.targetZoom : CONFIG.MAX_ZOOM;
+        const pinZoom = countryInfo
+          ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
+          : CONFIG.MAX_ZOOM;
         for (const pinEntry of pinsInCountryByProximity(countryName)) {
           await tourCheckpoint();
           await tourGoToPin(pinEntry, pinZoom);
         }
         await tourCheckpoint();
         await tourGoToCountryOverview(countryName);
+        await tourDwell(TOUR_DWELL_SECONDS);
       }
 
       await tourCheckpoint();

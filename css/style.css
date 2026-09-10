@@ -326,7 +326,12 @@ h1, h2, h3, .legend-label, .cluster-badge {
   left: 50%;
   bottom: max(16px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  z-index: 970;
+  /* Above #ministry-lightbox (z-index 1300) — that overlay's inset:0,
+     pointer-events:auto wrapper covers the whole viewport including
+     wherever these controls sit, which matches the reported symptom of
+     Stop/Pause/etc. only being reachable while no photo carousel was
+     open — this ordering is what makes them reachable regardless. */
+  z-index: 1400;
   display: flex;
   gap: 8px;
   padding: 8px;
