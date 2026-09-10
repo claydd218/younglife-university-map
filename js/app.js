@@ -369,12 +369,20 @@ function clusterIconFactory(divisionKey) {
 // visible effect on its own, it just warms the cache. Used below so every
 // ministry's own popup-thumbnail photo (the same URL buildPopupHtml's own
 // <img> will request) starts downloading the moment the map loads,
-// instead of only starting once a visitor actually opens that popup —
-// confirmed live as the fix for a visible parchment-placeholder-then-
-// photo-pops-in flash on first open.
+// instead of only starting once a visitor actually opens that popup.
+//
+// The Image object itself is pushed into preloadedImagePool rather than
+// left to fall out of scope — with hundreds of these firing at once on
+// page load, an unreferenced one is eligible for GC before its request
+// actually finishes, which can silently abort the very fetch this
+// function exists to start. Never drained — held for the life of the
+// page, same as the DOM would hold it if it were a real <img>.
+const preloadedImagePool = [];
+
 function preloadImage(url) {
   const img = new Image();
   img.src = url;
+  preloadedImagePool.push(img);
 }
 
 // Same cache-warming idea as preloadImage above, but for a staff photo,
@@ -402,6 +410,7 @@ function preloadStaffPhoto(slug, extIdx = 0) {
   const img = new Image();
   img.onerror = () => preloadStaffPhoto(slug, extIdx + 1);
   img.src = `${CONFIG.IMAGES_DIR}${slug}.${CONFIG.IMAGE_EXTENSIONS[extIdx]}`;
+  preloadedImagePool.push(img);
 }
 
 function buildPopupHtml(row, divisionKey) {
