@@ -3274,10 +3274,15 @@ function pinsInCountryByProximity(countryName) {
   return orderByProximity(points).map((p) => p.entry);
 }
 
-// Flies to one pin, as close as the map ever zooms (CONFIG.MAX_ZOOM — a
-// country's own zoom can already be near that for a small country, so
-// this often isn't a huge further zoom-in, just a pan), then opens that
-// pin's own popup. If it has photos, steps through all of them once in
+// Flies to one pin, but stays at the country's own zoom (targetZoom,
+// passed down from countryBoundsAndZoom — the same one tourGoToCountry
+// itself lands at) rather than zooming in further to CONFIG.MAX_ZOOM —
+// pin-to-pin hops within a country now read as a pan across a view that
+// still shows the country's outline, not a tight zoom-in per pin. Pins
+// aren't clustered during this phase (see showTourCountryPinsOnly), so
+// two close together can end up visually tight at this wider zoom —
+// accepted tradeoff for keeping the country's shape in view throughout.
+// Then opens that pin's own popup. If it has photos, steps through all of them once in
 // the fullscreen lightbox (window.__ministryLightbox — exposed by
 // wireMinistryPhotoCarousel specifically for this) at TOUR_PHOTO_DWELL_
 // SECONDS each, then closes the lightbox and holds on the popup/pin view
@@ -3303,9 +3308,8 @@ function tourPinLandingLatLng(target, targetZoom) {
   return map.unproject(centerPoint, targetZoom);
 }
 
-async function tourGoToPin(entry) {
+async function tourGoToPin(entry, targetZoom) {
   const target = entry.marker.getLatLng();
-  const targetZoom = CONFIG.MAX_ZOOM;
   const duration = tourPinLegDuration(target, targetZoom);
   await tourFlyToAndWait(() => {
     const landing = tourPinLandingLatLng(target, targetZoom);
@@ -3426,9 +3430,14 @@ async function runTour(divisionKeys) {
         await tourCheckpoint();
         await tourGoToCountry(countryName);
         await tourDwell(TOUR_DWELL_SECONDS);
+        // Same zoom tourGoToCountry itself just landed at — pin-to-pin
+        // hops stay there instead of zooming in further (see
+        // tourGoToPin's own comment on why).
+        const countryInfo = countryBoundsAndZoom(countryName);
+        const pinZoom = countryInfo ? countryInfo.targetZoom : CONFIG.MAX_ZOOM;
         for (const pinEntry of pinsInCountryByProximity(countryName)) {
           await tourCheckpoint();
-          await tourGoToPin(pinEntry);
+          await tourGoToPin(pinEntry, pinZoom);
         }
         await tourCheckpoint();
         await tourGoToCountryOverview(countryName);
