@@ -949,7 +949,7 @@ function wireNavMenu() {
       // and choosing World) was doing despite animate:true. flyTo has no
       // such cutoff — it always plays its own zoom-out/pan/zoom-in curve,
       // which is also just a more dynamic transition in general.
-      map.flyTo(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM);
+      flyToWithRedrawWatch(() => map.flyTo(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM));
     });
     showMetricsOverlay(state.worldMetrics, null);
   }
@@ -966,10 +966,10 @@ function wireNavMenu() {
       // just breathing room, same spirit as mapCapture.js's DIVISION_PADDING.
       // flyToBounds — see goToWorld's comment on why flyTo(Bounds) over a
       // plain animated fitBounds/setView.
-      map.flyToBounds(bounds, {
+      flyToWithRedrawWatch(() => map.flyToBounds(bounds, {
         paddingTopLeft: [40, 170],
         paddingBottomRight: [40, 40],
-      });
+      }));
     });
     showMetricsOverlay(state.metricsByDivision.get(key) || [], DIVISIONS[key].pin, escapeHtml(DIVISIONS[key].label));
   }
@@ -1180,7 +1180,7 @@ function flyToCountryBounds(countryName) {
   // zoomAnimationThreshold cutoff, so a distant search result still
   // animates instead of jumping).
   withSuppressedDismiss(() => {
-    map.flyTo(bounds.getCenter(), map.getBoundsZoom(bounds) - 0.5);
+    flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), map.getBoundsZoom(bounds) - 0.5));
   });
   showCountryMetricsOverlay(countryName);
   return true;
@@ -2015,7 +2015,7 @@ async function init() {
             // click is about to bubble into, would each immediately hide
             // the metrics overlay this click is showing.
             withSuppressedDismiss(() => {
-              map.flyTo(bounds.getCenter(), targetZoom);
+              flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom));
             });
             showCountryMetricsOverlay(name);
           }
@@ -2082,7 +2082,7 @@ async function init() {
     map.getPane('coastalGlowPane').style.filter = 'blur(7px)';
     map.getPane('coastalGlowPane').style.pointerEvents = 'none';
     // Kept as a handle (state.coastalGlowRenderer) so the tour's mid-flight
-    // redraw watcher (see watchTourFlightForRedraw) can reach it directly,
+    // redraw watcher (see watchFlightForRedraw) can reach it directly,
     // same as map.options.renderer for the main country layer — Leaflet otherwise
     // auto-creates one renderer per distinct pane with no way to get a
     // reference back to it.
@@ -2973,14 +2973,14 @@ function tourCountryLegDuration(targetLatLng, targetZoom) {
 // but unlike the fixed-timer version that's not a real downside here — a
 // user who isn't looking at the tab doesn't notice missed resets, and
 // rAF resumes and catches up as soon as they refocus.
-const TOUR_ZOOM_DRIFT_THRESHOLD = 1; // zoom levels ≈ 2x stretch before it's worth paying for a reset
+const ZOOM_DRIFT_THRESHOLD = 1; // zoom levels ≈ 2x stretch before it's worth paying for a reset
 // The glow pane is already blurred, so a somewhat larger stretch on it is
 // much less noticeable than the same stretch on the crisp border layer —
 // giving it a looser threshold measurably cuts total reset cost (it's
 // roughly half the ~35-65ms combined cost) for a "touch more" smoothness,
 // confirmed as still worth asking for even after the switch off a flat
 // timer.
-const TOUR_GLOW_DRIFT_THRESHOLD = 2;
+const GLOW_DRIFT_THRESHOLD = 2;
 
 // Zoom drift alone missed a real case: a pin-to-pin hop starts and ends at
 // the exact same zoom (both CONFIG.MAX_ZOOM), so the zoom-drift check
@@ -2996,7 +2996,7 @@ const TOUR_GLOW_DRIFT_THRESHOLD = 2;
 // renderer's own last-reset center (projected at the current zoom) and
 // resetting once it crosses a fraction of the viewport size catches this
 // independently of whatever the zoom-drift check is doing.
-const TOUR_PAN_DRIFT_FRACTION = 0.75; // fraction of the smaller viewport dimension
+const PAN_DRIFT_FRACTION = 0.75; // fraction of the smaller viewport dimension
 
 function renderRendererDriftPx(renderer, zoom) {
   if (!renderer || !renderer._center) return 0;
@@ -3005,26 +3005,26 @@ function renderRendererDriftPx(renderer, zoom) {
   return currentPoint.distanceTo(refPoint);
 }
 
-function watchTourFlightForRedraw() {
+function watchFlightForRedraw() {
   const renderer = map.options.renderer;
   const glowRenderer = state.coastalGlowRenderer;
   let running = true;
   function tick() {
     if (!running) return;
     const zoom = map.getZoom();
-    const panThreshold = Math.min(map.getSize().x, map.getSize().y) * TOUR_PAN_DRIFT_FRACTION;
+    const panThreshold = Math.min(map.getSize().x, map.getSize().y) * PAN_DRIFT_FRACTION;
     // Each renderer's own drift, checked and reset independently — the
     // glow pane resets on its own, looser cadence (see
-    // TOUR_GLOW_DRIFT_THRESHOLD's comment), not tied to the main layer's.
+    // GLOW_DRIFT_THRESHOLD's comment), not tied to the main layer's.
     if (renderer && renderer._reset) {
       const zoomDrift = Math.abs(zoom - renderer._zoom);
       const panDrift = renderRendererDriftPx(renderer, zoom);
-      if (zoomDrift > TOUR_ZOOM_DRIFT_THRESHOLD || panDrift > panThreshold) renderer._reset();
+      if (zoomDrift > ZOOM_DRIFT_THRESHOLD || panDrift > panThreshold) renderer._reset();
     }
     if (glowRenderer) {
       const zoomDrift = Math.abs(zoom - glowRenderer._zoom);
       const panDrift = renderRendererDriftPx(glowRenderer, zoom);
-      if (zoomDrift > TOUR_GLOW_DRIFT_THRESHOLD || panDrift > panThreshold) glowRenderer._reset();
+      if (zoomDrift > GLOW_DRIFT_THRESHOLD || panDrift > panThreshold) glowRenderer._reset();
     }
     requestAnimationFrame(tick);
   }
@@ -3032,10 +3032,38 @@ function watchTourFlightForRedraw() {
   return () => { running = false; };
 }
 
+// Same buffer-staleness problem watchFlightForRedraw exists to fix, but
+// for the site's own regular flyTo/flyToBounds calls (World/Division nav,
+// a country polygon or directory/search pick) — none of those are
+// tour legs and none of them await anything today, so this doesn't
+// return a promise the way tourFlyToAndWait does; it just attaches the
+// watcher for the duration of the flight and detaches it once the flight
+// settles. Flying from a deep pin-level zoom straight out to World or a
+// division (e.g. the tour's own Stop button, or a visitor doing the same
+// thing by hand) went through these plain calls, which never had the
+// watcher wired in — same pop-in-on-arrival symptom already fixed for
+// tour legs specifically, just never generalized past them until now.
+function flyToWithRedrawWatch(flyFn) {
+  const stopRedrawWatcher = watchFlightForRedraw();
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    stopRedrawWatcher();
+  };
+  flyFn();
+  map.once('moveend', finish);
+  // Safety net in case 'moveend' never fires (e.g. a no-op flight to an
+  // already-current view) — same reasoning as tourFlyToAndWait's own
+  // hard ceiling below, just a fixed generous duration since these
+  // callers don't already compute one of their own the way tour legs do.
+  setTimeout(finish, 8000);
+}
+
 function tourFlyToAndWait(flyFn, duration) {
   return new Promise((resolve) => {
     let done = false;
-    const stopRedrawWatcher = watchTourFlightForRedraw();
+    const stopRedrawWatcher = watchFlightForRedraw();
     const finish = () => {
       if (done) return;
       done = true;
