@@ -979,6 +979,14 @@ function wireNavMenu() {
     const btn = e.target.closest('.nav-menu-item');
     if (!btn) return;
     closeMenu();
+    // A paused tour is still "live" — tourRunPromise is just parked
+    // inside tourCheckpoint's own wait loop, ready to resume right where
+    // it left off. Picking World/a division here is a real navigate-away,
+    // so end the tour outright first (state cleanup + hide controls only,
+    // no navigate-away of its own — this click is already about to fly
+    // the camera itself, a second fly-to on top of it would just fight
+    // it) rather than leaving it parked to silently resume later.
+    if (tourController.state === 'paused') endTourInPlace();
     if (btn.dataset.nav === 'world') goToWorld();
     else goToDivision(btn.dataset.nav);
   });
