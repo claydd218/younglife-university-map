@@ -3074,21 +3074,28 @@ function countryBoundsAndZoom(name) {
   return { targetZoom, target: bounds.getCenter() };
 }
 
+// Fraction of a country leg's duration at which its label appears — not
+// on departure (labeled a place the camera hadn't even started toward)
+// and not gated to full arrival either (read as a step behind once pins
+// made the rest of the tour brisker). flyTo's own easing is fastest in
+// the middle and decelerates into the back third or so of a flight, so
+// timing the reveal there lines the name up with roughly when the
+// destination visibly starts "arriving" rather than with departure or
+// the final stop.
+const TOUR_COUNTRY_LABEL_REVEAL_FRACTION = 0.65;
+
 async function tourGoToCountry(name) {
   showTourCountryPinsOnly(name);
   // Hidden as this flight departs — leaving the division's own metrics
   // (the first country in a division) or the previous country's overview
   // (every country after) behind, same reasoning as tourGoToWorld's own
-  // hide-on-departure. Shown again only once this flight actually settles
-  // on the country it names (confirmed live as reading better than
-  // showing it right as departure begins, while the visitor's still
-  // looking at wherever they're leaving).
+  // hide-on-departure.
   hideMetricsOverlay();
   const info = countryBoundsAndZoom(name);
   if (!info) return;
   const duration = tourCountryLegDuration(info.target, info.targetZoom);
+  setTimeout(() => showCountryMetricsOverlay(name), duration * TOUR_COUNTRY_LABEL_REVEAL_FRACTION * 1000);
   await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
-  showCountryMetricsOverlay(name);
 }
 
 // After visiting all of a country's pins, zoom back out to that same
@@ -3167,6 +3174,17 @@ async function tourCheckpoint() {
   if (tourController.state === 'stopped') throw new TourStopSignal();
 }
 
+// A deliberate held dwell — everywhere else in the tour, legs chain
+// straight into each other with no pause (decel into arrival, immediately
+// accel back out). This is the one exception: a beat to actually read the
+// division's metrics before the camera starts moving toward its first
+// country. Not itself pause/stop-aware mid-dwell — same granularity as
+// every other checkpoint, which only ever takes effect between legs, not
+// instantly.
+async function tourDwell(seconds) {
+  await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+}
+
 // Every pass ends back at World — the same place it started — rather
 // than stopping wherever the last country happened to leave off. Doing
 // that unconditionally (loop on or off) is what makes looping trivial:
@@ -3194,6 +3212,7 @@ async function runTour(divisionKeys) {
     for (const divisionKey of divisionKeys) {
       await tourCheckpoint();
       await tourGoToDivision(divisionKey);
+      await tourDwell(1.5);
 
       // TESTING ONLY — caps each division to its first few countries so a
       // full run (especially a World Tour) is fast to iterate on. Remove
