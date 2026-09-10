@@ -3475,15 +3475,17 @@ async function tourGoToPin(entry, targetZoom) {
 
   await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
 
+  // TESTING ONLY — skips the header/carousel card entirely (not just its
+  // photos) so the pin flight/landing motion can be watched with nothing
+  // else happening. Remove this early return (back to the real
+  // window.__ministryLightbox block below) once that's settled.
+  if (TOUR_TESTING_SUPPRESS_CARD) {
+    await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
+    return;
+  }
+
   if (window.__ministryLightbox) {
-    // TESTING ONLY — force every pin to the no-photo (header-only) path
-    // so the pin flight/landing/pop motions can be evaluated on their
-    // own, without any photo loading/carousel in the mix. Remove this
-    // override (back to the real photos.length check below) once that's
-    // settled.
-    const photos = TOUR_TESTING_SUPPRESS_PHOTOS
-      ? []
-      : (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+    const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
     const headerHtml = tourPinHeaderHtml(entry.row);
     await window.__ministryLightbox.openFromPoint(photos, headerHtml, target);
     if (photos.length) {
@@ -3562,9 +3564,10 @@ const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 const TOUR_TESTING_MAX_COUNTRIES = 2;
 
 // TESTING ONLY — see its one use in tourGoToPin above. true while
-// evaluating pin flight/landing/pop motion in isolation; flip back to
+// evaluating pin flight/landing motion in isolation, with the header/
+// carousel card skipped entirely (not just its photos); flip back to
 // false (or remove the override entirely) once that's settled.
-const TOUR_TESTING_SUPPRESS_PHOTOS = true;
+const TOUR_TESTING_SUPPRESS_CARD = true;
 
 // divisionKeys is an array, not a single key — a "World Tour" (every
 // division) and a single-division tour are the exact same code, just a
