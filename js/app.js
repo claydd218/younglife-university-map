@@ -2242,13 +2242,28 @@ async function init() {
         // .leaflet-zoom-anim .leaflet-zoom-animated rule) every time,
         // however big or small the step. CLUSTER_CLICK_ZOOM_DURATION
         // makes it an actual, adjustable value instead.
-        withSuppressedDismiss(() => {
-          flyToWithRedrawWatch(() => map.flyTo(
-            cluster.getLatLng(),
-            Math.min(idealZoom, cap, map.getMaxZoom()),
-            { duration: CLUSTER_CLICK_ZOOM_DURATION },
-          ));
-        });
+        //
+        // Only when there's still somewhere left to zoom: Leaflet.
+        // markercluster's own internal 'clusterclick' listener (wired
+        // because spiderfyOnMaxZoom is on, regardless of our
+        // zoomToBoundsOnClick:false) fires on this exact same event, and
+        // spiderfies a cluster whose members can only ever be separated
+        // at the map's own max zoom — already-at-max-zoom case. Matches
+        // the reported symptom (a spiderfy briefly appears, then
+        // collapses back to the cluster icon) exactly: our own flyTo
+        // firing right after, even to an effectively unchanged position,
+        // still dispatches real movement events on top of it. Skipping
+        // our flight in this case leaves it entirely to Leaflet's own
+        // listener instead of fighting it a moment later.
+        if (map.getZoom() < map.getMaxZoom()) {
+          withSuppressedDismiss(() => {
+            flyToWithRedrawWatch(() => map.flyTo(
+              cluster.getLatLng(),
+              Math.min(idealZoom, cap, map.getMaxZoom()),
+              { duration: CLUSTER_CLICK_ZOOM_DURATION },
+            ));
+          });
+        }
         // Same re-sync a pin's own popup does (see the map-level
         // 'popupopen' listener below init()) — a cluster click has no
         // popup to hang that off of, so it needs its own trigger here.
