@@ -673,6 +673,31 @@ function computeMetrics(rowsSubset, { includeCountries = true } = {}) {
   return metrics;
 }
 
+// Counts `el`'s displayed number up from 0 to `target` over
+// METRIC_COUNT_UP_MS — eased out (fast start, settles into the final
+// value) rather than linear, so it reads as a quick flourish rather than
+// a visible ticking clock. Each call's rAF loop writes to the specific
+// `el` it closed over, so an old, still-running animation from a metric
+// box that's since been replaced (renderMetrics rebuilds .metrics-boxes'
+// whole innerHTML on every call) just harmlessly finishes writing to a
+// detached node — nothing to cancel, nothing left visible.
+const METRIC_COUNT_UP_MS = 600;
+
+function animateCountUp(el, target) {
+  if (!target) {
+    el.textContent = '0';
+    return;
+  }
+  const start = performance.now();
+  function tick(now) {
+    const t = Math.min(1, (now - start) / METRIC_COUNT_UP_MS);
+    const eased = 1 - (1 - t) ** 3;
+    el.textContent = String(Math.round(eased * target));
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
 function renderMetrics(metrics, accentColor) {
   const container = document.getElementById('metrics-boxes');
   const boxStyle = accentColor ? ` style="border-color:${accentColor}"` : '';
@@ -680,9 +705,11 @@ function renderMetrics(metrics, accentColor) {
   container.innerHTML = metrics.map(({ label, num }) => `
     <div class="metric-box"${boxStyle}>
       <div class="metric-box-label"${textStyle}>${escapeHtml(label).replace(' ', '<br>')}</div>
-      <div class="metric-box-num"${textStyle}>${num}</div>
+      <div class="metric-box-num"${textStyle}>0</div>
     </div>
   `).join('');
+  const numEls = container.querySelectorAll('.metric-box-num');
+  metrics.forEach((m, i) => animateCountUp(numEls[i], m.num));
 }
 
 // labelHtml identifies *what* the metrics below it describe — a division
