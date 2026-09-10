@@ -3098,11 +3098,18 @@ async function tourGoToDivision(divisionKey) {
 // together, not lingering on the last country specifically — but not
 // until arrival: showing "division" metrics while the camera's still
 // tightly zoomed into that last country would be the same label/view
-// mismatch already confirmed to read badly for country labels. Every
+// mismatch already confirmed to read badly for country labels. So the
+// last country's own label/metrics hide (fade out) as this flight
+// departs, same as every other hide-on-departure leg, then the
+// division's fade back in on arrival — #metrics-overlay's own opacity
+// transition (css/style.css) handles both fades, this just needs to
+// actually toggle metrics-hidden off then on instead of swapping the
+// label's content while it sits at full opacity the whole flight. Every
 // pin (not just the last country's) is un-hidden right away, though —
 // explicitly asked to happen before this zoom-out, not gated to arrival.
 async function tourGoToDivisionOverview(divisionKey) {
   restoreTourClustering();
+  hideMetricsOverlay();
   await tourFlyToDivisionBounds(divisionKey);
   showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
 }
