@@ -111,7 +111,7 @@ const map = L.map('map', {
 const DirectoryControl = L.Control.extend({
   options: { position: 'bottomright' },
   onAdd: function () {
-    const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+    const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control directory-control');
     const link = L.DomUtil.create('a', 'directory-control-link', container);
     link.href = '#';
     link.title = 'Browse countries';
@@ -3065,6 +3065,10 @@ async function tourGoToWorld() {
 // its original caller). map.flyToBounds happily normalizes that array on
 // its own, but .getCenter() needs an actual LatLngBounds instance.
 // Shared by tourGoToDivision and tourGoToDivisionOverview.
+// Returns { promise, duration } rather than just the promise — callers
+// that want to reveal something partway through the flight (see
+// TOUR_LABEL_REVEAL_FRACTION, used by tourGoToDivisionOverview below)
+// need the computed duration too, not just something to await.
 function tourFlyToDivisionBounds(divisionKey) {
   const rawBounds = window.__divisionBounds(divisionKey);
   if (!rawBounds) return null;
@@ -3074,11 +3078,12 @@ function tourFlyToDivisionBounds(divisionKey) {
   // padding) internally; this is only close enough to feed the pixel-based
   // duration estimate, not meant to match flyToBounds' actual result.
   const duration = tourCountryLegDuration(target, map.getBoundsZoom(bounds));
-  return tourFlyToAndWait(() => map.flyToBounds(bounds, {
+  const promise = tourFlyToAndWait(() => map.flyToBounds(bounds, {
     paddingTopLeft: [40, 170],
     paddingBottomRight: [40, 40],
     duration,
   }), duration);
+  return { promise, duration };
 }
 
 async function tourGoToDivision(divisionKey) {
@@ -3087,7 +3092,8 @@ async function tourGoToDivision(divisionKey) {
   // not after — this is the one leaving World, not a country/division, so
   // it keeps the original show-on-departure behavior.
   showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
-  await tourFlyToDivisionBounds(divisionKey);
+  const flight = tourFlyToDivisionBounds(divisionKey);
+  if (flight) await flight.promise;
 }
 
 // After the division's last country (pins + country overview) is done,
@@ -3107,11 +3113,20 @@ async function tourGoToDivision(divisionKey) {
 // label's content while it sits at full opacity the whole flight. Every
 // pin (not just the last country's) is un-hidden right away, though —
 // explicitly asked to happen before this zoom-out, not gated to arrival.
+// The division label itself reveals at TOUR_LABEL_REVEAL_FRACTION of the
+// flight, same early-reveal timing as a country's own label (see that
+// constant's comment) rather than waiting for full arrival.
 async function tourGoToDivisionOverview(divisionKey) {
   restoreTourClustering();
   hideMetricsOverlay();
-  await tourFlyToDivisionBounds(divisionKey);
-  showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
+  const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
+  const flight = tourFlyToDivisionBounds(divisionKey);
+  if (flight) {
+    setTimeout(reveal, flight.duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
+    await flight.promise;
+  } else {
+    reveal();
+  }
 }
 
 // Shared bounds/zoom lookup for a country — used both when first arriving
@@ -3128,15 +3143,16 @@ function countryBoundsAndZoom(name) {
   return { targetZoom, target: bounds.getCenter() };
 }
 
-// Fraction of a country leg's duration at which its label appears — not
+// Fraction of a leg's duration at which its arrival label appears — not
 // on departure (labeled a place the camera hadn't even started toward)
 // and not gated to full arrival either (read as a step behind once pins
 // made the rest of the tour brisker). flyTo's own easing is fastest in
 // the middle and decelerates into the back third or so of a flight, so
 // timing the reveal there lines the name up with roughly when the
 // destination visibly starts "arriving" rather than with departure or
-// the final stop.
-const TOUR_COUNTRY_LABEL_REVEAL_FRACTION = 0.65;
+// the final stop. Shared by a country's own label (tourGoToCountry) and
+// the division's, on the final zoom-out (tourGoToDivisionOverview).
+const TOUR_LABEL_REVEAL_FRACTION = 0.65;
 
 async function tourGoToCountry(name) {
   showTourCountryPinsOnly(name);
@@ -3148,7 +3164,7 @@ async function tourGoToCountry(name) {
   const info = countryBoundsAndZoom(name);
   if (!info) return;
   const duration = tourCountryLegDuration(info.target, info.targetZoom);
-  setTimeout(() => showCountryMetricsOverlay(name), duration * TOUR_COUNTRY_LABEL_REVEAL_FRACTION * 1000);
+  setTimeout(() => showCountryMetricsOverlay(name), duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
   await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
 }
 
@@ -3508,6 +3524,13 @@ function runQueryStringTour() {
 
   document.getElementById('tour-controls').hidden = false;
   document.getElementById('tour-menu-toggle').hidden = false;
+  // Legend, zoom control, search (DirectoryControl), and the World/
+  // Division nav menu all compete with the tour's own controls and don't
+  // do anything useful while it's driving the camera — hidden via CSS
+  // (see .tour-active in css/style.css) for the whole ?tour= session,
+  // same lifetime as tour-controls/tour-menu-toggle above rather than
+  // tied to play/pause.
+  document.body.classList.add('tour-active');
   wireTourControls();
   wireTourMenu();
   updateTourControlsUI();

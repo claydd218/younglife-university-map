@@ -398,6 +398,20 @@ h1, h2, h3, .legend-label, .cluster-badge {
   display: none;
 }
 
+/* Set on <body> for the whole ?tour=NAME session (see runQueryStringTour
+   in js/app.js), not toggled per play/pause — these controls don't do
+   anything useful while the tour is driving the camera and just compete
+   with its own controls for space/attention. Plain display:none, not a
+   fade — same treatment as .tour-menu-toggle[hidden] above, not the
+   idle-fade .tour-controls.idle-hidden gets during playback. */
+body.tour-active #legend,
+body.tour-active .leaflet-control-zoom,
+body.tour-active .directory-control,
+body.tour-active #nav-menu-toggle,
+body.tour-active #nav-menu {
+  display: none;
+}
+
 .nav-menu {
   position: fixed;
   top: calc(max(14px, env(safe-area-inset-top)) + 46px);
