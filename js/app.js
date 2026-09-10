@@ -1496,6 +1496,7 @@ function wireMinistryPhotoCarousel() {
   const dotsEl = lightbox.querySelector('.lightbox-dots');
   const prevBtn = lightbox.querySelector('.lightbox-prev');
   const nextBtn = lightbox.querySelector('.lightbox-next');
+  const headerEl = lightbox.querySelector('.lightbox-tour-header');
   const FADE_MS = 500;
   const HIDE_MS = 120; // matches .lightbox-close/.lightbox-nav/.lightbox-dots's own opacity transition in style.css
 
@@ -1634,17 +1635,35 @@ function wireMinistryPhotoCarousel() {
     }, FADE_MS);
   }
 
-  async function open(photoList) {
-    photos = photoList;
+  // headerHtml is only ever passed by the tour (see openFromPoint below,
+  // and tourPinHeaderHtml in tourGoToPin) — a real visitor's own click to
+  // open a photo never has one, leaving the header hidden/empty exactly
+  // like before this existed. photoList can be empty (the tour's
+  // no-photo case, via openFromPoint) — skips all photo loading/sizing
+  // and just shows the header alone, with no slide, dots, or prev/next.
+  async function open(photoList, headerHtml) {
+    if (headerHtml) {
+      headerEl.innerHTML = headerHtml;
+      headerEl.hidden = false;
+    } else {
+      headerEl.hidden = true;
+      headerEl.innerHTML = '';
+    }
+
+    photos = photoList || [];
     index = 0;
     activeSlide = slideA;
     slideB.classList.remove('active');
     slideB.removeAttribute('src');
+    slideA.classList.remove('active');
+    slideA.removeAttribute('src');
     resetPinch();
-    slideA.src = urlFor(0);
-    await whenLoaded(slideA);
-    applySlideSize(slideA, computeSlideSize(slideA));
-    slideA.classList.add('active');
+    if (photos.length) {
+      slideA.src = urlFor(0);
+      await whenLoaded(slideA);
+      applySlideSize(slideA, computeSlideSize(slideA));
+      slideA.classList.add('active');
+    }
     renderDots();
     const multi = photos.length > 1;
     prevBtn.hidden = !multi;
@@ -1655,17 +1674,74 @@ function wireMinistryPhotoCarousel() {
   function close() {
     lightbox.classList.remove('visible');
     activeImg = null;
+    headerEl.hidden = true;
+    headerEl.innerHTML = '';
   }
 
   function showNext() { showIndex((index + 1) % photos.length); }
   function showPrev() { showIndex((index - 1 + photos.length) % photos.length); }
+
+  // Pixel position (viewport-relative, like getBoundingClientRect) of a
+  // map LatLng right now — used below to animate the lightbox growing
+  // out of (and shrinking back into) wherever a tour pin actually sits on
+  // screen, rather than just fading in centered like a real visitor's own
+  // click does.
+  function screenPointForLatLng(latLng) {
+    const pt = map.latLngToContainerPoint(latLng);
+    const mapRect = map.getContainer().getBoundingClientRect();
+    return { x: mapRect.left + pt.x, y: mapRect.top + pt.y };
+  }
+
+  // Tour-only entry point (see tourGoToPin) — opens exactly like open()
+  // above (same header/photo/no-photo handling), then plays a one-off
+  // grow-from-`latLng` animation on .lightbox-content via the Web
+  // Animations API rather than a CSS class + transition: this is a
+  // single programmatic run, not a state the element sits in, and WAAPI
+  // needs no manual cleanup afterward (no fill:'forwards' — the element
+  // reverts to its plain, un-transformed layout the instant the
+  // animation ends, which is exactly the settled "fully open" look).
+  // content itself (not the slides/header individually) is what's
+  // animated, so the photo and header move and scale together as one
+  // unit, same as if the whole card were physically emerging from the pin.
+  async function openFromPoint(photoList, headerHtml, latLng) {
+    await open(photoList, headerHtml);
+    const { x, y } = screenPointForLatLng(latLng);
+    const dx = x - window.innerWidth / 2;
+    const dy = y - window.innerHeight / 2;
+    const anim = content.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(0.04)`, opacity: 0 },
+      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+    ], { duration: 380, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+    await anim.finished;
+  }
+
+  // The reverse of openFromPoint — shrinks .lightbox-content back down
+  // into `latLng`'s current screen position, then closes for real. Takes
+  // its own latLng rather than remembering the one from the matching
+  // openFromPoint call because the map can have panned/zoomed since (the
+  // pin's screen position isn't fixed) — tourGoToPin always passes the
+  // same pin's current position both times, so this still lands on it.
+  async function closeToPoint(latLng) {
+    const { x, y } = screenPointForLatLng(latLng);
+    const dx = x - window.innerWidth / 2;
+    const dy = y - window.innerHeight / 2;
+    const anim = content.animate([
+      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+      { transform: `translate(${dx}px, ${dy}px) scale(0.04)`, opacity: 0 },
+    ], { duration: 320, easing: 'cubic-bezier(0.6, 0, 0.8, 0.2)' });
+    await anim.finished;
+    close();
+  }
 
   // Exposed so runQueryStringTour's own scripted tour can drive this
   // carousel the same way a real viewer's clicks/arrow keys do, without
   // reaching into (or duplicating) this closure's own open/showNext/close.
   // Same window.__ convention this file already uses for other internal
   // hooks (__divisionBounds, __isolateDivision, __mapReady, ...).
-  window.__ministryLightbox = { open, showNext, close, isVisible: () => lightbox.classList.contains('visible') };
+  window.__ministryLightbox = {
+    open, showNext, close, openFromPoint, closeToPoint,
+    isVisible: () => lightbox.classList.contains('visible'),
+  };
 
   prevBtn.addEventListener('click', (e) => { e.stopPropagation(); showPrev(); });
   nextBtn.addEventListener('click', (e) => { e.stopPropagation(); showNext(); });
@@ -3322,6 +3398,15 @@ function pinsInCountryByProximity(countryName) {
   return orderByProximity(points).map((p) => p.entry);
 }
 
+// Same city/country header a popup's own <h3> shows (buildPopupHtml),
+// reused here for the lightbox's tour-only header (see openFromPoint) —
+// the tour goes straight to the fullscreen carousel now and never opens
+// the real popup at all, so this is that header's only stand-in.
+function tourPinHeaderHtml(row) {
+  const flag = flagEmoji(state.countryIsoByName.get(normalizeCountryName(row.country)));
+  return `${flag ? `${flag} ` : ''}${escapeHtml(row.city)}${row.city === row.country ? '' : `, ${escapeHtml(row.country)}`}`;
+}
+
 // Flies to one pin, but stays at the country's own zoom (targetZoom,
 // passed down from countryBoundsAndZoom — the same one tourGoToCountry
 // itself lands at) rather than zooming in further to CONFIG.MAX_ZOOM —
@@ -3330,61 +3415,48 @@ function pinsInCountryByProximity(countryName) {
 // aren't clustered during this phase (see showTourCountryPinsOnly), so
 // two close together can end up visually tight at this wider zoom —
 // accepted tradeoff for keeping the country's shape in view throughout.
-// Then opens that pin's own popup. If it has photos, steps through all of them once in
-// the fullscreen lightbox (window.__ministryLightbox — exposed by
-// wireMinistryPhotoCarousel specifically for this) at TOUR_PHOTO_DWELL_
-// SECONDS each, then closes the lightbox and holds on the popup/pin view
-// alone for the shorter TOUR_PIN_DWELL_SECONDS before closing the popup
-// and moving on — content to actually read/see, not a pause before
-// continuing straight through like every other dwell in the tour.
-// Country metrics stay up underneath throughout.
-// Landing spot for a pin visit isn't the pin's own lat/lng — that would
-// center it in the middle of the screen, right where a future info card
-// popping up over it would want to sit. Instead, fly to a point shifted
-// far enough north (at the target zoom) that the pin itself ends up
-// low-center on screen, just above the tour-controls bar, leaving the
-// rest of the viewport free for that card. Computed via
-// project/unproject at the target zoom rather than a fixed lat/lng
-// offset, since the same screen-pixel gap means a different real-world
-// distance depending on zoom.
-function tourPinLandingLatLng(target, targetZoom) {
-  const mapSize = map.getSize();
-  const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
-  const desiredScreenY = controlsRect.top - 24; // 24px clearance above the controls bar
-  const targetPoint = map.project(target, targetZoom);
-  const centerPoint = targetPoint.add([0, mapSize.y / 2 - desiredScreenY]);
-  return map.unproject(centerPoint, targetZoom);
-}
-
+// Lands right on the pin's own lat/lng, centered — unlike the old
+// popup-card version, there's no card to leave screen room for anymore
+// (see below), so it doesn't need shifting off-center.
+//
+// Goes straight to the fullscreen photo carousel (window.__ministryLightbox
+// — exposed by wireMinistryPhotoCarousel), skipping the popup card
+// entirely: openFromPoint plays the carousel growing out of the pin's own
+// screen position (with tourPinHeaderHtml's city/country header on top,
+// standing in for the card's own <h3>), steps through every photo once
+// at TOUR_PHOTO_DWELL_SECONDS each (or, with no photos, just holds the
+// header alone for TOUR_PIN_NO_PHOTO_DWELL_SECONDS), then closeToPoint
+// shrinks it back down into the pin before moving on. A short
+// TOUR_PIN_TRANSITION_DWELL_SECONDS brackets the whole thing — a beat on
+// the plain pin before it grows out, and another after it shrinks back in
+// before flying onward — rather than the animation running the instant
+// the camera stops, or the next flight starting the instant it's done.
 async function tourGoToPin(entry, targetZoom) {
   const target = entry.marker.getLatLng();
   const duration = tourPinLegDuration(target, targetZoom);
   await tourFlyToAndWait(() => {
-    const landing = tourPinLandingLatLng(target, targetZoom);
-    map.flyTo(landing, targetZoom, { duration });
+    map.flyTo(target, targetZoom, { duration });
   }, duration);
-  entry.marker.openPopup();
 
-  const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
-  if (photos.length && window.__ministryLightbox) {
-    await tourDwell(TOUR_PIN_DWELL_SECONDS);
-    await window.__ministryLightbox.open(photos);
-    await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
-    for (let i = 1; i < photos.length; i++) {
-      window.__ministryLightbox.showNext();
+  await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
+
+  if (window.__ministryLightbox) {
+    const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+    const headerHtml = tourPinHeaderHtml(entry.row);
+    await window.__ministryLightbox.openFromPoint(photos, headerHtml, target);
+    if (photos.length) {
       await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
+      for (let i = 1; i < photos.length; i++) {
+        window.__ministryLightbox.showNext();
+        await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
+      }
+    } else {
+      await tourDwell(TOUR_PIN_NO_PHOTO_DWELL_SECONDS);
     }
-    window.__ministryLightbox.close();
-    await tourDwell(TOUR_PIN_DWELL_SECONDS);
-  } else {
-    // No photos means no lightbox detour, so the two TOUR_PIN_DWELL_
-    // SECONDS beats either side of it would otherwise just stack into a
-    // single, needlessly-doubled pause — one flat dwell instead, its own
-    // tunable length.
-    await tourDwell(TOUR_PIN_NO_PHOTO_DWELL_SECONDS);
+    await window.__ministryLightbox.closeToPoint(target);
   }
 
-  entry.marker.closePopup();
+  await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
 }
 
 class TourStopSignal extends Error {}
@@ -3424,20 +3496,18 @@ const TOUR_DWELL_SECONDS = 1;
 // country arrival dwells above.
 const TOUR_PHOTO_DWELL_SECONDS = 2;
 
-// How long tourGoToPin holds on the plain popup/pin view — once right
-// after the popup opens (before any photos), and again once the photo
-// lightbox has already closed — a beat to actually see the pin/popup on
-// its own both before and after the photos, not just a single dwell
-// tacked on one side. Only used when there are photos, i.e. both beats
-// actually happen — see TOUR_PIN_NO_PHOTO_DWELL_SECONDS for the case
-// where there's no lightbox detour to bookend at all.
-const TOUR_PIN_DWELL_SECONDS = 1.5;
+// Brackets the whole lightbox detour in tourGoToPin — once on the plain
+// pin right before it grows out into the carousel, and again on the
+// plain pin right after it's shrunk back in, before flying onward. Short
+// on purpose: just enough to read as a deliberate beat around the
+// animation, not a second content-viewing pause the way
+// TOUR_PHOTO_DWELL_SECONDS/TOUR_PIN_NO_PHOTO_DWELL_SECONDS are.
+const TOUR_PIN_TRANSITION_DWELL_SECONDS = 1;
 
-// A pin with no photos skips the lightbox entirely, so it gets one flat
-// dwell instead of the two TOUR_PIN_DWELL_SECONDS beats that would
-// otherwise stack into a needlessly-doubled pause (3s) for a plain popup
-// with nothing to show but text. Its own tunable value rather than reused
-// so the two cases (photos vs no photos) can be paced independently.
+// How long tourGoToPin holds on the header-only lightbox (no photos to
+// cycle through) before shrinking back into the pin — its own tunable
+// value, independent of TOUR_PHOTO_DWELL_SECONDS, since it's a much
+// quicker read (just a name/country, not a photo).
 const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 
 // Every pass ends back at World — the same place it started — rather
@@ -3620,12 +3690,13 @@ function endTourInPlace() {
   document.getElementById('tour-controls').hidden = true;
   updateTourControlsUI();
   restoreTourClustering();
-  // A pin's popup — and, mid-photo-dwell, the fullscreen lightbox on top
-  // of it — is still open and waiting out its own dwell timer when Stop
-  // interrupts tourGoToPin. Neither timer is checkpoint-aware mid-dwell
-  // (same as every other tour dwell), so without this they'd sit open
-  // until they happen to elapse on their own instead of closing the
-  // instant Stop is pressed.
+  // The fullscreen lightbox (tourGoToPin's own openFromPoint/closeToPoint)
+  // can still be open, waiting out one of its own dwell timers, when Stop
+  // interrupts — none of them are checkpoint-aware mid-dwell (same as
+  // every other tour dwell), so without this it would sit open until it
+  // happens to elapse on its own instead of closing the instant Stop is
+  // pressed. Plain close(), not closeToPoint() — no need for the
+  // shrink-back-into-the-pin animation on a hard stop.
   if (window.__ministryLightbox && window.__ministryLightbox.isVisible()) window.__ministryLightbox.close();
   map.closePopup();
 }

@@ -112,6 +112,19 @@
 
   <div id="ministry-lightbox" class="ministry-lightbox" aria-hidden="true">
     <div class="lightbox-backdrop"></div>
+    <!-- Only ever populated for the ?tour=NAME tour (see tourGoToPin/
+         tourPinHeaderHtml in js/app.js and window.__ministryLightbox's own
+         openFromPoint) — a real visitor's own click-to-open never passes
+         a header, so this stays empty/hidden for them. A sibling of
+         .lightbox-content, deliberately NOT inside it: openFromPoint/
+         closeToPoint animate .lightbox-content's own `transform`, and a
+         `position:fixed` descendant of a transformed element is
+         positioned relative to THAT element instead of the viewport
+         (a CSS containing-block rule) — nested here, the header would
+         jump to a wrong spot for the animation's duration. As a sibling
+         it just fades with #ministry-lightbox's own opacity transition,
+         unaffected by whatever .lightbox-content's transform is doing. -->
+    <div class="lightbox-tour-header" hidden></div>
     <div class="lightbox-content">
       <button type="button" class="lightbox-close" aria-label="Close">&times;</button>
       <button type="button" class="lightbox-nav lightbox-prev" aria-label="Previous photo">&#10094;</button>

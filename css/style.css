@@ -1044,6 +1044,34 @@ img.popup-photo {
   display: flex;
 }
 
+/* Fixed to the viewport (not sized/positioned off the photo — see its
+   own HTML comment) so it reads the same whether the active photo is
+   portrait, landscape, or absent entirely (the no-photo case just shows
+   this alone). Same card look as a popup's own <h3> header, so it reads
+   as a direct stand-in for it rather than a new, different treatment. */
+.lightbox-tour-header {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  max-width: min(560px, 92vw);
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  padding: 10px 20px;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
+  font-family: 'Cinzel', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: center;
+}
+
+.lightbox-tour-header[hidden] {
+  display: none;
+}
+
 /* No box of its own — purely a positioning/sizing reference. Sized by JS
    (positionSlide in wireMinistryPhotoCarousel) to match whichever photo
    is actually active, so the arrows/close (positioned relative to
