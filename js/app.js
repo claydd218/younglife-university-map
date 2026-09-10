@@ -2205,10 +2205,11 @@ async function init() {
     // whatever level fully separates that cluster's members — fine for
     // loosely-spaced pins, but a wild, disorienting jump for two ministries
     // right on top of each other (tested interactively with a tunable
-    // slider to land on 3). spiderfyOnMaxZoom above still fans out any
-    // pins that stay clustered after hitting the cap, so nothing's ever
-    // unreachable — it may just take an extra tap.
-    const CLUSTER_CLICK_MAX_ZOOM_STEP = 3;
+    // slider, first landing on 3, later dialed down further to 2 — still
+    // felt like too much of a jump per tap). spiderfyOnMaxZoom above still
+    // fans out any pins that stay clustered after hitting the cap, so
+    // nothing's ever unreachable — it may just take an extra tap.
+    const CLUSTER_CLICK_MAX_ZOOM_STEP = 2;
     for (const group of Object.values(state.clusterGroups)) {
       group.on('clusterclick', (e) => {
         const cluster = e.layer;
