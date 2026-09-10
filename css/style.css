@@ -356,8 +356,6 @@ h1, h2, h3, .legend-label, .cluster-badge {
   width: 42px;
   height: 42px;
   padding: 0;
-  font-size: 15px;
-  line-height: 1;
   background: var(--parchment);
   color: var(--ink);
   border: 1px solid var(--ink);
@@ -365,16 +363,13 @@ h1, h2, h3, .legend-label, .cluster-badge {
   cursor: pointer;
 }
 
-/* &#9632; (stop, a black square) and &#8635; (loop, a circular arrow)
-   both draw noticeably smaller within their own em box than &#9654;/
-   &#10074;&#10074; (play/pause) do at the same font-size — a glyph-metrics
-   quirk of these particular Unicode symbols, not a centering bug (all
-   four already share the same flex-centered box above). Sized up on
-   their own rather than bumping every button, which would make play/
-   pause oversized instead. */
-#tour-stop-btn,
-#tour-loop-btn {
-  font-size: 24px;
+/* All four are plain SVGs now (see index.html), sized identically here —
+   no more per-icon font-size tuning to compensate for mismatched glyph
+   metrics (the old Unicode entities drew at noticeably different sizes
+   and never quite centered the same way at any shared font-size). */
+.tour-control-btn svg {
+  width: 22px;
+  height: 22px;
 }
 
 .tour-control-btn:hover:not(:disabled) {

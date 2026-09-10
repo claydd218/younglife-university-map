@@ -3157,14 +3157,22 @@ function tourFlyToDivisionBounds(divisionKey) {
   return { promise, duration };
 }
 
+// Reveals at TOUR_LABEL_REVEAL_FRACTION of the flight, same as every
+// other arrival label (tourGoToCountry, tourGoToDivisionOverview) — this
+// used to show immediately on departure instead, the one inconsistent
+// one of the three, left over from before the other two got this same
+// early-reveal treatment.
 async function tourGoToDivision(divisionKey) {
   restoreTourClustering();
-  // See tourGoToWorld's own comment on why this fires before the flight,
-  // not after — this is the one leaving World, not a country/division, so
-  // it keeps the original show-on-departure behavior.
-  showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
+  hideMetricsOverlay();
+  const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
   const flight = tourFlyToDivisionBounds(divisionKey);
-  if (flight) await flight.promise;
+  if (flight) {
+    setTimeout(reveal, flight.duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
+    await flight.promise;
+  } else {
+    reveal();
+  }
 }
 
 // After the division's last country (pins + country overview) is done,
@@ -3514,6 +3522,12 @@ function endTourInPlace() {
   document.getElementById('tour-controls').hidden = true;
   updateTourControlsUI();
   restoreTourClustering();
+  // A pin's popup (tourGoToPin) is still open and waiting out its own
+  // TOUR_PIN_POPUP_DWELL_SECONDS timer when Stop interrupts it — that
+  // timer isn't checkpoint-aware mid-dwell (same as every other tour
+  // dwell), so without this the popup would sit open until it happens to
+  // elapse on its own instead of closing the instant Stop is pressed.
+  map.closePopup();
 }
 
 // Switches to a different tour (a single division, or every division for
