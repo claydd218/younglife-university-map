@@ -719,8 +719,24 @@ function renderMetrics(metrics, accentColor) {
 // callers that include a country/division name are responsible for
 // escaping it themselves (see the two call sites in init()), same
 // division-of-labor as buildPopupHtml's own callers.
+//
+// map's 'popupopen' listener calls this (via showCountryMetricsOverlay)
+// every time ANY popup opens, including a second pin clicked in the same
+// country whose metrics are already up — without the check below, that
+// re-ran renderMetrics with the exact same numbers, restarting the
+// count-up animation from 0 for no visible reason. Skipped only when the
+// overlay is already showing (not mid-hide/re-reveal, which should still
+// animate) and the content is byte-for-byte the same as what's already
+// there.
+let lastMetricsSignature = null;
+
 function showMetricsOverlay(metrics, accentColor, labelHtml) {
-  renderMetrics(metrics, accentColor);
+  const signature = JSON.stringify([metrics, accentColor, labelHtml]);
+  const alreadyShowing = !state.overlayDismissed && signature === lastMetricsSignature;
+  if (!alreadyShowing) {
+    renderMetrics(metrics, accentColor);
+    lastMetricsSignature = signature;
+  }
   const labelEl = document.getElementById('metrics-label');
   if (labelHtml) {
     labelEl.innerHTML = labelHtml;
