@@ -3311,6 +3311,7 @@ async function tourGoToPin(entry) {
     map.flyTo(landing, targetZoom, { duration });
   }, duration);
   entry.marker.openPopup();
+  await tourDwell(TOUR_PIN_DWELL_SECONDS);
 
   const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
   if (photos.length && window.__ministryLightbox) {
@@ -3364,11 +3365,13 @@ const TOUR_DWELL_SECONDS = 1;
 // country arrival dwells above.
 const TOUR_PHOTO_DWELL_SECONDS = 2;
 
-// How long tourGoToPin holds on the plain popup/pin view once the photo
-// lightbox (if any) has already closed — shorter than TOUR_PHOTO_DWELL_
-// SECONDS since the photo(s) were just the main event; this is just a
-// beat to read the rest of the popup (staff/blurb) before moving on.
-const TOUR_PIN_DWELL_SECONDS = 1;
+// How long tourGoToPin holds on the plain popup/pin view — once right
+// after the popup opens (before any photos), and again once the photo
+// lightbox (if any) has already closed — a beat to actually see the pin/
+// popup on its own both before and after the photos, not just a single
+// dwell tacked on one side. Tunable independently of TOUR_PHOTO_DWELL_
+// SECONDS since they're reads of very different content.
+const TOUR_PIN_DWELL_SECONDS = 1.5;
 
 // Every pass ends back at World — the same place it started — rather
 // than stopping wherever the last country happened to leave off. Doing

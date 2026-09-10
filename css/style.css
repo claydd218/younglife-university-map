@@ -1209,6 +1209,18 @@ img.popup-photo {
    ministry did nothing without this explicit override. */
 .lightbox-nav[hidden] { display: none; }
 
+/* The tour drives this lightbox itself (window.__ministryLightbox, see
+   tourGoToPin in js/app.js) with no visitor present to use prev/next/
+   close, and the dark backdrop is hidden too — experimenting with
+   whether the photo reads better sitting directly over the map/popup
+   instead of behind a dimmed scrim. Scoped to #ministry-lightbox only —
+   the separate #video-lightbox is never opened by the tour. */
+body.tour-active #ministry-lightbox .lightbox-nav,
+body.tour-active #ministry-lightbox .lightbox-close,
+body.tour-active #ministry-lightbox .lightbox-backdrop {
+  display: none;
+}
+
 .lightbox-dots {
   position: absolute;
   z-index: 2;
