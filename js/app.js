@@ -1537,8 +1537,11 @@ function wireMinistryPhotoCarousel() {
   // top of the screen — computeSlideSize below caps photo height to
   // whatever actually fits between this and captionBottomTargetY(),
   // instead of the regular (non-tour) view's flat 85vh cap, which left
-  // no room to also fit a caption underneath.
-  const TOUR_CARD_TOP_MARGIN_PX = 80;
+  // no room to also fit a caption underneath. Also keeps the photo from
+  // covering #site-header's own title/metrics overlay, which sits at
+  // the very top of the screen the whole time a tour is running — 80px
+  // wasn't enough clearance for it.
+  const TOUR_CARD_TOP_MARGIN_PX = 170;
 
   // The Y (viewport px) the caption's own bottom edge — and its tip —
   // should land on: a fixed gap above the exact spot tourPinLandingLatLng
@@ -1727,13 +1730,13 @@ function wireMinistryPhotoCarousel() {
     }, FADE_MS);
   }
 
-  // headerHtml is only ever passed by the tour (see openFromPoint below,
-  // and tourPinCaptionHtml in tourGoToPin) — a real visitor's own click to
-  // open a photo never has one, leaving the caption hidden/empty exactly
-  // like before this existed. photoList can be empty (the tour's
-  // no-photo case, via openFromPoint) — skips all photo loading/sizing
-  // and just shows the caption alone, centered at its own default
-  // position (see .lightbox-tour-caption in style.css) rather than
+  // headerHtml is only ever passed by the tour (see tourPinCaptionHtml in
+  // tourGoToPin) — a real visitor's own click to open a photo never has
+  // one, leaving the caption hidden/empty exactly like before this
+  // existed. photoList can be empty (the tour's no-photo case) — skips
+  // all photo loading/sizing and just shows the caption alone, centered
+  // at its own default position (see .lightbox-tour-caption in
+  // style.css) rather than
   // attached under a photo, with no slide, dots, or prev/next.
   async function open(photoList, headerHtml) {
     captionActive = !!headerHtml;
@@ -1784,6 +1787,10 @@ function wireMinistryPhotoCarousel() {
     prevBtn.hidden = !multi;
     nextBtn.hidden = !multi;
     lightbox.classList.add('visible');
+    // Fades in via its own opacity transition, same as the photo does
+    // via .active — see window.__ministryLightbox's own comment on why
+    // both are plain fades now, not a grow/pop-in pair.
+    if (captionActive) captionEl.classList.add('visible');
   }
 
   function close() {
@@ -1803,70 +1810,24 @@ function wireMinistryPhotoCarousel() {
   function showNext() { showIndex((index + 1) % photos.length); }
   function showPrev() { showIndex((index - 1 + photos.length) % photos.length); }
 
-  // Pixel position (viewport-relative, like getBoundingClientRect) of a
-  // map LatLng right now — used below to animate the lightbox growing
-  // out of wherever a tour pin actually sits on screen, rather than just
-  // fading in centered like a real visitor's own click does.
-  function screenPointForLatLng(latLng) {
-    const pt = map.latLngToContainerPoint(latLng);
-    const mapRect = map.getContainer().getBoundingClientRect();
-    return { x: mapRect.left + pt.x, y: mapRect.top + pt.y };
-  }
-
-  // Tour-only entry point (see tourGoToPin) — opens exactly like open()
-  // above (same caption/photo/no-photo handling), then plays a one-off
-  // grow-from-`latLng` animation via the Web Animations API rather than
-  // a CSS class + transition: this is a single programmatic run, not a
-  // state the element sits in, and WAAPI needs no manual cleanup
-  // afterward (no fill:'forwards' — the element reverts to its plain,
-  // un-transformed layout the instant the animation ends, which is
-  // exactly the settled "fully open" look).
-  //
-  // Animates activeSlide itself, not an ancestor — an earlier version
-  // animated .lightbox-content's own transform instead, which broke
-  // .lightbox-slide's positioning: a `transform` on an ancestor becomes
-  // the containing block for a `position:fixed` descendant (a CSS rule,
-  // not a bug), so the slide's own viewport-relative left/top were
-  // suddenly being resolved against .lightbox-content's small box
-  // instead of the true viewport, for the animation's whole duration —
-  // exactly the "photo grows in from the wrong side" symptom that got
-  // reported. Animating the slide directly has no such ancestor, so its
-  // own left/top stay correctly viewport-relative throughout.
-  // .lightbox-tour-caption fades in on its own (a sibling, not a
-  // descendant of the slide — its own opacity transition, not WAAPI) at
-  // the same time the photo starts growing, so the two read as one
-  // thing emerging together despite animating independently.
-  async function openFromPoint(photoList, headerHtml, latLng) {
-    await open(photoList, headerHtml);
-    if (!photos.length) {
-      captionEl.classList.add('visible');
-      return;
-    }
-    const target = screenPointForLatLng(latLng);
-    const rect = activeSlide.getBoundingClientRect();
-    const dx = target.x - (rect.left + rect.width / 2);
-    const dy = target.y - (rect.top + rect.height / 2);
-    captionEl.classList.add('visible');
-    const anim = activeSlide.animate([
-      { transform: `translate(${dx}px, ${dy}px) scale(0.04)`, opacity: 0 },
-      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
-    ], { duration: 380, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
-    await anim.finished;
-  }
-
   // Exposed so runQueryStringTour's own scripted tour can drive this
   // carousel the same way a real viewer's clicks/arrow keys do, without
   // reaching into (or duplicating) this closure's own open/showNext/close.
   // Same window.__ convention this file already uses for other internal
-  // hooks (__divisionBounds, __isolateDivision, __mapReady, ...). Ending a
-  // pin visit is just the plain close() above (a fade, via #ministry-
-  // lightbox's own opacity transition) — no point-aware "shrink back into
-  // the pin" close animation anymore; that had its own flicker issue
-  // (WAAPI reverting to full opacity/scale the instant it finished,
-  // visible for a frame before the container's own fade caught up) and
-  // a plain fade reads fine for ending a visit.
+  // hooks (__divisionBounds, __isolateDivision, __mapReady, ...).
+  //
+  // Both open and close are plain fades now, full size the whole time —
+  // no more grow-from-the-pin/shrink-back-into-it animation. That WAAPI
+  // scale+translate only ever ran on the photo itself (animating an
+  // ancestor instead broke .lightbox-slide's position:fixed layout — see
+  // git history), so the caption below it could only ever fade in
+  // separately, popping in at full size while the photo visibly grew —
+  // never read as one thing. A plain fade for both, riding each
+  // element's own existing opacity transition (the slide's from toggling
+  // .active, the caption's from toggling .visible in open() below) needs
+  // no extra animation code at all, and reads as one consistent reveal.
   window.__ministryLightbox = {
-    open, showNext, close, openFromPoint,
+    open, showNext, close,
     isVisible: () => lightbox.classList.contains('visible'),
   };
 
@@ -3545,14 +3506,13 @@ function tourPinCaptionHtml(row) {
 }
 
 // Landing spot for a pin visit isn't the pin's own lat/lng — that would
-// center it in the middle of the screen, right where the carousel
-// growing out of it (openFromPoint, below) would rather have the whole
-// screen to expand into. Instead, fly to a point shifted far enough
-// north (at the target zoom) that the pin itself ends up low-center on
-// screen, just above the tour-controls bar. Computed via project/
-// unproject at the target zoom rather than a fixed lat/lng offset, since
-// the same screen-pixel gap means a different real-world distance
-// depending on zoom.
+// center it in the middle of the screen, right where the caption's own
+// tip (see captionBottomTargetY) points down at it from above. Instead,
+// fly to a point shifted far enough north (at the target zoom) that the
+// pin itself ends up low-center on screen, just above the tour-controls
+// bar. Computed via project/unproject at the target zoom rather than a
+// fixed lat/lng offset, since the same screen-pixel gap means a
+// different real-world distance depending on zoom.
 function tourPinLandingLatLng(target, targetZoom) {
   const mapSize = map.getSize();
   const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
@@ -3578,11 +3538,10 @@ function tourPinLandingLatLng(target, targetZoom) {
 // pin motions never delay on their own, only the carousel's own viewing
 // time does (TOUR_PHOTO_DWELL_SECONDS/TOUR_PIN_NO_PHOTO_DWELL_SECONDS
 // below), same as only the division level gets a plain arrival dwell
-// (TOUR_DWELL_SECONDS). openFromPoint plays the carousel growing out of
-// the pin's own screen position (with tourPinCaptionHtml's flag/city
-// caption on top, standing in for the card's own <h3>), steps through
-// every photo once, then a plain close() fades it out before moving
-// straight on to the next leg.
+// (TOUR_DWELL_SECONDS). open() fades the card in (with tourPinCaptionHtml's
+// flag/city caption below the photo, standing in for a popup's own <h3>),
+// steps through every photo once, then a plain close() fades it back out
+// before moving straight on to the next leg.
 async function tourGoToPin(entry, targetZoom) {
   const target = entry.marker.getLatLng();
   const duration = tourPinLegDuration(target, targetZoom);
@@ -3600,7 +3559,7 @@ async function tourGoToPin(entry, targetZoom) {
   if (window.__ministryLightbox) {
     const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
     const captionHtml = tourPinCaptionHtml(entry.row);
-    await window.__ministryLightbox.openFromPoint(photos, captionHtml, target);
+    await window.__ministryLightbox.open(photos, captionHtml);
     if (photos.length) {
       await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
       for (let i = 1; i < photos.length; i++) {
@@ -3793,6 +3752,11 @@ function pauseTour() {
   document.body.classList.remove('tour-active');
   updateTourControlsUI();
   showTourControlsNow(); // stay visible while paused — nothing to auto-hide toward
+  // Pausing mid-pin-visit left its photo/caption card sitting open —
+  // legend/zoom/search/nav menu all come back on pause (tour-active
+  // removed above), so the card should too rather than floating over
+  // them until Play (or Stop) happens to close it later.
+  if (window.__ministryLightbox && window.__ministryLightbox.isVisible()) window.__ministryLightbox.close();
 }
 
 function toggleTourLoop() {
@@ -3835,7 +3799,7 @@ function endTourInPlace() {
   document.getElementById('tour-controls').hidden = true;
   updateTourControlsUI();
   restoreTourClustering();
-  // The fullscreen lightbox (tourGoToPin's own openFromPoint) can still
+  // The fullscreen lightbox (tourGoToPin's own open() call) can still
   // be open, waiting out one of its own dwell timers, when Stop
   // interrupts — none of them are checkpoint-aware mid-dwell (same as
   // every other tour dwell), so without this it would sit open until it
