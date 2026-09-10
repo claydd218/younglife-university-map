@@ -1372,7 +1372,7 @@ img.popup-photo {
    !important: .leaflet-disabled's own selector is more specific than the
    plain .leaflet-bar a rule above, so it'd otherwise win. */
 .leaflet-bar a.leaflet-disabled {
-  background-color: var(--parchment-light) !important;
+  background-color: red !important; /* TEMP: verifying this rule is actually reaching the deployed page */
 }
 
 /* Fixed rather than safe-area-based on purpose: the safe-area inset changes
