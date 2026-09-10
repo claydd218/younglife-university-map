@@ -3412,12 +3412,14 @@ function scheduleTourControlsHide() {
 function playTour() {
   if (tourController.state === 'paused') {
     tourController.state = 'playing';
+    document.body.classList.add('tour-active');
     updateTourControlsUI();
     scheduleTourControlsHide();
     return;
   }
   if (tourRunPromise || !currentTourDivisionKeys || !currentTourDivisionKeys.length) return;
   tourController.state = 'playing';
+  document.body.classList.add('tour-active');
   updateTourControlsUI();
   scheduleTourControlsHide();
   tourRunPromise = runTour(currentTourDivisionKeys)
@@ -3439,6 +3441,7 @@ function playTour() {
 function pauseTour() {
   if (tourController.state !== 'playing') return;
   tourController.state = 'paused';
+  document.body.classList.remove('tour-active');
   updateTourControlsUI();
   showTourControlsNow(); // stay visible while paused — nothing to auto-hide toward
 }
@@ -3478,6 +3481,7 @@ function stopTour() {
 // than anything in the leg that actually got us there correctly.
 function endTourInPlace() {
   tourController.state = 'stopped';
+  document.body.classList.remove('tour-active');
   clearTimeout(tourControlsIdleTimer);
   document.getElementById('tour-controls').hidden = true;
   updateTourControlsUI();
@@ -3567,13 +3571,6 @@ function runQueryStringTour() {
 
   document.getElementById('tour-controls').hidden = false;
   document.getElementById('tour-menu-toggle').hidden = false;
-  // Legend, zoom control, search (DirectoryControl), and the World/
-  // Division nav menu all compete with the tour's own controls and don't
-  // do anything useful while it's driving the camera — hidden via CSS
-  // (see .tour-active in css/style.css) for the whole ?tour= session,
-  // same lifetime as tour-controls/tour-menu-toggle above rather than
-  // tied to play/pause.
-  document.body.classList.add('tour-active');
   wireTourControls();
   wireTourMenu();
   updateTourControlsUI();
