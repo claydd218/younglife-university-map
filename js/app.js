@@ -681,7 +681,7 @@ function computeMetrics(rowsSubset, { includeCountries = true } = {}) {
 // box that's since been replaced (renderMetrics rebuilds .metrics-boxes'
 // whole innerHTML on every call) just harmlessly finishes writing to a
 // detached node — nothing to cancel, nothing left visible.
-const METRIC_COUNT_UP_MS = 600;
+const METRIC_COUNT_UP_MS = 950;
 
 function animateCountUp(el, target) {
   if (!target) {
