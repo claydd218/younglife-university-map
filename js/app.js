@@ -3476,7 +3476,14 @@ async function tourGoToPin(entry, targetZoom) {
   await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
 
   if (window.__ministryLightbox) {
-    const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+    // TESTING ONLY — force every pin to the no-photo (header-only) path
+    // so the pin flight/landing/pop motions can be evaluated on their
+    // own, without any photo loading/carousel in the mix. Remove this
+    // override (back to the real photos.length check below) once that's
+    // settled.
+    const photos = TOUR_TESTING_SUPPRESS_PHOTOS
+      ? []
+      : (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
     const headerHtml = tourPinHeaderHtml(entry.row);
     await window.__ministryLightbox.openFromPoint(photos, headerHtml, target);
     if (photos.length) {
@@ -3553,6 +3560,11 @@ const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 // landing spot instead of trailing off at an arbitrary country.
 // TESTING ONLY — see its one use in runTour below.
 const TOUR_TESTING_MAX_COUNTRIES = 2;
+
+// TESTING ONLY — see its one use in tourGoToPin above. true while
+// evaluating pin flight/landing/pop motion in isolation; flip back to
+// false (or remove the override entirely) once that's settled.
+const TOUR_TESTING_SUPPRESS_PHOTOS = true;
 
 // divisionKeys is an array, not a single key — a "World Tour" (every
 // division) and a single-division tour are the exact same code, just a
