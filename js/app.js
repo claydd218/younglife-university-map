@@ -2041,6 +2041,16 @@ async function init() {
         // Off so the clusterclick handler below can cap the zoom itself —
         // see that handler's comment for why.
         zoomToBoundsOnClick: false,
+        // Leaflet.markercluster's default (true) only renders markers
+        // within the current viewport at add time, then waits for the
+        // next 'moveend' to add newly-visible ones. The tour re-adds
+        // these groups WHILE still zoomed into a single country, right
+        // before flying back out — with the default on, only pins near
+        // that country show immediately and the rest of the division only
+        // pops in once the zoom-out's own 'moveend' fires (i.e. right at
+        // the end of the tour). Our marker counts are small enough that
+        // this perf optimization isn't worth that correctness bug.
+        removeOutsideVisibleBounds: false,
       });
     }
 
@@ -3185,6 +3195,10 @@ async function tourDwell(seconds) {
   await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 }
 
+// Shared pause length for every tourDwell() call in the tour — one place
+// to retune the pacing.
+const TOUR_DWELL_SECONDS = 1;
+
 // Every pass ends back at World — the same place it started — rather
 // than stopping wherever the last country happened to leave off. Doing
 // that unconditionally (loop on or off) is what makes looping trivial:
@@ -3192,7 +3206,7 @@ async function tourDwell(seconds) {
 // jump-back case, and a non-repeating tour gets a clean, deliberate
 // landing spot instead of trailing off at an arbitrary country.
 // TESTING ONLY — see its one use in runTour below.
-const TOUR_TESTING_MAX_COUNTRIES = 3;
+const TOUR_TESTING_MAX_COUNTRIES = 2;
 
 // divisionKeys is an array, not a single key — a "World Tour" (every
 // division) and a single-division tour are the exact same code, just a
@@ -3212,7 +3226,7 @@ async function runTour(divisionKeys) {
     for (const divisionKey of divisionKeys) {
       await tourCheckpoint();
       await tourGoToDivision(divisionKey);
-      await tourDwell(1.5);
+      await tourDwell(TOUR_DWELL_SECONDS);
 
       // TESTING ONLY — caps each division to its first few countries so a
       // full run (especially a World Tour) is fast to iterate on. Remove
@@ -3222,7 +3236,7 @@ async function runTour(divisionKeys) {
       for (const countryName of countries) {
         await tourCheckpoint();
         await tourGoToCountry(countryName);
-        await tourDwell(1.5);
+        await tourDwell(TOUR_DWELL_SECONDS);
         for (const pinEntry of pinsInCountryByProximity(countryName)) {
           await tourCheckpoint();
           await tourGoToPin(pinEntry);
