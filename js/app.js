@@ -1532,6 +1532,13 @@ function wireMinistryPhotoCarousel() {
   // Gap between the caption's own downward-pointing tip (::after, in
   // style.css) and the pin it's pointing at.
   const CAPTION_TIP_CLEARANCE_PX = 22;
+  // Clearance kept above the photo when captionActive, so a tall photo
+  // can't push the whole card (or just the caption under it) off the
+  // top of the screen — computeSlideSize below caps photo height to
+  // whatever actually fits between this and captionBottomTargetY(),
+  // instead of the regular (non-tour) view's flat 85vh cap, which left
+  // no room to also fit a caption underneath.
+  const TOUR_CARD_TOP_MARGIN_PX = 80;
 
   // The Y (viewport px) the caption's own bottom edge — and its tip —
   // should land on: a fixed gap above the exact spot tourPinLandingLatLng
@@ -1575,7 +1582,13 @@ function wireMinistryPhotoCarousel() {
   // all (see that comment for why).
   function computeSlideSize(img) {
     const maxW = window.innerWidth * 0.92;
-    const maxH = window.innerHeight * 0.85;
+    // captionActive reserves room for the caption (and its tip) below
+    // the photo, and keeps the whole card off the top of the screen —
+    // a real visitor's plain photo view has neither concern, so it
+    // keeps the original flat 85vh cap.
+    const maxH = captionActive
+      ? Math.max(120, captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX - TOUR_CARD_TOP_MARGIN_PX)
+      : window.innerHeight * 0.85;
     const ratio = img.naturalWidth / img.naturalHeight;
     let w = maxW;
     let h = w / ratio;
@@ -1620,6 +1633,22 @@ function wireMinistryPhotoCarousel() {
     viewport.style.height = `${size.h}px`;
     if (captionActive) {
       const rect = slide.getBoundingClientRect();
+      // .lightbox-content itself is normally positioned by its parent's
+      // flex centering (#ministry-lightbox), not by slide's own
+      // position:fixed left/top — the two happen to line up for a
+      // regular, screen-centered view, but not anymore once the slide is
+      // deliberately moved up near the pin instead. .lightbox-dots is
+      // position:absolute *within* .lightbox-content, so left uncorrected
+      // it stayed anchored to content's old, still-centered box — on the
+      // photo in a regular view, but well below the actual (now higher
+      // up) photo here. Pinning content's own box to match the slide's
+      // exactly (fixed, same left/top/width/height) keeps dots correctly
+      // anchored to wherever the photo actually is.
+      content.style.position = 'fixed';
+      content.style.left = slide.style.left;
+      content.style.top = slide.style.top;
+      content.style.width = slide.style.width;
+      content.style.height = slide.style.height;
       // transform cleared — the default CSS rule centers via
       // left:50%/translateX(-50%), but `rect.left` here is already the
       // photo's real left edge, not a center point; leaving that
@@ -1708,6 +1737,17 @@ function wireMinistryPhotoCarousel() {
   // attached under a photo, with no slide, dots, or prev/next.
   async function open(photoList, headerHtml) {
     captionActive = !!headerHtml;
+    // Reset first, not just when !captionActive below — applySlideSize
+    // only sets these when captionActive is true, so without this a
+    // real visitor's regular click-to-view, right after the tour last
+    // used this same lightbox, would otherwise inherit content's
+    // leftover fixed position/size from that tour card instead of its
+    // normal flex-centered layout.
+    content.style.position = '';
+    content.style.left = '';
+    content.style.top = '';
+    content.style.width = '';
+    content.style.height = '';
     if (headerHtml) {
       captionEl.innerHTML = headerHtml;
       captionEl.hidden = false;
