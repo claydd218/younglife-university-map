@@ -3311,10 +3311,10 @@ async function tourGoToPin(entry) {
     map.flyTo(landing, targetZoom, { duration });
   }, duration);
   entry.marker.openPopup();
-  await tourDwell(TOUR_PIN_DWELL_SECONDS);
 
   const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
   if (photos.length && window.__ministryLightbox) {
+    await tourDwell(TOUR_PIN_DWELL_SECONDS);
     await window.__ministryLightbox.open(photos);
     await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
     for (let i = 1; i < photos.length; i++) {
@@ -3322,9 +3322,15 @@ async function tourGoToPin(entry) {
       await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
     }
     window.__ministryLightbox.close();
+    await tourDwell(TOUR_PIN_DWELL_SECONDS);
+  } else {
+    // No photos means no lightbox detour, so the two TOUR_PIN_DWELL_
+    // SECONDS beats either side of it would otherwise just stack into a
+    // single, needlessly-doubled pause — one flat dwell instead, its own
+    // tunable length.
+    await tourDwell(TOUR_PIN_NO_PHOTO_DWELL_SECONDS);
   }
 
-  await tourDwell(TOUR_PIN_DWELL_SECONDS);
   entry.marker.closePopup();
 }
 
@@ -3367,11 +3373,19 @@ const TOUR_PHOTO_DWELL_SECONDS = 2;
 
 // How long tourGoToPin holds on the plain popup/pin view — once right
 // after the popup opens (before any photos), and again once the photo
-// lightbox (if any) has already closed — a beat to actually see the pin/
-// popup on its own both before and after the photos, not just a single
-// dwell tacked on one side. Tunable independently of TOUR_PHOTO_DWELL_
-// SECONDS since they're reads of very different content.
+// lightbox has already closed — a beat to actually see the pin/popup on
+// its own both before and after the photos, not just a single dwell
+// tacked on one side. Only used when there are photos, i.e. both beats
+// actually happen — see TOUR_PIN_NO_PHOTO_DWELL_SECONDS for the case
+// where there's no lightbox detour to bookend at all.
 const TOUR_PIN_DWELL_SECONDS = 1.5;
+
+// A pin with no photos skips the lightbox entirely, so it gets one flat
+// dwell instead of the two TOUR_PIN_DWELL_SECONDS beats that would
+// otherwise stack into a needlessly-doubled pause (3s) for a plain popup
+// with nothing to show but text. Its own tunable value rather than reused
+// so the two cases (photos vs no photos) can be paced independently.
+const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 
 // Every pass ends back at World — the same place it started — rather
 // than stopping wherever the last country happened to leave off. Doing
