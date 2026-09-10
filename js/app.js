@@ -3425,6 +3425,24 @@ function tourPinHeaderHtml(row) {
   return `${flag ? `${flag} ` : ''}${escapeHtml(row.city)}${row.city === row.country ? '' : `, ${escapeHtml(row.country)}`}`;
 }
 
+// Landing spot for a pin visit isn't the pin's own lat/lng — that would
+// center it in the middle of the screen, right where the carousel
+// growing out of it (openFromPoint, below) would rather have the whole
+// screen to expand into. Instead, fly to a point shifted far enough
+// north (at the target zoom) that the pin itself ends up low-center on
+// screen, just above the tour-controls bar. Computed via project/
+// unproject at the target zoom rather than a fixed lat/lng offset, since
+// the same screen-pixel gap means a different real-world distance
+// depending on zoom.
+function tourPinLandingLatLng(target, targetZoom) {
+  const mapSize = map.getSize();
+  const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
+  const desiredScreenY = controlsRect.top - 24; // 24px clearance above the controls bar
+  const targetPoint = map.project(target, targetZoom);
+  const centerPoint = targetPoint.add([0, mapSize.y / 2 - desiredScreenY]);
+  return map.unproject(centerPoint, targetZoom);
+}
+
 // Flies to one pin at targetZoom (passed down from runTour — one step in
 // from the country's own zoom, see its own comment there) rather than
 // zooming in further to CONFIG.MAX_ZOOM — pin-to-pin hops within a
@@ -3432,10 +3450,8 @@ function tourPinHeaderHtml(row) {
 // country's outline, not a tight zoom-in per pin. Pins aren't clustered
 // during this phase (see showTourCountryPinsOnly), so two close together
 // can end up visually tight at this wider zoom — accepted tradeoff for
-// keeping the country's shape in view throughout.
-// Lands right on the pin's own lat/lng, centered — unlike the old
-// popup-card version, there's no card to leave screen room for anymore
-// (see below), so it doesn't need shifting off-center.
+// keeping the country's shape in view throughout. Lands low-center (see
+// tourPinLandingLatLng) rather than dead-centered.
 //
 // Goes straight to the fullscreen photo carousel (window.__ministryLightbox
 // — exposed by wireMinistryPhotoCarousel), skipping the popup card
@@ -3453,7 +3469,8 @@ async function tourGoToPin(entry, targetZoom) {
   const target = entry.marker.getLatLng();
   const duration = tourPinLegDuration(target, targetZoom);
   await tourFlyToAndWait(() => {
-    map.flyTo(target, targetZoom, { duration });
+    const landing = tourPinLandingLatLng(target, targetZoom);
+    map.flyTo(landing, targetZoom, { duration });
   }, duration);
 
   await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
@@ -3565,7 +3582,11 @@ async function runTour(divisionKeys) {
       for (const countryName of countries) {
         await tourCheckpoint();
         await tourGoToCountry(countryName);
-        await tourDwell(TOUR_DWELL_SECONDS);
+        // Straight into the first pin, no dwell — unlike arriving at a
+        // division or a country's own overview, this isn't a place the
+        // tour actually lingers; it's just a waypoint on the way to the
+        // pins, so waiting here read as a dead beat before the tour
+        // actually gets moving again.
         // One step in from tourGoToCountry's own zoom, not the same
         // level — close enough to read individual pins a little more
         // clearly while cycling through them, without zooming in as far
