@@ -3222,6 +3222,7 @@ async function runTour(divisionKeys) {
       for (const countryName of countries) {
         await tourCheckpoint();
         await tourGoToCountry(countryName);
+        await tourDwell(1.5);
         for (const pinEntry of pinsInCountryByProximity(countryName)) {
           await tourCheckpoint();
           await tourGoToPin(pinEntry);
@@ -3241,14 +3242,13 @@ async function runTour(divisionKeys) {
 
     if (!tourController.loop) break;
   }
-  // Reaching the end of a non-looping run is its own kind of stop — same
-  // stopTour() the Stop button calls, reused rather than duplicated.
-  // Redundant with the leg that just ran (tourGoToDivisionOverview/
-  // tourGoToWorld already landed here and already restored clustering),
-  // but that just means its own flyTo/flyToBounds call is a fast near
-  // no-op — harmless, same as other already-tolerated no-op flights
-  // elsewhere in the tour.
-  stopTour();
+  // Reaching the end of a non-looping run is its own kind of stop, but not
+  // a full stopTour() — the leg that just ran (tourGoToDivisionOverview/
+  // tourGoToWorld) already landed exactly here and already restored
+  // clustering, so only the state/controls cleanup half is needed; see
+  // endTourInPlace's own comment for why the navigate-away half is
+  // deliberately skipped here.
+  endTourInPlace();
 }
 
 let tourRunPromise = null;
@@ -3332,16 +3332,30 @@ function toggleTourLoop() {
 // regular visitor would if they'd navigated there normally (same
 // metrics shown, same animated flyTo/flyToBounds).
 function stopTour() {
-  tourController.state = 'stopped';
-  clearTimeout(tourControlsIdleTimer);
-  document.getElementById('tour-controls').hidden = true;
-  updateTourControlsUI();
-  restoreTourClustering();
+  endTourInPlace();
   if (currentTourDivisionKeys && currentTourDivisionKeys.length === 1) {
     if (goToDivisionFn) goToDivisionFn(currentTourDivisionKeys[0]);
   } else if (goToWorldFn) {
     goToWorldFn();
   }
+}
+
+// Shared by stopTour (the Stop button, which can interrupt an arbitrary
+// mid-flight moment and so genuinely needs the navigate-away step above)
+// and runTour's own natural, non-looping end (below) — which does NOT:
+// the leg that just ran (tourGoToDivisionOverview/tourGoToWorld) already
+// landed exactly here, with clustering already restored, a moment ago.
+// Re-firing goToDivisionFn/goToWorldFn on top of that was a second,
+// redundant flyTo starting from (and animating a "no-op" move around)
+// an already-correct view — harmless in theory, but the more likely
+// explanation for pins occasionally not all showing after a tour ends
+// than anything in the leg that actually got us there correctly.
+function endTourInPlace() {
+  tourController.state = 'stopped';
+  clearTimeout(tourControlsIdleTimer);
+  document.getElementById('tour-controls').hidden = true;
+  updateTourControlsUI();
+  restoreTourClustering();
 }
 
 // Switches to a different tour (a single division, or every division for
