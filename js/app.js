@@ -2220,6 +2220,9 @@ async function init() {
     const CLUSTER_CLICK_ZOOM_STEP_THRESHOLD = 6; // below this current zoom = "pretty far out"
     const CLUSTER_CLICK_MAX_ZOOM_STEP_FAR = 2;
     const CLUSTER_CLICK_MAX_ZOOM_STEP_NEAR = 1;
+    // Was implicitly 0.25s (Leaflet's own default zoom-animation speed,
+    // via plain setView) — slowed down and made explicit.
+    const CLUSTER_CLICK_ZOOM_DURATION = 0.6;
     for (const group of Object.values(state.clusterGroups)) {
       group.on('clusterclick', (e) => {
         const cluster = e.layer;
@@ -2232,8 +2235,19 @@ async function init() {
         // still browsing the same selection, not leaving it, so it
         // shouldn't dismiss the metrics overlay (see
         // wireMetricsOverlayDismiss's own comment on this).
+        //
+        // flyTo with an explicit duration, not setView — setView's own
+        // zoom animation has no tunable speed of its own, it just plays
+        // Leaflet's fixed 0.25s CSS transition (leaflet.css's
+        // .leaflet-zoom-anim .leaflet-zoom-animated rule) every time,
+        // however big or small the step. CLUSTER_CLICK_ZOOM_DURATION
+        // makes it an actual, adjustable value instead.
         withSuppressedDismiss(() => {
-          map.setView(cluster.getLatLng(), Math.min(idealZoom, cap, map.getMaxZoom()));
+          flyToWithRedrawWatch(() => map.flyTo(
+            cluster.getLatLng(),
+            Math.min(idealZoom, cap, map.getMaxZoom()),
+            { duration: CLUSTER_CLICK_ZOOM_DURATION },
+          ));
         });
         // Same re-sync a pin's own popup does (see the map-level
         // 'popupopen' listener below init()) — a cluster click has no
