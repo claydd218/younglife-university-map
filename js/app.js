@@ -516,7 +516,7 @@ function buildPopupHtml(row, divisionKey) {
   return `
     <div class="popup-card">
       <div class="popup-body popup-header-body">
-        <h3>${flag ? `${flag} ` : ''}${escapeHtml(row.city)}${row.city === row.country ? '' : `, ${escapeHtml(row.country)}`}</h3>
+        <h3>${flag ? `${flag} ` : ''}${escapeHtml(row.city)}</h3>
       </div>
       ${cityPhoto}
       ${row.blurb ? `<div class="popup-body popup-blurb-body"><p class="popup-blurb">${escapeHtml(row.blurb)}</p></div>` : ''}
@@ -1518,10 +1518,25 @@ function wireMinistryPhotoCarousel() {
   // A caption's own height varies with its text, but only slightly (one
   // short line, flag + city) — an estimate here (rather than measuring
   // the real, currently-hidden-or-stale element) is close enough to
-  // center the photo+caption as one visual unit, shifting the photo up
-  // by half of it instead of leaving the caption to hang off-center below
-  // a fully-centered photo.
+  // stack the photo and caption as one unit.
   const CAPTION_HEIGHT_ESTIMATE_PX = 52;
+  // Width for the no-photo case, which has no photo rect to match.
+  const CAPTION_DEFAULT_WIDTH_PX = 280;
+  // Gap between the caption's own downward-pointing tip (::after, in
+  // style.css) and the pin it's pointing at.
+  const CAPTION_TIP_CLEARANCE_PX = 22;
+
+  // The Y (viewport px) the caption's own bottom edge — and its tip —
+  // should land on: a fixed gap above the exact spot tourPinLandingLatLng
+  // (js/app.js, far below) already aims the pin itself at ("low-center on
+  // screen, just above the tour-controls bar"). Keeping the card up here
+  // rather than centered on screen is what leaves the pin visible below
+  // it, with the tip visually pointing down at it — same relationship a
+  // real Leaflet popup has with its own marker.
+  function captionBottomTargetY() {
+    const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
+    return controlsRect.top - 24 - CAPTION_TIP_CLEARANCE_PX;
+  }
 
   function urlFor(i) { return CONFIG.IMAGES_DIR + photos[i]; }
 
@@ -1578,16 +1593,22 @@ function wireMinistryPhotoCarousel() {
   // off of. No transition on any of this — it's instant, so there's
   // nothing to read as a box visibly growing.
   function applySlideSize(slide, size) {
-    // Shifted up by half the caption's (estimated) height so the photo
-    // and caption together read as one centered unit — only while the
-    // tour's own caption is actually showing underneath; a real visitor's
-    // plain photo view has no caption to make room for, so it stays
-    // exactly centered as before.
-    const captionShift = captionActive ? CAPTION_HEIGHT_ESTIMATE_PX / 2 : 0;
     slide.style.width = `${size.w}px`;
     slide.style.height = `${size.h}px`;
     slide.style.left = `${(window.innerWidth - size.w) / 2}px`;
-    slide.style.top = `${(window.innerHeight - size.h) / 2 - captionShift}px`;
+    if (captionActive) {
+      // Stacked up from captionBottomTargetY() — the caption's own
+      // bottom/tip lands there, the photo sits directly above the
+      // caption, so this is that target minus both their heights, not
+      // just centered on screen (see captionBottomTargetY's own comment
+      // on why: keeping the whole card above the pin instead of
+      // overlapping it).
+      slide.style.top = `${captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX - size.h}px`;
+    } else {
+      // A real visitor's plain photo view has no caption to stack above
+      // a fixed point, so it just centers on screen as before.
+      slide.style.top = `${(window.innerHeight - size.h) / 2}px`;
+    }
     viewport.style.width = `${size.w}px`;
     viewport.style.height = `${size.h}px`;
     if (captionActive) {
@@ -1702,13 +1723,14 @@ function wireMinistryPhotoCarousel() {
       applySlideSize(slideA, computeSlideSize(slideA));
       slideA.classList.add('active');
     } else if (captionActive) {
-      // No photo to attach to — clear any left/top/width/transform this
-      // element still carries from a previous, photo-attached caption so
-      // it falls back to its own default centered CSS position.
-      captionEl.style.left = '';
-      captionEl.style.top = '';
-      captionEl.style.width = '';
-      captionEl.style.transform = '';
+      // No photo to attach to, so no photo rect to size/position off of —
+      // same captionBottomTargetY() placement as the photo case (close to
+      // the pin, not centered on screen), at a fixed default width
+      // instead of a photo's own.
+      captionEl.style.transform = 'none';
+      captionEl.style.width = `${CAPTION_DEFAULT_WIDTH_PX}px`;
+      captionEl.style.left = `${(window.innerWidth - CAPTION_DEFAULT_WIDTH_PX) / 2}px`;
+      captionEl.style.top = `${captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX}px`;
     }
     renderDots();
     const multi = photos.length > 1;
@@ -3462,10 +3484,10 @@ function pinsInCountryByProximity(countryName) {
   return orderByProximity(points).map((p) => p.entry);
 }
 
-// Flag + city only, no country — unlike a popup's own <h3> (buildPopupHtml),
-// which shows both. The country doesn't need repeating here: it's already
-// up in the site's own header the whole time a country's pins are being
-// visited (showCountryMetricsOverlay, still up throughout — see
+// Flag + city only, same as a popup's own <h3> now shows (buildPopupHtml).
+// The country doesn't need repeating here: it's already up in the site's
+// own header the whole time a country's pins are being visited
+// (showCountryMetricsOverlay, still up throughout — see
 // tourGoToCountryOverview's own comment), so this caption only needs to
 // name the specific place within it. The tour goes straight to the
 // fullscreen carousel now and never opens the real popup at all, so this

@@ -963,9 +963,13 @@ img.popup-photo {
   margin: 0 0 4px;
   font-size: 21px;
   color: var(--ink);
-  /* Reserve space for the close (X) button's column so a long
-     city/country title wraps before running under it, on any width. */
-  padding-right: 34px;
+  text-align: center;
+  /* Matching padding on both sides, not just the right — reserves space
+     for the close (X) button's column so a long title wraps before
+     running under it (the original reason for the right side alone),
+     but keeps text-align:center actually centered instead of visibly
+     shifted left by an unbalanced box. */
+  padding: 0 34px;
 }
 
 .popup-staff {
@@ -1054,13 +1058,12 @@ img.popup-photo {
   display: flex;
 }
 
-/* Left/top/width are set by JS (applySlideSize, in wireMinistryPhotoCarousel)
-   to sit flush under whichever photo is currently active — the two read
-   as one card, title below photo, matching-width. The values here are
-   only the *default* position, used for the no-photo case (nothing to
-   attach to — open() clears any leftover left/top/width from a previous,
-   photo-attached caption so this default takes over), roughly centered
-   where a photo would otherwise be.
+/* left/top/width are always set explicitly by JS (applySlideSize and
+   open(), in wireMinistryPhotoCarousel) — flush under the active photo
+   and matching its width when there's one, or captionBottomTargetY()'s
+   own default width/position when there isn't (see those functions'
+   own comments) — never left to this rule's own box model, so no
+   max-width here to fight a JS-set width narrower than intended.
    Same card chrome as a real ministry popup (.leaflet-popup-content-
    wrapper/.popup-body h3) — parchment background, ink border, the same
    shadow — so this reads as a direct stand-in for that card's own <h3>
@@ -1071,11 +1074,7 @@ img.popup-photo {
    that gets its own separate grow animation. */
 .lightbox-tour-caption {
   position: fixed;
-  left: 50%;
-  top: 42vh;
-  transform: translateX(-50%);
   z-index: 2;
-  max-width: min(400px, 88vw);
   background: var(--card-bg);
   border: 1px solid var(--ink);
   border-radius: 2px;
@@ -1097,6 +1096,34 @@ img.popup-photo {
 
 .lightbox-tour-caption[hidden] {
   display: none;
+}
+
+/* Points down at the pin the caption is sitting above — same relationship
+   a real Leaflet popup has with its own marker (.leaflet-popup-tip),
+   just drawn with plain CSS triangles instead of Leaflet's rotated-
+   square-in-a-clipped-box trick, since this element isn't part of
+   Leaflet's own popup machinery. Two stacked triangles, the lower one
+   (::before) 2px larger all around in --ink, the upper one (::after) in
+   --card-bg — the 2px of --ink peeking out from behind reads as an
+   outline, the same way the card's own 1px border does. */
+.lightbox-tour-caption::before,
+.lightbox-tour-caption::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+}
+
+.lightbox-tour-caption::before {
+  bottom: -9px;
+  border-top: 9px solid var(--ink);
+}
+
+.lightbox-tour-caption::after {
+  bottom: -7px;
+  border-top: 8px solid var(--card-bg);
 }
 
 /* No box of its own — purely a positioning/sizing reference. Sized by JS
@@ -1263,6 +1290,14 @@ img.popup-photo {
    source order — so JS setting prevBtn/nextBtn.hidden on a single-photo
    ministry did nothing without this explicit override. */
 .lightbox-nav[hidden] { display: none; }
+
+/* Same specificity collision .lightbox-nav[hidden] above exists to fix —
+   .lightbox-dots' own display:flex ties [hidden]'s UA-stylesheet
+   display:none, and author styles win ties regardless of source order.
+   dotsEl.hidden was already being set correctly (renderDots) for a
+   single-photo ministry, it just never took effect — showed as an empty
+   pill with no dots inside instead of vanishing. */
+.lightbox-dots[hidden] { display: none; }
 
 /* The tour drives this lightbox itself (window.__ministryLightbox, see
    tourGoToPin in js/app.js) with no visitor present to use prev/next/
