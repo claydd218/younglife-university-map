@@ -2779,7 +2779,7 @@ function divisionsByProximity() {
 // a deliberate move rather than a jump-cut, and a very long one doesn't
 // drag on forever.
 const TOUR_SPEED_SCALE = 4; // ~5x slower than Leaflet's own natural pixel-based pace (0.8 * 5 ≈ 4)
-const TOUR_MIN_LEG_SECONDS = 2;
+const TOUR_MIN_LEG_SECONDS = 2.5;
 const TOUR_MAX_LEG_SECONDS = 8;
 
 function tourFlightPixelUnits(targetLatLng, targetZoom) {
@@ -2816,7 +2816,7 @@ function tourLegDuration(targetLatLng, targetZoom) {
 // country's pins, not a deliberate cross-country flight. Its own, faster
 // scale and tighter clamp instead.
 const TOUR_PIN_SPEED_SCALE = 1.5;
-const TOUR_PIN_MIN_LEG_SECONDS = 0.6;
+const TOUR_PIN_MIN_LEG_SECONDS = 1;
 const TOUR_PIN_MAX_LEG_SECONDS = 2.5;
 
 function tourPinLegDuration(targetLatLng, targetZoom) {
@@ -2833,7 +2833,7 @@ function tourPinLegDuration(targetLatLng, targetZoom) {
 // original tourLegDuration/TOUR_SPEED_SCALE — only country/division use
 // this one.
 const TOUR_COUNTRY_SPEED_SCALE = 1.8;
-const TOUR_COUNTRY_MIN_LEG_SECONDS = 1;
+const TOUR_COUNTRY_MIN_LEG_SECONDS = 1.4;
 const TOUR_COUNTRY_MAX_LEG_SECONDS = 4.5;
 
 function tourCountryLegDuration(targetLatLng, targetZoom) {
@@ -3136,10 +3136,11 @@ function pinsInCountryByProximity(countryName) {
 
 // Flies to one pin, as close as the map ever zooms (CONFIG.MAX_ZOOM — a
 // country's own zoom can already be near that for a small country, so
-// this often isn't a huge further zoom-in, just a pan). No popup, no
-// pause — same continuous decel-into-arrival/accel-back-out chaining as
-// every other leg (see tourFlyToAndWait), just a smaller hop. Country
-// metrics stay up throughout; nothing pin-specific shown yet.
+// this often isn't a huge further zoom-in, just a pan), then opens that
+// pin's own popup, holds it for TOUR_PIN_POPUP_DWELL_SECONDS, and closes
+// it again before the next leg starts — the one dwell in the tour that
+// isn't a pause before continuing straight through, but content to
+// actually read. Country metrics stay up underneath throughout.
 // Landing spot for a pin visit isn't the pin's own lat/lng — that would
 // center it in the middle of the screen, right where a future info card
 // popping up over it would want to sit. Instead, fly to a point shifted
@@ -3166,6 +3167,9 @@ async function tourGoToPin(entry) {
     const landing = tourPinLandingLatLng(target, targetZoom);
     map.flyTo(landing, targetZoom, { duration });
   }, duration);
+  entry.marker.openPopup();
+  await tourDwell(TOUR_PIN_POPUP_DWELL_SECONDS);
+  entry.marker.closePopup();
 }
 
 class TourStopSignal extends Error {}
@@ -3198,6 +3202,11 @@ async function tourDwell(seconds) {
 // Shared pause length for every tourDwell() call in the tour — one place
 // to retune the pacing.
 const TOUR_DWELL_SECONDS = 1;
+
+// How long a pin's popup stays open before the tour moves on — its own,
+// longer constant since there's actual content (photo/blurb) to read,
+// unlike the division/country arrival dwells above.
+const TOUR_PIN_POPUP_DWELL_SECONDS = 2;
 
 // Every pass ends back at World — the same place it started — rather
 // than stopping wherever the last country happened to leave off. Doing
