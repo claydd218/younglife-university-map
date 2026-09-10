@@ -911,9 +911,14 @@ img.popup-photo {
   gap: 3px;
   padding: 4px 6px;
   border-radius: 10px;
-  background: rgba(20, 15, 8, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  color: #fff;
+  /* Was a dark translucent badge with white text/icon — unreadable
+     against an equally dark photo. Same parchment/ink treatment as the
+     site's other buttons (.tour-control-btn, .nav-menu-toggle) instead,
+     plus their same drop shadow so it stays legible over any photo. */
+  background: var(--parchment);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
   pointer-events: none;
 }
 
