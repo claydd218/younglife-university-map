@@ -3601,7 +3601,6 @@ async function runTour(divisionKeys) {
         }
         await tourCheckpoint();
         await tourGoToCountryOverview(countryName);
-        await tourDwell(TOUR_DWELL_SECONDS);
       }
 
       await tourCheckpoint();
