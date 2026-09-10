@@ -3370,17 +3370,7 @@ function countryBoundsAndZoom(name) {
 // the division's, on the final zoom-out (tourGoToDivisionOverview).
 const TOUR_LABEL_REVEAL_FRACTION = 0.65;
 
-// landing/landingZoom let runTour aim this flight straight at the
-// country's first pin instead of the country's own bounds center —
-// TESTING: with no dwell between arriving at a country and starting its
-// first pin (see runTour), flying to the country center and then
-// immediately flying again to the first pin meant two separate decel-
-// then-accel curves back to back, reading as a stutter. Flying directly
-// to where the first pin lands removes that — one continuous flight
-// instead of two chained ones. Falls back to the country's own bounds
-// center/zoom when there's no override (a country with no pins, or any
-// other caller).
-async function tourGoToCountry(name, landing, landingZoom) {
+async function tourGoToCountry(name) {
   showTourCountryPinsOnly(name);
   // Hidden as this flight departs — leaving the division's own metrics
   // (the first country in a division) or the previous country's overview
@@ -3389,11 +3379,9 @@ async function tourGoToCountry(name, landing, landingZoom) {
   hideMetricsOverlay();
   const info = countryBoundsAndZoom(name);
   if (!info) return;
-  const target = landing || info.target;
-  const targetZoom = landingZoom === undefined ? info.targetZoom : landingZoom;
-  const duration = tourCountryLegDuration(target, targetZoom);
+  const duration = tourCountryLegDuration(info.target, info.targetZoom);
   setTimeout(() => showCountryMetricsOverlay(name), duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
-  await tourFlyToAndWait(() => map.flyTo(target, targetZoom, { duration }), duration);
+  await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
 }
 
 // After visiting all of a country's pins, zoom back out to the country's
@@ -3467,16 +3455,15 @@ function tourPinLandingLatLng(target, targetZoom) {
 //
 // Goes straight to the fullscreen photo carousel (window.__ministryLightbox
 // — exposed by wireMinistryPhotoCarousel), skipping the popup card
-// entirely: openFromPoint plays the carousel growing out of the pin's own
-// screen position (with tourPinHeaderHtml's city/country header on top,
-// standing in for the card's own <h3>), steps through every photo once
-// at TOUR_PHOTO_DWELL_SECONDS each (or, with no photos, just holds the
-// header alone for TOUR_PIN_NO_PHOTO_DWELL_SECONDS), then closeToPoint
-// shrinks it back down into the pin before moving on. A short
-// TOUR_PIN_TRANSITION_DWELL_SECONDS brackets the whole thing — a beat on
-// the plain pin before it grows out, and another after it shrinks back in
-// before flying onward — rather than the animation running the instant
-// the camera stops, or the next flight starting the instant it's done.
+// entirely, the instant the flight settles — no dwell before it starts:
+// pin motions never delay on their own, only the carousel's own viewing
+// time does (TOUR_PHOTO_DWELL_SECONDS/TOUR_PIN_NO_PHOTO_DWELL_SECONDS
+// below), same as only the division level gets a plain arrival dwell
+// (TOUR_DWELL_SECONDS). openFromPoint plays the carousel growing out of
+// the pin's own screen position (with tourPinHeaderHtml's city/country
+// header on top, standing in for the card's own <h3>), steps through
+// every photo once, then closeToPoint shrinks it back down into the pin
+// before moving straight on to the next leg.
 async function tourGoToPin(entry, targetZoom) {
   const target = entry.marker.getLatLng();
   const duration = tourPinLegDuration(target, targetZoom);
@@ -3485,16 +3472,11 @@ async function tourGoToPin(entry, targetZoom) {
     map.flyTo(landing, targetZoom, { duration });
   }, duration);
 
-  await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
-
   // TESTING ONLY — skips the header/carousel card entirely (not just its
   // photos) so the pin flight/landing motion can be watched with nothing
   // else happening. Remove this early return (back to the real
   // window.__ministryLightbox block below) once that's settled.
-  if (TOUR_TESTING_SUPPRESS_CARD) {
-    await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
-    return;
-  }
+  if (TOUR_TESTING_SUPPRESS_CARD) return;
 
   if (window.__ministryLightbox) {
     const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
@@ -3511,8 +3493,6 @@ async function tourGoToPin(entry, targetZoom) {
     }
     await window.__ministryLightbox.closeToPoint(target);
   }
-
-  await tourDwell(TOUR_PIN_TRANSITION_DWELL_SECONDS);
 }
 
 class TourStopSignal extends Error {}
@@ -3551,14 +3531,6 @@ const TOUR_DWELL_SECONDS = 1;
 // there's actual content (a photo) to look at, unlike the division/
 // country arrival dwells above.
 const TOUR_PHOTO_DWELL_SECONDS = 2;
-
-// Brackets the whole lightbox detour in tourGoToPin — once on the plain
-// pin right before it grows out into the carousel, and again on the
-// plain pin right after it's shrunk back in, before flying onward. Short
-// on purpose: just enough to read as a deliberate beat around the
-// animation, not a second content-viewing pause the way
-// TOUR_PHOTO_DWELL_SECONDS/TOUR_PIN_NO_PHOTO_DWELL_SECONDS are.
-const TOUR_PIN_TRANSITION_DWELL_SECONDS = 1;
 
 // How long tourGoToPin holds on the header-only lightbox (no photos to
 // cycle through) before shrinking back into the pin — its own tunable
@@ -3604,15 +3576,7 @@ async function runTour(divisionKeys) {
           ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
           : CONFIG.MAX_ZOOM;
         const pins = pinsInCountryByProximity(countryName);
-        // TESTING: aims tourGoToCountry's own flight straight at the
-        // first pin (see its own comment) instead of the country's
-        // bounds center — one continuous flight, no back-to-back decel/
-        // accel. A country with no pins just falls back to its own
-        // bounds center/zoom (tourGoToCountry's default).
-        const firstPinLanding = pins.length
-          ? tourPinLandingLatLng(pins[0].marker.getLatLng(), pinZoom)
-          : undefined;
-        await tourGoToCountry(countryName, firstPinLanding, pins.length ? pinZoom : undefined);
+        await tourGoToCountry(countryName);
         for (const pinEntry of pins) {
           await tourCheckpoint();
           await tourGoToPin(pinEntry, pinZoom);
