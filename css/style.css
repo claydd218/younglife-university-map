@@ -1049,31 +1049,48 @@ img.popup-photo {
   display: flex;
 }
 
-/* Fixed to the viewport (not sized/positioned off the photo — see its
-   own HTML comment) so it reads the same whether the active photo is
-   portrait, landscape, or absent entirely (the no-photo case just shows
-   this alone). Same card look as a popup's own <h3> header, so it reads
-   as a direct stand-in for it rather than a new, different treatment. */
-.lightbox-tour-header {
+/* Left/top/width are set by JS (applySlideSize, in wireMinistryPhotoCarousel)
+   to sit flush under whichever photo is currently active — the two read
+   as one card, title below photo, matching-width. The values here are
+   only the *default* position, used for the no-photo case (nothing to
+   attach to — open() clears any leftover left/top/width from a previous,
+   photo-attached caption so this default takes over), roughly centered
+   where a photo would otherwise be.
+   Same card chrome as a real ministry popup (.leaflet-popup-content-
+   wrapper/.popup-body h3) — parchment background, ink border, the same
+   shadow — so this reads as a direct stand-in for that card's own <h3>
+   rather than a new, different treatment. Fades in/out on its own
+   opacity transition (toggled via .visible — see openFromPoint/close in
+   js/app.js) rather than with #ministry-lightbox's — see this element's
+   own HTML comment on why it's a sibling, not nested inside the photo
+   that gets its own separate grow animation. */
+.lightbox-tour-caption {
   position: fixed;
-  top: max(16px, env(safe-area-inset-top));
   left: 50%;
+  top: 42vh;
   transform: translateX(-50%);
   z-index: 2;
-  max-width: min(560px, 92vw);
+  max-width: min(400px, 88vw);
   background: var(--card-bg);
   border: 1px solid var(--ink);
-  border-radius: 8px;
-  padding: 10px 20px;
-  box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
-  font-family: 'Cinzel', serif;
+  border-radius: 2px;
+  padding: 10px 16px;
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.35);
+  font-family: 'Cinzel', 'Times New Roman', serif;
   font-size: 20px;
   font-weight: 600;
   color: var(--ink);
   text-align: center;
+  opacity: 0;
+  pointer-events: none; /* never interactive — just a title, nothing to click */
+  transition: opacity 400ms ease;
 }
 
-.lightbox-tour-header[hidden] {
+.lightbox-tour-caption.visible {
+  opacity: 1;
+}
+
+.lightbox-tour-caption[hidden] {
   display: none;
 }
 
