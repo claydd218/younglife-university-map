@@ -3276,10 +3276,14 @@ function pinsInCountryByProximity(countryName) {
 // Flies to one pin, as close as the map ever zooms (CONFIG.MAX_ZOOM — a
 // country's own zoom can already be near that for a small country, so
 // this often isn't a huge further zoom-in, just a pan), then opens that
-// pin's own popup, holds it for TOUR_PIN_POPUP_DWELL_SECONDS, and closes
-// it again before the next leg starts — the one dwell in the tour that
-// isn't a pause before continuing straight through, but content to
-// actually read. Country metrics stay up underneath throughout.
+// pin's own popup. If it has photos, steps through all of them once in
+// the fullscreen lightbox (window.__ministryLightbox — exposed by
+// wireMinistryPhotoCarousel specifically for this) at TOUR_PHOTO_DWELL_
+// SECONDS each, then closes the lightbox and holds on the popup/pin view
+// alone for the shorter TOUR_PIN_DWELL_SECONDS before closing the popup
+// and moving on — content to actually read/see, not a pause before
+// continuing straight through like every other dwell in the tour.
+// Country metrics stay up underneath throughout.
 // Landing spot for a pin visit isn't the pin's own lat/lng — that would
 // center it in the middle of the screen, right where a future info card
 // popping up over it would want to sit. Instead, fly to a point shifted
@@ -3307,7 +3311,19 @@ async function tourGoToPin(entry) {
     map.flyTo(landing, targetZoom, { duration });
   }, duration);
   entry.marker.openPopup();
-  await tourDwell(TOUR_PIN_POPUP_DWELL_SECONDS);
+
+  const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+  if (photos.length && window.__ministryLightbox) {
+    await window.__ministryLightbox.open(photos);
+    await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
+    for (let i = 1; i < photos.length; i++) {
+      window.__ministryLightbox.showNext();
+      await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
+    }
+    window.__ministryLightbox.close();
+  }
+
+  await tourDwell(TOUR_PIN_DWELL_SECONDS);
   entry.marker.closePopup();
 }
 
@@ -3342,10 +3358,17 @@ async function tourDwell(seconds) {
 // to retune the pacing.
 const TOUR_DWELL_SECONDS = 1;
 
-// How long a pin's popup stays open before the tour moves on — its own,
-// longer constant since there's actual content (photo/blurb) to read,
-// unlike the division/country arrival dwells above.
-const TOUR_PIN_POPUP_DWELL_SECONDS = 2;
+// How long each of a ministry's photos stays up in the fullscreen
+// lightbox during a pin visit (tourGoToPin) — its own constant since
+// there's actual content (a photo) to look at, unlike the division/
+// country arrival dwells above.
+const TOUR_PHOTO_DWELL_SECONDS = 2;
+
+// How long tourGoToPin holds on the plain popup/pin view once the photo
+// lightbox (if any) has already closed — shorter than TOUR_PHOTO_DWELL_
+// SECONDS since the photo(s) were just the main event; this is just a
+// beat to read the rest of the popup (staff/blurb) before moving on.
+const TOUR_PIN_DWELL_SECONDS = 1;
 
 // Every pass ends back at World — the same place it started — rather
 // than stopping wherever the last country happened to leave off. Doing
@@ -3522,11 +3545,13 @@ function endTourInPlace() {
   document.getElementById('tour-controls').hidden = true;
   updateTourControlsUI();
   restoreTourClustering();
-  // A pin's popup (tourGoToPin) is still open and waiting out its own
-  // TOUR_PIN_POPUP_DWELL_SECONDS timer when Stop interrupts it — that
-  // timer isn't checkpoint-aware mid-dwell (same as every other tour
-  // dwell), so without this the popup would sit open until it happens to
-  // elapse on its own instead of closing the instant Stop is pressed.
+  // A pin's popup — and, mid-photo-dwell, the fullscreen lightbox on top
+  // of it — is still open and waiting out its own dwell timer when Stop
+  // interrupts tourGoToPin. Neither timer is checkpoint-aware mid-dwell
+  // (same as every other tour dwell), so without this they'd sit open
+  // until they happen to elapse on their own instead of closing the
+  // instant Stop is pressed.
+  if (window.__ministryLightbox && window.__ministryLightbox.isVisible()) window.__ministryLightbox.close();
   map.closePopup();
 }
 
