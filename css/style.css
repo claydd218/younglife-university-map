@@ -372,14 +372,19 @@ h1, h2, h3, .legend-label, .cluster-badge {
   cursor: default;
 }
 
-/* Loop toggle's own on-state — the accent color already used for a
-   division's own pin (LAC's, since this prototype is LAC-only for now)
-   would be more contextually meaningful, but that's not worth the extra
-   plumbing yet for a single hardcoded prototype tour; a plain highlighted
+/* Loop toggle's own on-state — a division's own pin color would be more
+   contextually meaningful now that a tour can span every division at
+   once, but that's not worth the extra plumbing yet; a plain highlighted
    toggle state reads clearly enough on its own. */
 #tour-loop-btn.active {
   background: var(--ink);
   color: var(--parchment);
+}
+
+/* Sits immediately left of #nav-menu-toggle (same top edge), same
+   prototype-only gating as #tour-controls — see runQueryStringTour. */
+.tour-menu-toggle {
+  right: calc(max(16px, env(safe-area-inset-right)) + 46px);
 }
 
 .nav-menu {
@@ -397,6 +402,10 @@ h1, h2, h3, .legend-label, .cluster-badge {
 
 .nav-menu[hidden] {
   display: none;
+}
+
+.tour-menu {
+  right: calc(max(16px, env(safe-area-inset-right)) + 46px);
 }
 
 .nav-menu-list {

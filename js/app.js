@@ -2735,6 +2735,25 @@ function countriesInDivisionByProximity(divisionKey) {
   return orderByProximity(points).map((p) => p.name);
 }
 
+// Every division that actually has at least one ministry pin, ordered by
+// orderByProximity above (same NW-start nearest-neighbor chain used for
+// countries within a division) — used for a "World Tour" that sweeps
+// through every division in turn instead of just one.
+function divisionsByProximity() {
+  const keys = Object.keys(DIVISIONS).filter((key) => {
+    for (const countryName of state.markersByCountry.keys()) {
+      if (state.markersByCountry.get(countryName).length && state.countryDivisionByName.get(countryName) === key) return true;
+    }
+    return false;
+  });
+  const points = keys.map((key) => {
+    const rawBounds = window.__divisionBounds(key);
+    const center = rawBounds ? L.latLngBounds(rawBounds).getCenter() : L.latLng(0, 0);
+    return { key, lat: center.lat, lng: center.lng };
+  });
+  return orderByProximity(points).map((p) => p.key);
+}
+
 // Each leg's duration scales with how far it actually moves ON SCREEN,
 // not real-world km — the same km distance can be a tiny nudge or a huge
 // sweep depending on zoom level (confirmed live: had to watch it to see
@@ -3154,27 +3173,35 @@ async function tourCheckpoint() {
 // the next pass just continues on from Division again with no special
 // jump-back case, and a non-repeating tour gets a clean, deliberate
 // landing spot instead of trailing off at an arbitrary country.
-async function runTour(divisionKey) {
+// divisionKeys is an array, not a single key — a "World Tour" (every
+// division) and a single-division tour are the exact same code, just a
+// different-length list. Divisions flow straight from one to the next
+// (no forced return to World in between), same as countries flow
+// straight to the next country within a division — World only bookends
+// the whole run (once at the very start, once per loop pass at the end).
+async function runTour(divisionKeys) {
   await tourCheckpoint();
   await tourGoToWorld();
   for (;;) {
-    await tourCheckpoint();
-    await tourGoToDivision(divisionKey);
-
-    const countries = countriesInDivisionByProximity(divisionKey);
-    for (const countryName of countries) {
+    for (const divisionKey of divisionKeys) {
       await tourCheckpoint();
-      await tourGoToCountry(countryName);
-      for (const pinEntry of pinsInCountryByProximity(countryName)) {
+      await tourGoToDivision(divisionKey);
+
+      const countries = countriesInDivisionByProximity(divisionKey);
+      for (const countryName of countries) {
         await tourCheckpoint();
-        await tourGoToPin(pinEntry);
+        await tourGoToCountry(countryName);
+        for (const pinEntry of pinsInCountryByProximity(countryName)) {
+          await tourCheckpoint();
+          await tourGoToPin(pinEntry);
+        }
+        await tourCheckpoint();
+        await tourGoToCountryOverview(countryName);
       }
-      await tourCheckpoint();
-      await tourGoToCountryOverview(countryName);
-    }
 
-    await tourCheckpoint();
-    await tourGoToDivisionOverview(divisionKey);
+      await tourCheckpoint();
+      await tourGoToDivisionOverview(divisionKey);
+    }
 
     await tourCheckpoint();
     await tourGoToWorld();
@@ -3187,7 +3214,7 @@ async function runTour(divisionKey) {
 }
 
 let tourRunPromise = null;
-let currentTourDivisionKey = null;
+let currentTourDivisionKeys = null; // array of division keys — see runTour
 
 function updateTourControlsUI() {
   const playing = tourController.state === 'playing';
@@ -3225,11 +3252,11 @@ function playTour() {
     scheduleTourControlsHide();
     return;
   }
-  if (tourRunPromise || !currentTourDivisionKey) return;
+  if (tourRunPromise || !currentTourDivisionKeys || !currentTourDivisionKeys.length) return;
   tourController.state = 'playing';
   updateTourControlsUI();
   scheduleTourControlsHide();
-  tourRunPromise = runTour(currentTourDivisionKey)
+  tourRunPromise = runTour(currentTourDivisionKeys)
     .catch((err) => {
       if (!(err instanceof TourStopSignal)) console.error(err);
     })
@@ -3268,6 +3295,25 @@ function closeTour() {
   restoreTourClustering();
 }
 
+// Switches to a different tour (a single division, or every division for
+// a World Tour) from the tour-picker menu, whether or not one's already
+// playing. If one is, this stops it and waits for its own runTour promise
+// to actually settle (same checkpoint-based unwind closeTour uses — takes
+// effect once the current leg finishes, not instantly) before starting
+// the new selection; playTour's own tourRunPromise guard would otherwise
+// silently no-op a call made while the old run is still unwinding.
+async function selectTour(divisionKeys) {
+  if (tourRunPromise) {
+    tourController.state = 'stopped';
+    await tourRunPromise;
+  }
+  currentTourDivisionKeys = divisionKeys;
+  tourController.state = 'stopped';
+  document.getElementById('tour-controls').hidden = false;
+  updateTourControlsUI();
+  playTour();
+}
+
 function wireTourControls() {
   document.getElementById('tour-play-btn').addEventListener('click', playTour);
   document.getElementById('tour-pause-btn').addEventListener('click', pauseTour);
@@ -3279,19 +3325,80 @@ function wireTourControls() {
   });
 }
 
+// Separate from the site's own #nav-menu-toggle (which picks what the
+// map is currently showing) — this picks which tour to run, without
+// having to edit the ?tour= query string each time. Only ever wired/
+// shown alongside the rest of this prototype (see runQueryStringTour).
+function wireTourMenu() {
+  const toggle = document.getElementById('tour-menu-toggle');
+  const menu = document.getElementById('tour-menu');
+  const list = document.getElementById('tour-menu-list');
+
+  function closeMenu() {
+    menu.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+  function openMenu() {
+    menu.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+  }
+
+  const divisionKeys = divisionsByProximity();
+  list.innerHTML = `<li><button type="button" class="nav-menu-item" data-tour="all">
+        <img class="nav-menu-icon" src="images/favicon.svg" alt="">
+        <span>World Tour (All Divisions)</span>
+      </button></li>`
+    + divisionKeys.map((key) => `
+      <li><button type="button" class="nav-menu-item" data-tour="${escapeHtml(key)}">
+        <span class="color-swatch" style="background:${DIVISIONS[key].pin}"></span>
+        <span>${escapeHtml(DIVISIONS[key].label)}</span>
+      </button></li>
+    `).join('');
+
+  list.querySelectorAll('.nav-menu-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.tour;
+      closeMenu();
+      selectTour(key === 'all' ? divisionsByProximity() : [key]);
+    });
+  });
+
+  toggle.addEventListener('click', () => {
+    if (menu.hidden) openMenu();
+    else closeMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && !toggle.contains(e.target)) closeMenu();
+  });
+}
+
 function runQueryStringTour() {
   const name = new URLSearchParams(location.search).get('tour');
   if (!name) return;
-  // Step 1: only 'lac' exists, hardcoded to the Latin America & Caribbean
-  // division. Later steps generalize this to start from wherever the
-  // visitor already is, per the real plan.
-  if (name !== 'lac') {
-    console.warn(`?tour=${name} — no such tour yet. Known: lac`);
+
+  document.getElementById('tour-controls').hidden = false;
+  document.getElementById('tour-menu-toggle').hidden = false;
+  wireTourControls();
+  wireTourMenu();
+  updateTourControlsUI();
+
+  // 'lac' kept as a shorthand for the division this prototype started
+  // with; 'all'/'world' runs every division in one sweep (a "World
+  // Tour"); anything else needs to be an exact division key. An
+  // unrecognized value still leaves the controls/menu up (rather than
+  // bailing entirely) so a mistyped query string can just be corrected
+  // by picking a real option from the new menu instead of editing the URL.
+  let divisionKeys;
+  if (name === 'all' || name === 'world') {
+    divisionKeys = divisionsByProximity();
+  } else if (name === 'lac') {
+    divisionKeys = ['latin_america_caribbean'];
+  } else if (DIVISIONS[name]) {
+    divisionKeys = [name];
+  } else {
+    console.warn(`?tour=${name} — no such tour. Known: all, world, lac, or a division key (${Object.keys(DIVISIONS).join(', ')}). Pick one from the new tour menu instead.`);
     return;
   }
-  currentTourDivisionKey = 'latin_america_caribbean';
-  document.getElementById('tour-controls').hidden = false;
-  wireTourControls();
-  updateTourControlsUI();
+  currentTourDivisionKeys = divisionKeys;
   playTour();
 }

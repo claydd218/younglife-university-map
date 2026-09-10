@@ -137,9 +137,6 @@
     </div>
   </div>
 
-  <!-- Only ever shown for the ?tour=NAME prototype tour (see
-       runQueryStringAnimation in js/app.js) — hidden by default here, not
-       wired to any regular-visitor UI yet. -->
   <!-- Only ever shown for the ?tour=NAME prototype (see runQueryStringTour
        in js/app.js) — hidden by default here, not wired to any regular-
        visitor UI yet. -->
@@ -148,6 +145,21 @@
     <button type="button" id="tour-pause-btn" class="tour-control-btn" aria-label="Pause">&#10074;&#10074;</button>
     <button type="button" id="tour-loop-btn" class="tour-control-btn" aria-label="Loop" aria-pressed="false">&#8635;</button>
     <button type="button" id="tour-close-btn" class="tour-control-btn" aria-label="Close tour">&times;</button>
+  </div>
+
+  <!-- Separate from #nav-menu-toggle (which picks what the map is
+       currently showing) — this picks which tour to run (a single
+       division, or all of them). Same prototype-only gating as
+       #tour-controls above. -->
+  <button id="tour-menu-toggle" class="nav-menu-toggle tour-menu-toggle" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="tour-menu" aria-label="Choose tour" hidden>
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="5" cy="10" r="1.8" fill="currentColor"/>
+      <circle cx="10" cy="10" r="1.8" fill="currentColor"/>
+      <circle cx="15" cy="10" r="1.8" fill="currentColor"/>
+    </svg>
+  </button>
+  <div id="tour-menu" class="nav-menu tour-menu" hidden>
+    <ul id="tour-menu-list" class="nav-menu-list"></ul>
   </div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
