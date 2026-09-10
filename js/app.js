@@ -987,6 +987,13 @@ function wireNavMenu() {
     // the camera itself, a second fly-to on top of it would just fight
     // it) rather than leaving it parked to silently resume later.
     if (tourController.state === 'paused') endTourInPlace();
+    // Same window.__ministryLightbox.close() either way — shared by the
+    // tour's own carousel card and a real visitor's plain photo view, so
+    // one call dismisses whichever kind (if any) is open. goToWorld/
+    // goToDivision below already close a regular marker popup
+    // themselves; this is the equivalent for the photo lightbox, which
+    // they don't know about.
+    if (window.__ministryLightbox) window.__ministryLightbox.close();
     if (btn.dataset.nav === 'world') goToWorld();
     else goToDivision(btn.dataset.nav);
   });
