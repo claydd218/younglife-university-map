@@ -382,9 +382,20 @@ h1, h2, h3, .legend-label, .cluster-badge {
 }
 
 /* Sits immediately left of #nav-menu-toggle (same top edge), same
-   prototype-only gating as #tour-controls — see runQueryStringTour. */
+   prototype-only gating as #tour-controls — see runQueryStringTour. The
+   explicit [hidden] rule matters here in a way it never did for
+   #nav-menu-toggle itself (which never carries the hidden attribute):
+   .nav-menu-toggle's own display:flex is the same specificity as the
+   browser's default [hidden]{display:none} and comes later in the
+   cascade, so without this the hidden attribute would be silently
+   overridden and the button would show up on the plain site too
+   (confirmed live — exactly what happened before this rule existed). */
 .tour-menu-toggle {
   right: calc(max(16px, env(safe-area-inset-right)) + 46px);
+}
+
+.tour-menu-toggle[hidden] {
+  display: none;
 }
 
 .nav-menu {
