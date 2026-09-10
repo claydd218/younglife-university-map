@@ -3180,8 +3180,13 @@ async function tourCheckpoint() {
 // straight to the next country within a division — World only bookends
 // the whole run (once at the very start, once per loop pass at the end).
 async function runTour(divisionKeys) {
+  // World only bookends a real World Tour (more than one division) — a
+  // single division picked from the menu goes straight there (wherever
+  // the map happens to be starting from) and, if looping, just repeats
+  // within that division, never detouring through World at all.
+  const isWorldTour = divisionKeys.length > 1;
   await tourCheckpoint();
-  await tourGoToWorld();
+  if (isWorldTour) await tourGoToWorld();
   for (;;) {
     for (const divisionKey of divisionKeys) {
       await tourCheckpoint();
@@ -3203,8 +3208,10 @@ async function runTour(divisionKeys) {
       await tourGoToDivisionOverview(divisionKey);
     }
 
-    await tourCheckpoint();
-    await tourGoToWorld();
+    if (isWorldTour) {
+      await tourCheckpoint();
+      await tourGoToWorld();
+    }
 
     if (!tourController.loop) break;
   }
@@ -3399,6 +3406,8 @@ function runQueryStringTour() {
     console.warn(`?tour=${name} — no such tour. Known: all, world, lac, or a division key (${Object.keys(DIVISIONS).join(', ')}). Pick one from the new tour menu instead.`);
     return;
   }
+  // Preselected (so Play works right away, or the menu can just pick
+  // something else) but not auto-started — press Play, or pick a tour
+  // from the new menu, rather than immediately flying off on load.
   currentTourDivisionKeys = divisionKeys;
-  playTour();
 }
