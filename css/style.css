@@ -4,6 +4,7 @@
   --ink: #3b2a1a;
   --ink-soft: #6b5a44;
   --card-bg: #f7efdc;
+  --parchment-light: #faf4e6;
   --border-soft: rgba(59, 42, 26, 0.25);
   /* Exposed so JS can read the notch/rounded-corner safe area on the sides
      (landscape iPhone in particular) — env() itself isn't readable from JS. */
@@ -377,7 +378,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
 }
 
 .tour-control-btn:hover:not(:disabled) {
-  background: #fff;
+  background: var(--parchment-light);
 }
 
 .tour-control-btn:disabled {
@@ -415,16 +416,27 @@ h1, h2, h3, .legend-label, .cluster-badge {
    endTourInPlace in js/app.js) — these controls don't do anything useful
    while the tour is driving the camera and just compete with its own
    controls for space/attention, but should come right back the moment
-   playback isn't actually moving the camera (paused, or stopped). Plain
-   display:none, not a fade — same treatment as .tour-menu-toggle[hidden]
-   above, not the idle-fade .tour-controls.idle-hidden gets during
-   playback. */
+   playback isn't actually moving the camera (paused, or stopped). Faded
+   via opacity (each one's own transition: opacity rule, next to its base
+   styles) rather than display:none, same 300ms ease as .tour-controls'
+   own transition — these should visibly fade together with it, not
+   blink out ahead of it. pointer-events:none keeps them unclickable
+   while faded without needing to wait for the transition to finish. */
+#legend,
+.leaflet-control-zoom,
+.directory-control,
+.nav-menu-toggle,
+.nav-menu {
+  transition: opacity 300ms ease;
+}
+
 body.tour-active #legend,
 body.tour-active .leaflet-control-zoom,
 body.tour-active .directory-control,
 body.tour-active #nav-menu-toggle,
 body.tour-active #nav-menu {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .nav-menu {
@@ -1357,6 +1369,15 @@ img.popup-photo {
 
 .leaflet-bar a:hover {
   background-color: var(--parchment);
+}
+
+/* Leaflet's own default (leaflet.css) gives the zoom control's disabled
+   button — shown once you're already at CONFIG.MAX_ZOOM — a plain grey
+   #f4f4f4 background, off-palette next to everything else here. Needs
+   !important: .leaflet-disabled's own selector is more specific than the
+   plain .leaflet-bar a rule above, so it'd otherwise win. */
+.leaflet-bar a.leaflet-disabled {
+  background-color: var(--parchment-light) !important;
 }
 
 /* Fixed rather than safe-area-based on purpose: the safe-area inset changes
