@@ -3751,18 +3751,7 @@ const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 // TESTING ONLY — see its one use in tourGoToPin above. Flip to true to
 // evaluate pin flight/landing motion in isolation again, with the
 // caption/carousel card skipped entirely (not just its photos).
-const TOUR_TESTING_SUPPRESS_CARD = true;
-
-// TESTING ONLY — see its one use in runTour below. Looping behavior is
-// easier to watch/debug over just a couple of countries per division
-// than a whole division's worth — flip back to Infinity (or remove) for
-// real behavior.
-const TOUR_TESTING_MAX_COUNTRIES_PER_DIVISION = 2;
-
-// TESTING ONLY — see its one use in runTour below. Back for another
-// round of pacing checks (the first-leg skip just below); flip back to
-// false for real behavior once confirmed.
-const TOUR_TESTING_ONE_PIN_PER_COUNTRY = true;
+const TOUR_TESTING_SUPPRESS_CARD = false;
 
 // divisionKeys is an array, not a single key — a "World Tour" (every
 // division) and a single-division tour are the exact same code, just a
@@ -3806,8 +3795,7 @@ async function runTour(divisionKeys) {
       if (isWorldTour) await tourGoToDivision(divisionKey);
       await tourDwell(TOUR_DWELL_SECONDS);
 
-      const countries = countriesInDivisionByProximity(divisionKey)
-        .slice(0, TOUR_TESTING_MAX_COUNTRIES_PER_DIVISION);
+      const countries = countriesInDivisionByProximity(divisionKey);
       for (const countryName of countries) {
         await tourCheckpoint();
         // One step in from tourGoToCountry's own zoom, not the same
@@ -3818,9 +3806,7 @@ async function runTour(divisionKeys) {
         const pinZoom = countryInfo
           ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
           : CONFIG.MAX_ZOOM;
-        const pins = TOUR_TESTING_ONE_PIN_PER_COUNTRY
-          ? pinsInCountryByProximity(countryName).slice(0, 1)
-          : pinsInCountryByProximity(countryName);
+        const pins = pinsInCountryByProximity(countryName);
         await tourGoToCountry(countryName);
         await tourDwell(TOUR_DWELL_SECONDS);
         for (const pinEntry of pins) {
