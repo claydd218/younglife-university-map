@@ -28,16 +28,14 @@ html, body {
   height: 100%;
   /* svh (small viewport height — the size assuming browser chrome, like an
      address bar, IS showing), not dvh (dynamic viewport height, which
-     actively tracks chrome as it shows/hides). .frame-border (position:
-     fixed) and #map (position: absolute) both track this same box, and
-     dvh reacting to an in-app browser's (Messages, etc.) chrome settling
-     into its final size *after* this first paint was moving the whole
-     page — frame included, not just the map's own content — during that
-     brief window. svh means the page is born at its final, stable size
-     and never has to reactively shrink to match a chrome change later; if
-     that chrome does end up collapsing (freeing up more space than svh
-     assumed), the cost is just some unused margin at the bottom, not
-     another visible reflow.
+     actively tracks chrome as it shows/hides) — #map (position: absolute)
+     tracks this same box, and dvh reacting to an in-app browser's
+     (Messages, etc.) chrome settling into its final size *after* this
+     first paint was moving the whole page during that brief window. svh
+     means the page is born at its final, stable size and never has to
+     reactively shrink to match a chrome change later; if that chrome does
+     end up collapsing (freeing up more space than svh assumed), the cost
+     is just some unused margin at the bottom, not another visible reflow.
   */
   height: 100svh;
   width: 100%;
@@ -507,13 +505,7 @@ body.tour-active #nav-menu {
 
 #map {
   position: absolute;
-  /* Kept just inside the decorative frame's border+outline rings below, so
-     the body's ocean-colored background shows through as solid "matting"
-     instead of the map bleeding through the transparent gap between them. */
-  top: max(11px, env(safe-area-inset-top));
-  left: max(11px, env(safe-area-inset-left));
-  right: max(11px, env(safe-area-inset-right));
-  bottom: max(11px, env(safe-area-inset-bottom));
+  inset: 0;
   background: var(--ocean);
 }
 
@@ -562,20 +554,8 @@ body.tour-active #nav-menu {
   box-shadow: 1px 1px 3px rgba(0,0,0,0.25);
 }
 
-/* ---------- Decorative frame & texture ---------- */
+/* ---------- Texture ---------- */
 
-.frame-border {
-  position: fixed;
-  top: max(8px, env(safe-area-inset-top));
-  left: max(8px, env(safe-area-inset-left));
-  right: max(8px, env(safe-area-inset-right));
-  bottom: max(8px, env(safe-area-inset-bottom));
-  border: 2px solid var(--ink);
-  outline: 1px solid var(--ink-soft);
-  outline-offset: 4px;
-  pointer-events: none;
-  z-index: 950;
-}
 
 .paper-grain {
   position: fixed;
@@ -1521,16 +1501,17 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
    a different distance from the corner depending on orientation. A plain
    fixed margin keeps them in the same spot always.
 
-   The value is 5px, not the legend's 16px, because these controls live
-   inside #map, which is already inset 11px from the viewport on its own
-   (the decorative frame gap) — 11 + 5 = 16px from the viewport, matching
-   the legend's fixed-positioned 16px offset from the opposite corner. */
+   16px, matching the legend's own fixed-positioned 16px offset from the
+   opposite corner — #map now fills the viewport with no inset of its own
+   (it used to be inset 11px for the decorative frame that sat around it,
+   which made this 5px, for 11 + 5 = 16px total; the frame's gone, so this
+   carries the whole 16px itself now). */
 .leaflet-right .leaflet-control {
-  margin-right: 5px;
+  margin-right: 16px;
 }
 
 .leaflet-bottom.leaflet-right .leaflet-control:last-child {
-  margin-bottom: 5px;
+  margin-bottom: 16px;
 }
 
 /* ---------- Country directory ---------- */
@@ -1704,9 +1685,9 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
   /* Claws back part of .site-header's own 20px side padding just for the
      metrics row, so the 4 boxes have enough width to stay on one line on a
      narrow phone instead of wrapping their labels to a second line. Only
-     12px of the 20px is reclaimed (not the full amount) so the boxes still
-     clear the decorative frame-border, which sits ~8px from the viewport
-     edge. Tightened gap/padding/min-width below make up the rest. */
+     12px of the 20px is reclaimed (not the full amount), leaving a little
+     breathing room from the true viewport edge. Tightened gap/padding/
+     min-width below make up the rest. */
   .metrics-overlay {
     margin-left: -12px;
     margin-right: -12px;
