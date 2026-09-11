@@ -3731,12 +3731,9 @@ async function runTour(divisionKeys) {
 
     if (!tourController.loop) break;
   }
-  // Reaching the end of a non-looping run is its own kind of stop, but not
-  // a full stopTour() — the leg that just ran (tourGoToDivisionOverview/
-  // tourGoToWorld) already landed exactly here and already restored
-  // clustering, so only the state/controls cleanup half is needed; see
-  // endTourInPlace's own comment for why the navigate-away half is
-  // deliberately skipped here.
+  // Reaching the end of a non-looping run is its own kind of stop —
+  // same cleanup stopTour's Stop button triggers, just arrived at
+  // naturally instead of by interrupting mid-flight.
   endTourInPlace();
 }
 
@@ -3827,39 +3824,40 @@ function toggleTourLoop() {
 // site's own nav-menu uses, so this ends up in exactly the state a
 // regular visitor would if they'd navigated there normally (same
 // metrics shown, same animated flyTo/flyToBounds).
+// A full, immediate stop wherever the tour happens to be — no flyTo back
+// to the division/world view. It used to navigate there on Stop
+// specifically (unlike runTour's own natural end, which never did — see
+// endTourInPlace's own comment), but that read as the tour taking one
+// more action after being told to stop, not actually stopping.
 function stopTour() {
   endTourInPlace();
-  if (currentTourDivisionKeys && currentTourDivisionKeys.length === 1) {
-    if (goToDivisionFn) goToDivisionFn(currentTourDivisionKeys[0]);
-  } else if (goToWorldFn) {
-    goToWorldFn();
-  }
 }
 
-// Shared by stopTour (the Stop button, which can interrupt an arbitrary
-// mid-flight moment and so genuinely needs the navigate-away step above)
-// and runTour's own natural, non-looping end (below) — which does NOT:
-// the leg that just ran (tourGoToDivisionOverview/tourGoToWorld) already
-// landed exactly here, with clustering already restored, a moment ago.
-// Re-firing goToDivisionFn/goToWorldFn on top of that was a second,
-// redundant flyTo starting from (and animating a "no-op" move around)
-// an already-correct view — harmless in theory, but the more likely
-// explanation for pins occasionally not all showing after a tour ends
-// than anything in the leg that actually got us there correctly.
 function endTourInPlace() {
   tourController.state = 'stopped';
-  document.body.classList.remove('tour-active');
-  clearTimeout(tourControlsIdleTimer);
-  document.getElementById('tour-controls').hidden = true;
-  updateTourControlsUI();
-  restoreTourClustering();
   // The fullscreen lightbox (tourGoToPin's own open() call) can still
   // be open, waiting out one of its own dwell timers, when Stop
   // interrupts — none of them are checkpoint-aware mid-dwell (same as
   // every other tour dwell), so without this it would sit open until it
   // happens to elapse on its own instead of closing the instant Stop is
   // pressed.
+  //
+  // Closed before body.tour-active is removed below, not after — that
+  // class is the only thing hiding this lightbox's own dark backdrop
+  // during a tour (see the body.tour-active selector in style.css).
+  // Removing tour-active first left a one-frame window where a still-
+  // open lightbox picked up its normal backdrop with no transition (a
+  // display:none/block flip can't animate), which then only faded out
+  // with the rest of the close — a visible flash of the dark overlay on
+  // Stop, confirmed live. Closing first means .visible is already gone
+  // (or fading) by the time tour-active's removal would otherwise
+  // un-hide the backdrop, so there's nothing left to flash.
   if (window.__ministryLightbox && window.__ministryLightbox.isVisible()) window.__ministryLightbox.close();
+  document.body.classList.remove('tour-active');
+  clearTimeout(tourControlsIdleTimer);
+  document.getElementById('tour-controls').hidden = true;
+  updateTourControlsUI();
+  restoreTourClustering();
   map.closePopup();
 }
 
