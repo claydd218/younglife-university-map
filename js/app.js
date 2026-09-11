@@ -3746,7 +3746,6 @@ let currentTourDivisionKeys = null; // array of division keys — see runTour
 function updateTourControlsUI() {
   const playing = tourController.state === 'playing';
   document.getElementById('tour-play-btn').disabled = playing;
-  document.getElementById('tour-pause-btn').disabled = !playing;
   const loopBtn = document.getElementById('tour-loop-btn');
   loopBtn.classList.toggle('active', tourController.loop);
   loopBtn.setAttribute('aria-pressed', String(tourController.loop));
@@ -3885,7 +3884,10 @@ async function selectTour(divisionKeys) {
 
 function wireTourControls() {
   document.getElementById('tour-play-btn').addEventListener('click', playTour);
-  document.getElementById('tour-pause-btn').addEventListener('click', pauseTour);
+  // No #tour-pause-btn to wire anymore — pauseTour() itself, and the
+  // 'paused' state it sets (see waitWhilePaused), are left in place
+  // below in case this comes back; nothing reaches either without the
+  // button.
   document.getElementById('tour-loop-btn').addEventListener('click', toggleTourLoop);
   document.getElementById('tour-stop-btn').addEventListener('click', stopTour);
   document.addEventListener('mousemove', () => {

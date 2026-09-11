@@ -166,9 +166,9 @@
     <button type="button" id="tour-play-btn" class="tour-control-btn" aria-label="Play">
       <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7,5 19,12 7,19" fill="currentColor"/></svg>
     </button>
-    <button type="button" id="tour-pause-btn" class="tour-control-btn" aria-label="Pause">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" fill="currentColor"/><rect x="14" y="5" width="4" height="14" fill="currentColor"/></svg>
-    </button>
+    <!-- Pause removed for now (problematic — see js/app.js's pauseTour,
+         left in place since the button is the only thing pulled out
+         here) — may come back later. -->
     <button type="button" id="tour-loop-btn" class="tour-control-btn" aria-label="Loop" aria-pressed="false">
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.7-6"/><polyline points="20 4 20 9 15 9"/></svg>
     </button>
