@@ -145,10 +145,17 @@ export async function onRequestPost({ request, env, ctx }) {
   const cityExt = detectImageExt(imageBase64);
   if (!cityExt) return errorResponse(400, "Couldn't recognize the image format (expected JPEG, PNG, or WebP)");
 
-  const numberedPattern = new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)\\.`);
+  // Matched against f.key (the full "images/slug-N.ext" path), not
+  // f.name — listObjects strips the *query* prefix ("images/slug", no
+  // trailing hyphen) off of name, which silently ate the "slug-" this
+  // pattern expected to find there too, so it never matched anything and
+  // nextIndex stayed stuck at 1 no matter how many numbered files already
+  // existed. Confirmed live: every additional photo for an existing area
+  // silently overwrote slug-1 instead of appending a new file.
+  const numberedPattern = new RegExp(`^${IMAGES_DIR}/${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)\\.`);
   let nextIndex = 1;
   for (const f of existing) {
-    const match = f.name.match(numberedPattern);
+    const match = f.key.match(numberedPattern);
     if (match) nextIndex = Math.max(nextIndex, parseInt(match[1], 10) + 1);
   }
   const filename = `${slug}-${nextIndex}.${cityExt}`;
