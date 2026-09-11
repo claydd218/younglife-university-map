@@ -1580,6 +1580,22 @@ function wireMinistryPhotoCarousel() {
 
   function otherSlide() { return activeSlide === slideA ? slideB : slideA; }
 
+  // Hides `slide` with no fade at all — used only when the pin we're
+  // navigating to has no photo of its own for the new one to crossfade
+  // against (see open() below). Un-.active-ing normally still leaves the
+  // slide's own opacity transition to play out over FADE_MS, during
+  // which its own actual (unrelated) photo is genuinely still visible,
+  // fading out roughly where this pin's own photo would have sat —
+  // reading as if it belonged to the ministry being visited. A hard cut
+  // has no crossfade to be graceful about, since there's nothing on the
+  // other end of it.
+  function hideSlideInstantly(slide) {
+    slide.style.transition = 'none';
+    slide.classList.remove('active');
+    void slide.offsetHeight; // flush so the transition:none above actually applies before it's cleared
+    slide.style.transition = '';
+  }
+
   // Pure calculation, no DOM writes — the size `img` would render at
   // within the 92vw/85vh bounds, computed from its own real aspect ratio.
   // Split out from applySlideSize below so showIndex can compare an
@@ -1774,15 +1790,20 @@ function wireMinistryPhotoCarousel() {
     photos = photoList || [];
     index = 0;
     activeSlide = slideA;
-    // Only ever un-.active here, never removeAttribute('src') too — opacity
-    // still takes FADE_MS to reach 0, and stripping src immediately blanked
-    // the image out from under it, leaving an empty bordered frame (border/
-    // box-shadow, no photo) visibly fading out whenever this pin has no
-    // photo of its own to load in its place. Leaving the old src in place
-    // costs nothing: the slide is already invisible once its fade
-    // finishes, and a future photo just overwrites .src as normal.
-    slideB.classList.remove('active');
-    slideA.classList.remove('active');
+    // A pin with its own photo lets the outgoing slide fade out normally
+    // — its old photo crossfades against the new one fading in below,
+    // same as ever. A pin with none has nothing for the fade to end on:
+    // letting it play out anyway meant genuinely seeing the *previous*
+    // pin's own photo, fading out over FADE_MS roughly where this pin's
+    // photo slot would be — reading as though it belonged here. Hiding
+    // instantly avoids that; see hideSlideInstantly's own comment.
+    if (photos.length) {
+      slideB.classList.remove('active');
+      slideA.classList.remove('active');
+    } else {
+      hideSlideInstantly(slideB);
+      hideSlideInstantly(slideA);
+    }
     resetPinch();
     if (photos.length) {
       slideA.src = urlFor(0);
