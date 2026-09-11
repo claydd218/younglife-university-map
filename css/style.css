@@ -341,6 +341,21 @@ h1, h2, h3, .legend-label, .cluster-badge {
   background: var(--parchment);
 }
 
+/* See the element's own comment in index.html. z-index sits above
+   everything it needs to block (#ministry-lightbox's 1300 included —
+   its own backdrop is display:none during a tour, see further down)
+   but below .tour-controls' 1400, so only those buttons punch through. */
+#tour-click-shield {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1350;
+}
+
+body.tour-active #tour-click-shield {
+  display: block;
+}
+
 /* Bottom-center playback bar, shown once a visitor picks World or a
    division from #nav-menu (see activateTourControls in js/app.js) —
    same card/border/shadow treatment as .nav-menu-toggle, just relocated

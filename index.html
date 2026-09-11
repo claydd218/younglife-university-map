@@ -151,6 +151,16 @@
     </div>
   </div>
 
+  <!-- Full-viewport, invisible, present only while body.tour-active (i.e.
+       actively playing — see playTour/pauseTour/endTourInPlace in
+       js/app.js) — swallows every click/drag/scroll aimed at the map,
+       lightbox dots, or anything else underneath so a visitor can't
+       divert a playing tour, while sitting below #tour-controls'
+       z-index so those buttons stay reachable. No JS needed: shown/
+       hidden purely by the same body.tour-active class already driving
+       everything else tour-related. -->
+  <div id="tour-click-shield" aria-hidden="true"></div>
+
   <!-- Hidden by default — shown once a visitor picks World or a division
        from #nav-menu (see activateTourControls in js/app.js), or via the
        ?tour=NAME deep link (runQueryStringTour). -->
