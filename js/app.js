@@ -1800,7 +1800,17 @@ function wireMinistryPhotoCarousel() {
 
     photos = photoList || [];
     index = 0;
-    activeSlide = slideA;
+    // Loaded into whichever slide ISN'T currently active — same
+    // otherSlide() pattern showIndex() already uses — not always slideA
+    // regardless of what's already showing. Reusing the same element for
+    // both the outgoing and incoming photo (the bug this replaced) meant
+    // setting its .src swapped the actual pixels the instant the new
+    // photo decoded, mid-fade-out and well before the crossfade's own
+    // opacity transition got anywhere near 0 — a visible flash/pop of
+    // the new photo partway faded in, not a clean crossfade, every time
+    // one pin's photo followed another's.
+    const incoming = otherSlide();
+    const outgoing = activeSlide;
     // A pin with its own photo lets the outgoing slide fade out normally
     // — its old photo crossfades against the new one fading in below,
     // same as ever. A pin with none has nothing for the fade to end on:
@@ -1809,25 +1819,25 @@ function wireMinistryPhotoCarousel() {
     // photo slot would be — reading as though it belonged here. Hiding
     // instantly avoids that; see hideSlideInstantly's own comment.
     if (photos.length) {
-      slideB.classList.remove('active');
-      slideA.classList.remove('active');
+      outgoing.classList.remove('active');
     } else {
       hideSlideInstantly(slideB);
       hideSlideInstantly(slideA);
     }
     resetPinch();
     if (photos.length) {
-      slideA.src = urlFor(0);
-      if (await whenLoaded(slideA)) {
-        applySlideSize(slideA, computeSlideSize(slideA));
-        slideA.classList.add('active');
+      incoming.src = urlFor(0);
+      if (await whenLoaded(incoming)) {
+        applySlideSize(incoming, computeSlideSize(incoming));
+        incoming.classList.add('active');
+        activeSlide = incoming;
       } else {
         // Broken/missing photo file — don't show an empty bordered frame
         // for it (see whenLoaded's own comment). Falls through to the
         // no-photo caption placement below, same as if this pin had no
         // photos listed at all.
         photos = [];
-        slideA.removeAttribute('src');
+        incoming.removeAttribute('src');
       }
     }
     if (!photos.length && captionActive) {
