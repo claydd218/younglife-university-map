@@ -837,6 +837,7 @@ function wireMetricsOverlayDismiss() {
   function maybeHide() {
     if (state.suppressOverlayDismiss) return;
     hideMetricsOverlay();
+    hideTourControlsIfNotPlaying();
   }
   map.on('dragstart zoomstart', maybeHide);
   map.on('click', (e) => {
@@ -991,14 +992,17 @@ function wireNavMenu() {
     const btn = e.target.closest('.nav-menu-item');
     if (!btn) return;
     closeMenu();
-    // A paused tour is still "live" — tourRunPromise is just parked
-    // inside tourCheckpoint's own wait loop, ready to resume right where
-    // it left off. Picking World/a division here is a real navigate-away,
-    // so end the tour outright first (state cleanup + hide controls only,
-    // no navigate-away of its own — this click is already about to fly
-    // the camera itself, a second fly-to on top of it would just fight
-    // it) rather than leaving it parked to silently resume later.
-    if (tourController.state === 'paused') endTourInPlace();
+    // A playing or paused tour is still "live" — playing means runTour's
+    // own loop is actively driving the camera; paused means tourRunPromise
+    // is just parked inside tourCheckpoint's own wait loop, ready to
+    // resume right where it left off. Either way, picking World/a
+    // division here is a real navigate-away, so end the tour outright
+    // first (state cleanup + hide controls only, no navigate-away of its
+    // own — this click is already about to fly the camera itself, a
+    // second fly-to on top of it would just fight it) rather than
+    // leaving a paused one to silently resume later, or a playing one to
+    // keep driving the camera against this click's own move.
+    if (tourController.state !== 'stopped') endTourInPlace();
     // Same window.__ministryLightbox.close() either way — shared by the
     // tour's own carousel card and a real visitor's plain photo view, so
     // one call dismisses whichever kind (if any) is open. goToWorld/
@@ -1006,8 +1010,13 @@ function wireNavMenu() {
     // themselves; this is the equivalent for the photo lightbox, which
     // they don't know about.
     if (window.__ministryLightbox) window.__ministryLightbox.close();
-    if (btn.dataset.nav === 'world') goToWorld();
-    else goToDivision(btn.dataset.nav);
+    if (btn.dataset.nav === 'world') {
+      goToWorld();
+      activateTourControls(divisionsByProximity());
+    } else {
+      goToDivision(btn.dataset.nav);
+      activateTourControls([btn.dataset.nav]);
+    }
   });
 
   toggle.addEventListener('click', () => {
@@ -2602,6 +2611,7 @@ async function init() {
     showMetricsOverlay(state.worldMetrics, null);
     wireMetricsOverlayDismiss();
     wireNavMenu();
+    wireTourControls();
 
     wirePhotoPreview();
     wireMinistryPhotoCarousel();
@@ -3743,14 +3753,6 @@ const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 // caption/carousel card skipped entirely (not just its photos).
 const TOUR_TESTING_SUPPRESS_CARD = false;
 
-// TESTING ONLY — see its one use in runTour below. Visiting every pin in
-// every country makes a full pass slow to sit through while tuning
-// pacing (dwells, flight durations); this caps each country to just its
-// first pin (still by proximity, same ordering used everywhere else) so
-// a run covers every country quickly instead. Flip back to false for
-// real behavior.
-const TOUR_TESTING_ONE_PIN_PER_COUNTRY = true;
-
 // divisionKeys is an array, not a single key — a "World Tour" (every
 // division) and a single-division tour are the exact same code, just a
 // different-length list. Divisions flow straight from one to the next
@@ -3782,9 +3784,7 @@ async function runTour(divisionKeys) {
         const pinZoom = countryInfo
           ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
           : CONFIG.MAX_ZOOM;
-        const pins = TOUR_TESTING_ONE_PIN_PER_COUNTRY
-          ? pinsInCountryByProximity(countryName).slice(0, 1)
-          : pinsInCountryByProximity(countryName);
+        const pins = pinsInCountryByProximity(countryName);
         await tourGoToCountry(countryName);
         await tourDwell(TOUR_DWELL_SECONDS);
         for (const pinEntry of pins) {
@@ -3821,6 +3821,11 @@ let currentTourDivisionKeys = null; // array of division keys — see runTour
 function updateTourControlsUI() {
   const playing = tourController.state === 'playing';
   document.getElementById('tour-play-btn').disabled = playing;
+  // Nothing to stop until Play has actually been pressed — controls can
+  // now be sitting up in this not-yet-playing state for a while (shown
+  // as soon as World/a division is picked, before Play), so Stop reads
+  // as inert rather than implying it'd do something.
+  document.getElementById('tour-stop-btn').disabled = !playing;
   const loopBtn = document.getElementById('tour-loop-btn');
   loopBtn.classList.toggle('active', tourController.loop);
   loopBtn.setAttribute('aria-pressed', String(tourController.loop));
@@ -3829,7 +3834,7 @@ function updateTourControlsUI() {
 // "A couple of seconds" of no interaction fades the controls out during
 // active playback, so they're not sitting over the view for the whole
 // tour — brought back by any mouse movement (see the listener in
-// runQueryStringTour) or once the tour actually stops (paused or
+// wireTourControls) or once the tour actually stops (paused or
 // finished), so they're never hidden while there's something to press.
 const TOUR_CONTROLS_IDLE_MS = 2000;
 let tourControlsIdleTimer = null;
@@ -3844,6 +3849,19 @@ function scheduleTourControlsHide() {
   tourControlsIdleTimer = setTimeout(() => {
     document.getElementById('tour-controls').classList.add('idle-hidden');
   }, TOUR_CONTROLS_IDLE_MS);
+}
+
+// Tour controls (shown by activateTourControls once World/a division is
+// picked) share the exact same "did the visitor leave this selection"
+// signal the metrics overlay already dismisses on — see
+// wireMetricsOverlayDismiss's own maybeHide, which calls this. Scoped to
+// the not-yet-playing state only: once Play is actually pressed,
+// TOUR_CONTROLS_IDLE_MS's own mousemove-driven fade above governs
+// visibility instead, and Stop — not incidental map interaction — is
+// what ends that state.
+function hideTourControlsIfNotPlaying() {
+  const controls = document.getElementById('tour-controls');
+  if (!controls.hidden && tourController.state !== 'playing') controls.hidden = true;
 }
 
 function playTour() {
@@ -3939,23 +3957,17 @@ function endTourInPlace() {
   map.closePopup();
 }
 
-// Switches to a different tour (a single division, or every division for
-// a World Tour) from the tour-picker menu, whether or not one's already
-// playing. If one is, this stops it and waits for its own runTour promise
-// to actually settle (same checkpoint-based unwind stopTour uses — takes
-// effect once the current leg finishes, not instantly) before starting
-// the new selection; playTour's own tourRunPromise guard would otherwise
-// silently no-op a call made while the old run is still unwinding.
-async function selectTour(divisionKeys) {
-  if (tourRunPromise) {
-    tourController.state = 'stopped';
-    await tourRunPromise;
-  }
+// Reveals the tour controls and preselects `divisionKeys` for Play,
+// without auto-starting — a visitor presses Play themselves, same as
+// clicking any other control. Shared by the nav-menu's own World/
+// division picks (wireNavMenu) and the ?tour=NAME deep link
+// (runQueryStringTour), so both land in the exact same ready state.
+function activateTourControls(divisionKeys) {
   currentTourDivisionKeys = divisionKeys;
   tourController.state = 'stopped';
   document.getElementById('tour-controls').hidden = false;
+  showTourControlsNow();
   updateTourControlsUI();
-  playTour();
 }
 
 function wireTourControls() {
@@ -3972,69 +3984,17 @@ function wireTourControls() {
   });
 }
 
-// Separate from the site's own #nav-menu-toggle (which picks what the
-// map is currently showing) — this picks which tour to run, without
-// having to edit the ?tour= query string each time. Only ever wired/
-// shown alongside the rest of this prototype (see runQueryStringTour).
-function wireTourMenu() {
-  const toggle = document.getElementById('tour-menu-toggle');
-  const menu = document.getElementById('tour-menu');
-  const list = document.getElementById('tour-menu-list');
-
-  function closeMenu() {
-    menu.hidden = true;
-    toggle.setAttribute('aria-expanded', 'false');
-  }
-  function openMenu() {
-    menu.hidden = false;
-    toggle.setAttribute('aria-expanded', 'true');
-  }
-
-  const divisionKeys = divisionsByProximity();
-  list.innerHTML = `<li><button type="button" class="nav-menu-item" data-tour="all">
-        <img class="nav-menu-icon" src="images/favicon.svg" alt="">
-        <span>World Tour (All Divisions)</span>
-      </button></li>`
-    + divisionKeys.map((key) => `
-      <li><button type="button" class="nav-menu-item" data-tour="${escapeHtml(key)}">
-        <span class="color-swatch" style="background:${DIVISIONS[key].pin}"></span>
-        <span>${escapeHtml(DIVISIONS[key].label)}</span>
-      </button></li>
-    `).join('');
-
-  list.querySelectorAll('.nav-menu-item').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.tour;
-      closeMenu();
-      selectTour(key === 'all' ? divisionsByProximity() : [key]);
-    });
-  });
-
-  toggle.addEventListener('click', () => {
-    if (menu.hidden) openMenu();
-    else closeMenu();
-  });
-  document.addEventListener('click', (e) => {
-    if (!menu.hidden && !menu.contains(e.target) && !toggle.contains(e.target)) closeMenu();
-  });
-}
-
+// Deep link — ?tour=NAME lands a visitor in the exact same ready state
+// picking World/a division from #nav-menu does (see activateTourControls),
+// without needing the menu at all. Still just press Play; nothing
+// auto-starts on load.
 function runQueryStringTour() {
   const name = new URLSearchParams(location.search).get('tour');
   if (!name) return;
 
-  document.getElementById('tour-controls').hidden = false;
-  document.getElementById('tour-menu-toggle').hidden = false;
-  wireTourControls();
-  wireTourMenu();
-  updateTourControlsUI();
-
-  // 'lac' kept as a shorthand for the division this prototype started
+  // 'lac' kept as a shorthand for the division this feature started
   // with; 'all'/'world' runs every division in one sweep (a "World
-  // Tour"); anything else needs to be an exact division key. An
-  // unrecognized value still leaves the controls/menu up (rather than
-  // bailing entirely) so a mistyped query string can just be corrected
-  // by picking a real option from the new menu instead of editing the URL.
+  // Tour"); anything else needs to be an exact division key.
   let divisionKeys;
   if (name === 'all' || name === 'world') {
     divisionKeys = divisionsByProximity();
@@ -4043,11 +4003,8 @@ function runQueryStringTour() {
   } else if (DIVISIONS[name]) {
     divisionKeys = [name];
   } else {
-    console.warn(`?tour=${name} — no such tour. Known: all, world, lac, or a division key (${Object.keys(DIVISIONS).join(', ')}). Pick one from the new tour menu instead.`);
+    console.warn(`?tour=${name} — no such tour. Known: all, world, lac, or a division key (${Object.keys(DIVISIONS).join(', ')}). Pick World or a division from the menu instead.`);
     return;
   }
-  // Preselected (so Play works right away, or the menu can just pick
-  // something else) but not auto-started — press Play, or pick a tour
-  // from the new menu, rather than immediately flying off on load.
-  currentTourDivisionKeys = divisionKeys;
+  activateTourControls(divisionKeys);
 }

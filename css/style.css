@@ -343,10 +343,10 @@ h1, h2, h3, .legend-label, .cluster-badge {
   background: var(--parchment);
 }
 
-/* Bottom-center playback bar for the ?tour=NAME prototype (see
-   runQueryStringTour in js/app.js) — same card/border/shadow treatment as
-   .nav-menu-toggle, just relocated and widened for four buttons in a
-   row. */
+/* Bottom-center playback bar, shown once a visitor picks World or a
+   division from #nav-menu (see activateTourControls in js/app.js) —
+   same card/border/shadow treatment as .nav-menu-toggle, just relocated
+   and widened for the row of buttons. */
 .tour-controls {
   position: fixed;
   left: 50%;
@@ -421,23 +421,6 @@ h1, h2, h3, .legend-label, .cluster-badge {
   color: var(--parchment);
 }
 
-/* Sits immediately left of #nav-menu-toggle (same top edge), same
-   prototype-only gating as #tour-controls — see runQueryStringTour. The
-   explicit [hidden] rule matters here in a way it never did for
-   #nav-menu-toggle itself (which never carries the hidden attribute):
-   .nav-menu-toggle's own display:flex is the same specificity as the
-   browser's default [hidden]{display:none} and comes later in the
-   cascade, so without this the hidden attribute would be silently
-   overridden and the button would show up on the plain site too
-   (confirmed live — exactly what happened before this rule existed). */
-.tour-menu-toggle {
-  right: calc(max(16px, env(safe-area-inset-right)) + 46px);
-}
-
-.tour-menu-toggle[hidden] {
-  display: none;
-}
-
 /* Set on <body> while the tour is actively playing (playTour/pauseTour/
    endTourInPlace in js/app.js) — these controls don't do anything useful
    while the tour is driving the camera and just compete with its own
@@ -480,10 +463,6 @@ body.tour-active #nav-menu {
 
 .nav-menu[hidden] {
   display: none;
-}
-
-.tour-menu {
-  right: calc(max(16px, env(safe-area-inset-right)) + 46px);
 }
 
 .nav-menu-list {

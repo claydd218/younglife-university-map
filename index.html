@@ -152,9 +152,9 @@
     </div>
   </div>
 
-  <!-- Only ever shown for the ?tour=NAME prototype (see runQueryStringTour
-       in js/app.js) — hidden by default here, not wired to any regular-
-       visitor UI yet. -->
+  <!-- Hidden by default — shown once a visitor picks World or a division
+       from #nav-menu (see activateTourControls in js/app.js), or via the
+       ?tour=NAME deep link (runQueryStringTour). -->
   <!-- Plain hand-drawn SVGs (same convention as the hamburger/compass-rose/
        video-play icons above), not the Unicode glyphs these four used to
        be — those rendered at wildly different visual sizes/baselines
@@ -175,21 +175,6 @@
     <button type="button" id="tour-stop-btn" class="tour-control-btn" aria-label="Stop tour">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="currentColor"/></svg>
     </button>
-  </div>
-
-  <!-- Separate from #nav-menu-toggle (which picks what the map is
-       currently showing) — this picks which tour to run (a single
-       division, or all of them). Same prototype-only gating as
-       #tour-controls above. -->
-  <button id="tour-menu-toggle" class="nav-menu-toggle tour-menu-toggle" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="tour-menu" aria-label="Choose tour" hidden>
-    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-      <circle cx="5" cy="10" r="1.8" fill="currentColor"/>
-      <circle cx="10" cy="10" r="1.8" fill="currentColor"/>
-      <circle cx="15" cy="10" r="1.8" fill="currentColor"/>
-    </svg>
-  </button>
-  <div id="tour-menu" class="nav-menu tour-menu" hidden>
-    <ul id="tour-menu-list" class="nav-menu-list"></ul>
   </div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
