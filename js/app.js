@@ -852,6 +852,28 @@ function wireMetricsOverlayDismiss() {
   document.getElementById('metrics-overlay').addEventListener('click', maybeHide);
 }
 
+// Closes whatever "active pin card" a real visitor might currently have
+// open — a marker's own Leaflet popup, and the fullscreen photo lightbox
+// (window.__ministryLightbox) — before a navigation moves the view away
+// from it. Deliberately NOT wired into withSuppressedDismiss itself:
+// that's shared by the tour's own internal flights too (tourFlyToAndWait),
+// which drive window.__ministryLightbox directly with their own open/
+// close choreography this would fight, and by the cluster-click zoom
+// handler, which is explicitly "still browsing the same selection, not
+// leaving it" (see that handler's own comment) — neither should close
+// anything. This is only for the actual "moving to a different area"
+// entry points a regular visitor's own navigation goes through: the nav
+// menu (goToWorld/goToDivision below), a country-polygon click, and the
+// directory/search flyToCountryBounds. A stale popup or lightbox left
+// open past one of those (confirmed live: search in particular, since it
+// doesn't always open a new popup to naturally replace the old one) was
+// exactly the reported bug this exists to close for good, not just for
+// the one path that surfaced it.
+function dismissActivePinCard() {
+  map.closePopup();
+  if (window.__ministryLightbox) window.__ministryLightbox.close();
+}
+
 // Upper-right hamburger menu: "World" re-centers on the default view and
 // shows the world metrics; each division pans/zooms to that division's
 // bounds (same __divisionBounds the PDF/report maps use) and shows its
@@ -952,7 +974,7 @@ function wireNavMenu() {
   function goToWorld() {
     state.currentNavView = 'world';
     setActive('world');
-    map.closePopup();
+    dismissActivePinCard();
     withSuppressedDismiss(() => {
       // flyTo, not setView — a plain animated setView only actually
       // animates when the zoom-level change is under Leaflet's own
@@ -973,7 +995,7 @@ function wireNavMenu() {
     if (!bounds) return;
     state.currentNavView = key;
     setActive(key);
-    map.closePopup();
+    dismissActivePinCard();
     withSuppressedDismiss(() => {
       // Extra top padding clears the header/metrics overlay; the rest is
       // just breathing room, same spirit as mapCapture.js's DIVISION_PADDING.
@@ -1003,13 +1025,10 @@ function wireNavMenu() {
     // leaving a paused one to silently resume later, or a playing one to
     // keep driving the camera against this click's own move.
     if (tourController.state !== 'stopped') endTourInPlace();
-    // Same window.__ministryLightbox.close() either way — shared by the
-    // tour's own carousel card and a real visitor's plain photo view, so
-    // one call dismisses whichever kind (if any) is open. goToWorld/
-    // goToDivision below already close a regular marker popup
-    // themselves; this is the equivalent for the photo lightbox, which
-    // they don't know about.
-    if (window.__ministryLightbox) window.__ministryLightbox.close();
+    // No explicit dismissActivePinCard() call here — goToWorld/
+    // goToDivision below already do that themselves now (closes both a
+    // regular marker popup and the photo lightbox either way, whichever
+    // kind, if any, is open).
     if (btn.dataset.nav === 'world') {
       goToWorld();
       activateTourControls(divisionsByProximity());
@@ -1222,6 +1241,14 @@ function flyToCountryBounds(countryName) {
     if (normalizeCountryName(layer.feature.properties.name) === countryName) countryLayer = layer;
   });
   if (!countryLayer) return false;
+  // Search/directory (this function's two callers, flyToCountry and
+  // flyToArea) doesn't always open a new popup to naturally replace
+  // whatever was already open — flyToCountry only does for a country
+  // with exactly one ministry, and neither ever touches the photo
+  // lightbox at all — so without this, picking a search result while
+  // either was open left it sitting there, stale, over wherever the map
+  // just flew to. Confirmed live as the reported bug.
+  dismissActivePinCard();
   const bounds = computeMainLandBounds(countryLayer.feature);
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
   // flyTo, not setView — see goToWorld's own comment on why (no
@@ -2202,7 +2229,8 @@ function wireBackButtonReset() {
 
   function resetMapView() {
     suppressArm = true;
-    map.closePopup();
+    // No explicit dismissActivePinCard() call here — goToWorldFn (below)
+    // already does that itself now.
     if (goToWorldFn) goToWorldFn();
     // goToWorldFn's own move is animated and multi-leg (see
     // withSuppressedDismiss), so a fixed timeout can't safely bound it —
@@ -2300,6 +2328,12 @@ async function init() {
             state.openCountryTooltipLayer = layer;
           } else {
             state.openCountryTooltipLayer = null;
+            // Clicking a country never opens a new popup of its own to
+            // replace whatever ministry popup/photo lightbox a visitor
+            // already had open — without this, a plain country click
+            // left either sitting there, stale, over the new country
+            // this just flew to.
+            dismissActivePinCard();
             // A touch out from a tight fit, so the country reads with a
             // little breathing room and its neighbors are visible for
             // context, without backing off as far as a full zoom level.
