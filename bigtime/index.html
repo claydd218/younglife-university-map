@@ -474,7 +474,11 @@
      element. Clipped to .free-crop-stage's own overflow:hidden. */
   .free-crop-rect {
     position: absolute;
-    border: 1.5px solid #fff;
+    /* Dashed and semi-transparent, not a solid white line — a solid
+       border was too easy to mistake for an actual white edge/strip in
+       the photo itself, exactly the thing this tool exists to spot and
+       crop out. */
+    border: 1.5px dashed rgba(255,255,255,0.75);
     box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
     cursor: move;
   }
