@@ -1559,17 +1559,26 @@ function wireMinistryPhotoCarousel() {
   // Gap between the caption's own downward-pointing tip (::after, in
   // style.css) and the pin it's pointing at.
   const CAPTION_TIP_CLEARANCE_PX = 22;
-  // Clearance kept above the photo when captionActive, so a tall photo
-  // can't push the whole card (or just the caption under it) off the
-  // top of the screen — computeSlideSize below caps photo height to
-  // whatever actually fits between this and captionBottomTargetY(),
-  // instead of the regular (non-tour) view's flat 85vh cap, which left
-  // no room to also fit a caption underneath. Also keeps the photo from
-  // covering #site-header's own title/metrics overlay, which sits at
-  // the very top of the screen the whole time a tour is running — 80px
-  // wasn't enough clearance for it, though the overlay doesn't need this
-  // whole 170px either; trimmed down a bit to let photos run taller.
-  const TOUR_CARD_TOP_MARGIN_PX = 140;
+  // Gap kept below the division/country label specifically — the photo
+  // is free to run up over the metric boxes underneath it (it paints
+  // above #site-header, z-index 1300 vs. 900), just not over the label
+  // naming what they describe. Read from the live DOM rather than a
+  // guessed fixed pixel value, so it tracks the label's real height at
+  // whatever's actually rendering it (a 2-line title on a narrow phone,
+  // differing safe-area padding, etc.) instead of one number only ever
+  // measured on desktop. Falls back to the title itself when there's no
+  // label to clear (World view/division level, before a country's own
+  // name is showing) — shouldn't come up in practice, since a photo
+  // carousel only ever opens once a specific country's pins are being
+  // visited, by which point showCountryMetricsOverlay has already put
+  // the label up.
+  const TOUR_CARD_LABEL_CLEARANCE_PX = 12;
+  function tourCardTopMarginPx() {
+    const label = document.getElementById('metrics-label');
+    const anchor = (label && !label.hidden) ? label : document.querySelector('.site-header h1');
+    const bottom = anchor ? anchor.getBoundingClientRect().bottom : 90;
+    return bottom + TOUR_CARD_LABEL_CLEARANCE_PX;
+  }
   // How far the caption is pulled up into the photo's own bottom edge —
   // both boxes land at the exact same Y otherwise (border-box, touching
   // edge to edge), which reads as one fat, doubled-up border where the
@@ -1648,7 +1657,7 @@ function wireMinistryPhotoCarousel() {
     // a real visitor's plain photo view has neither concern, so it
     // keeps the original flat 85vh cap.
     const maxH = captionActive
-      ? Math.max(120, captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX - TOUR_CARD_TOP_MARGIN_PX)
+      ? Math.max(120, captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX - tourCardTopMarginPx())
       : window.innerHeight * 0.85;
     const ratio = img.naturalWidth / img.naturalHeight;
     let w = maxW;
