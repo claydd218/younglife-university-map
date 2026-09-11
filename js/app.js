@@ -1774,10 +1774,15 @@ function wireMinistryPhotoCarousel() {
     photos = photoList || [];
     index = 0;
     activeSlide = slideA;
+    // Only ever un-.active here, never removeAttribute('src') too — opacity
+    // still takes FADE_MS to reach 0, and stripping src immediately blanked
+    // the image out from under it, leaving an empty bordered frame (border/
+    // box-shadow, no photo) visibly fading out whenever this pin has no
+    // photo of its own to load in its place. Leaving the old src in place
+    // costs nothing: the slide is already invisible once its fade
+    // finishes, and a future photo just overwrites .src as normal.
     slideB.classList.remove('active');
-    slideB.removeAttribute('src');
     slideA.classList.remove('active');
-    slideA.removeAttribute('src');
     resetPinch();
     if (photos.length) {
       slideA.src = urlFor(0);
