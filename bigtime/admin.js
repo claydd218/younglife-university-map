@@ -565,6 +565,12 @@ function openFreeCropDialog(file) {
 
     loadImageBitmap(file).then((loaded) => {
       bitmap = loaded;
+      // #free-crop-image is one persistent <img>, reused for every file in
+      // a multi-file batch (and every ministry photo added afterward) —
+      // without clearing it first, showModal() below makes whatever photo
+      // it was last displaying flash on screen for a frame before the new
+      // objectUrl replaces it further down.
+      img.removeAttribute('src');
       // Opened before the image finishes loading (not after, like the
       // staff dialog) — img.clientWidth/Height below need real layout,
       // which a <dialog> that isn't open yet never produces (it's
@@ -1992,6 +1998,11 @@ function openDialog(row) {
   renderMinistryPhotos();
 
   $('ministry-dialog').showModal();
+  // .dialog-body keeps its scroll position across opens (it's never
+  // unmounted) — without this, editing a ministry right after scrolling
+  // partway down a previous one reopened already scrolled down instead
+  // of at Country/City.
+  document.querySelector('#ministry-dialog .dialog-body').scrollTop = 0;
 }
 
 function collectRepeatable(group, nameField, metaField) {
