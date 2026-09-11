@@ -474,6 +474,15 @@
      element. Clipped to .free-crop-stage's own overflow:hidden. */
   .free-crop-rect {
     position: absolute;
+    /* Without this, the element's own default content-box sizing adds
+       the border's width on top of whatever left/top/width/height JS
+       sets (openFreeCropDialog's rect state) — a real, confirmed bug:
+       at the full-image default, the rect rendered 3px wider/taller
+       than the image itself on the right/bottom, showing a sliver of
+       the dialog's own white background there that looked like it was
+       part of the crop area. border-box keeps the rect's rendered box
+       exactly matching the coordinates JS actually computed. */
+    box-sizing: border-box;
     /* Dashed and semi-transparent, not a solid white line — a solid
        border was too easy to mistake for an actual white edge/strip in
        the photo itself, exactly the thing this tool exists to spot and
