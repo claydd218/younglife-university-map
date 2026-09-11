@@ -1223,7 +1223,20 @@ img.popup-photo {
      every pinch handler needing to re-append it. */
   position: fixed;
   display: block;
-  object-fit: contain;
+  /* fill, not contain — the box's own width/height (computeSlideSize in
+     js/app.js) are already computed to match this image's exact natural
+     ratio, just rounded to whole device pixels for the box itself. That
+     rounding can leave the box's ratio a hair off the image's true one,
+     which is exactly what contain cares about: it'll still "fit" the
+     image within a box like that, leaving a thin gap on whichever axis
+     came up short — visible on some photos, not others, depending on
+     how the rounding happened to land (confirmed live: still there
+     intermittently after rounding computeSlideSize's own output).
+     fill stretches to the box's full size regardless, which for a
+     mismatch this small (sub-pixel) is a distortion nobody could ever
+     actually see, and it guarantees zero gap instead of leaving it to
+     chance. */
+  object-fit: fill;
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   opacity: 0;
