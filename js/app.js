@@ -3722,6 +3722,14 @@ const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 // caption/carousel card skipped entirely (not just its photos).
 const TOUR_TESTING_SUPPRESS_CARD = false;
 
+// TESTING ONLY — see its one use in runTour below. Visiting every pin in
+// every country makes a full pass slow to sit through while tuning
+// pacing (dwells, flight durations); this caps each country to just its
+// first pin (still by proximity, same ordering used everywhere else) so
+// a run covers every country quickly instead. Flip back to false for
+// real behavior.
+const TOUR_TESTING_ONE_PIN_PER_COUNTRY = true;
+
 // divisionKeys is an array, not a single key — a "World Tour" (every
 // division) and a single-division tour are the exact same code, just a
 // different-length list. Divisions flow straight from one to the next
@@ -3753,7 +3761,9 @@ async function runTour(divisionKeys) {
         const pinZoom = countryInfo
           ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
           : CONFIG.MAX_ZOOM;
-        const pins = pinsInCountryByProximity(countryName);
+        const pins = TOUR_TESTING_ONE_PIN_PER_COUNTRY
+          ? pinsInCountryByProximity(countryName).slice(0, 1)
+          : pinsInCountryByProximity(countryName);
         await tourGoToCountry(countryName);
         await tourDwell(TOUR_DWELL_SECONDS);
         for (const pinEntry of pins) {
