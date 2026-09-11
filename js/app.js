@@ -4042,6 +4042,29 @@ function endTourInPlace(keepControlsVisible = false) {
   map.closePopup();
 }
 
+// Jumps back to the very start of the current selection — deliberately
+// not just "Stop then Play", since Stop fully hides the controls (see
+// stopTour's own comment), which would force re-picking World/the
+// division from the nav menu again. Works whether the tour is currently
+// playing or already stopped; in the stopped case this ends up doing
+// exactly what Play does.
+async function restartTour() {
+  if (tourController.state !== 'stopped') {
+    // Same cleanup Stop itself uses, just keeping the controls visible —
+    // this flips tourController.state to 'stopped', which is what the
+    // running tour's own next tourCheckpoint() call checks to unwind
+    // (throwing TourStopSignal, caught in playTour's .catch below).
+    endTourInPlace(true);
+    // ...but that unwind is asynchronous (it only happens at the next
+    // checkpoint), so tourRunPromise can still be in flight here —
+    // without waiting for it, the guard at the top of playTour would see
+    // a stale non-null tourRunPromise and silently refuse to start the
+    // new run.
+    if (tourRunPromise) await tourRunPromise;
+  }
+  playTour();
+}
+
 // Reveals the tour controls and preselects `divisionKeys` for Play,
 // without auto-starting — a visitor presses Play themselves, same as
 // clicking any other control. Shared by the nav-menu's own World/
@@ -4061,6 +4084,7 @@ function wireTourControls() {
   // 'paused' state it sets (see waitWhilePaused), are left in place
   // below in case this comes back; nothing reaches either without the
   // button.
+  document.getElementById('tour-restart-btn').addEventListener('click', restartTour);
   document.getElementById('tour-loop-btn').addEventListener('click', toggleTourLoop);
   document.getElementById('tour-stop-btn').addEventListener('click', stopTour);
   document.addEventListener('mousemove', () => {
