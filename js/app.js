@@ -3946,20 +3946,12 @@ function playTour() {
   document.body.classList.add('tour-active');
   updateTourControlsUI();
   scheduleTourControlsHide();
-  // Captured so the .finally() below only clears tourRunPromise if it's
-  // still THIS run's own promise sitting there — restartTour starts a
-  // new run without waiting for an old one's cooperative unwind (that
-  // only happens at its next tourCheckpoint(), which can be seconds
-  // away mid-flight/mid-dwell), so by the time this old run's finally
-  // actually fires, tourRunPromise may already belong to that new run;
-  // nulling it unconditionally would stomp the reference to a tour
-  // that's still genuinely playing.
-  const thisRun = runTour(currentTourDivisionKeys)
+  tourRunPromise = runTour(currentTourDivisionKeys)
     .catch((err) => {
       if (!(err instanceof TourStopSignal)) console.error(err);
     })
     .finally(() => {
-      if (tourRunPromise === thisRun) tourRunPromise = null;
+      tourRunPromise = null;
       // Belt-and-suspenders alongside the restoreTourClustering() calls
       // already in tourGoToWorld/tourGoToDivision/stopTour — this one
       // covers the case those don't: an actual error (not a normal
@@ -3968,7 +3960,6 @@ function playTour() {
       // no tour left running to ever fix it.
       restoreTourClustering();
     });
-  tourRunPromise = thisRun;
 }
 
 function pauseTour() {
@@ -4051,28 +4042,6 @@ function endTourInPlace(keepControlsVisible = false) {
   map.closePopup();
 }
 
-// Jumps back to the very start of the current selection — deliberately
-// not just "Stop then Play", since Stop fully hides the controls (see
-// stopTour's own comment), which would force re-picking World/the
-// division from the nav menu again. Works whether the tour is currently
-// playing or already stopped; in the stopped case this ends up doing
-// exactly what Play does.
-//
-// Deliberately doesn't wait for the old run to actually unwind (its own
-// tourCheckpoint() only throws at its next leg boundary, which can be
-// seconds away mid-flight/mid-dwell) — clearing tourRunPromise here and
-// starting fresh immediately is what makes Restart feel instant instead
-// of only resuming once the interrupted leg happens to finish. Safe:
-// every loop in runTour checkpoints before its next map action, so the
-// dying old run never issues another flyTo/reveal once a new one has
-// started (see playTour's own run-token comment for the other half of
-// this — its .finally() won't stomp the new run's promise either).
-function restartTour() {
-  if (tourController.state !== 'stopped') endTourInPlace(true);
-  tourRunPromise = null;
-  playTour();
-}
-
 // Reveals the tour controls and preselects `divisionKeys` for Play,
 // without auto-starting — a visitor presses Play themselves, same as
 // clicking any other control. Shared by the nav-menu's own World/
@@ -4092,7 +4061,6 @@ function wireTourControls() {
   // 'paused' state it sets (see waitWhilePaused), are left in place
   // below in case this comes back; nothing reaches either without the
   // button.
-  document.getElementById('tour-restart-btn').addEventListener('click', restartTour);
   document.getElementById('tour-loop-btn').addEventListener('click', toggleTourLoop);
   document.getElementById('tour-stop-btn').addEventListener('click', stopTour);
   document.addEventListener('mousemove', () => {
