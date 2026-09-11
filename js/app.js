@@ -1027,7 +1027,8 @@ function wireNavMenu() {
       // and choosing World) was doing despite animate:true. flyTo has no
       // such cutoff — it always plays its own zoom-out/pan/zoom-in curve,
       // which is also just a more dynamic transition in general.
-      flyToWithRedrawWatch(() => map.flyTo(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM));
+      const duration = interactiveFlyDuration(L.latLng(CONFIG.MAP_CENTER), CONFIG.MAP_ZOOM);
+      flyToWithRedrawWatch(() => map.flyTo(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM, { duration }));
     });
     showMetricsOverlay(state.worldMetrics, null);
   }
@@ -1044,9 +1045,15 @@ function wireNavMenu() {
       // just breathing room, same spirit as mapCapture.js's DIVISION_PADDING.
       // flyToBounds — see goToWorld's comment on why flyTo(Bounds) over a
       // plain animated fitBounds/setView.
+      // Approximate target for the duration estimate only, same as
+      // tourFlyToDivisionBounds's own — flyToBounds computes its actual
+      // fitted zoom (with padding) internally.
+      const llBounds = L.latLngBounds(bounds);
+      const duration = interactiveFlyDuration(llBounds.getCenter(), map.getBoundsZoom(llBounds));
       flyToWithRedrawWatch(() => map.flyToBounds(bounds, {
         paddingTopLeft: [40, 170],
         paddingBottomRight: [40, 40],
+        duration,
       }));
     });
     showMetricsOverlay(state.metricsByDivision.get(key) || [], DIVISIONS[key].pin, escapeHtml(DIVISIONS[key].label));
@@ -1297,10 +1304,10 @@ function flyToCountryBounds(countryName) {
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
   // flyTo, not setView — see goToWorld's own comment on why (no
   // zoomAnimationThreshold cutoff, so a distant search result still
-  // animates instead of jumping). Duration left to Leaflet's own natural
-  // pace, same as ever — only the metrics reveal below is slowed/delayed.
+  // animates instead of jumping).
+  const duration = interactiveFlyDuration(bounds.getCenter(), targetZoom);
   withSuppressedDismiss(() => {
-    flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom));
+    flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom, { duration }));
   });
   // EXPERIMENTAL: revealed on arrival, not the instant the flight starts
   // — showing it immediately meant its own count-up/pop-in-then-settle
@@ -2399,8 +2406,9 @@ async function init() {
             // flyTo's own 'movestart', and the map 'click' this layer
             // click is about to bubble into, would each immediately hide
             // the metrics overlay this click is showing.
+            const duration = interactiveFlyDuration(bounds.getCenter(), targetZoom);
             withSuppressedDismiss(() => {
-              flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom));
+              flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom, { duration }));
             });
             showCountryMetricsOverlay(name);
           }
@@ -3357,6 +3365,23 @@ const TOUR_COUNTRY_MAX_LEG_SECONDS = 4.5;
 function tourCountryLegDuration(targetLatLng, targetZoom) {
   const units = tourFlightPixelUnits(targetLatLng, targetZoom);
   return Math.min(TOUR_COUNTRY_MAX_LEG_SECONDS, Math.max(TOUR_COUNTRY_MIN_LEG_SECONDS, units * TOUR_COUNTRY_SPEED_SCALE));
+}
+
+// A regular visitor's own tap/search moves (goToWorld, goToDivision, a
+// country click, flyToCountryBounds) left Leaflet's flyTo to pick its own
+// natural duration (~0.8x this same pixel unit — see TOUR_SPEED_SCALE's
+// own comment above), reported as too abrupt landing on the destination
+// — jumpy specifically in how fast it decelerates, not just the overall
+// pace. A modest bump over that natural pace, nowhere near the tour's
+// own much slower scale, still keeps a nearby tap snappy while giving a
+// longer move (e.g. a distant search result) a visibly smoother settle.
+const INTERACTIVE_SPEED_SCALE = 1.15; // Leaflet's own natural pace is ~0.8
+const INTERACTIVE_MIN_LEG_SECONDS = 0.6;
+const INTERACTIVE_MAX_LEG_SECONDS = 2.2;
+
+function interactiveFlyDuration(targetLatLng, targetZoom) {
+  const units = tourFlightPixelUnits(targetLatLng, targetZoom);
+  return Math.min(INTERACTIVE_MAX_LEG_SECONDS, Math.max(INTERACTIVE_MIN_LEG_SECONDS, units * INTERACTIVE_SPEED_SCALE));
 }
 
 // Flies via `flyFn` (a zero-arg closure that calls the real map.flyTo/
