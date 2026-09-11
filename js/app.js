@@ -1572,7 +1572,7 @@ function wireMinistryPhotoCarousel() {
   // carousel only ever opens once a specific country's pins are being
   // visited, by which point showCountryMetricsOverlay has already put
   // the label up.
-  const TOUR_CARD_LABEL_CLEARANCE_PX = 12;
+  const TOUR_CARD_LABEL_CLEARANCE_PX = 4;
   function tourCardTopMarginPx() {
     const label = document.getElementById('metrics-label');
     const anchor = (label && !label.hidden) ? label : document.querySelector('.site-header h1');
