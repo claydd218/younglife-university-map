@@ -681,7 +681,7 @@ function computeMetrics(rowsSubset, { includeCountries = true } = {}) {
 // box that's since been replaced (renderMetrics rebuilds .metrics-boxes'
 // whole innerHTML on every call) just harmlessly finishes writing to a
 // detached node — nothing to cancel, nothing left visible.
-const METRIC_COUNT_UP_MS = 1400;
+const METRIC_COUNT_UP_MS = 2800;
 
 function animateCountUp(el, target) {
   if (!target) {
@@ -1203,11 +1203,20 @@ function flyToCountryBounds(countryName) {
   });
   if (!countryLayer) return false;
   const bounds = computeMainLandBounds(countryLayer.feature);
+  const targetZoom = map.getBoundsZoom(bounds) - 0.5;
+  // EXPERIMENTAL: explicit duration, twice Leaflet's own natural pace for
+  // this specific hop — tourFlightPixelUnits reimplements the same van
+  // Wijk pixel-distance unit flyTo computes internally to pick a duration
+  // on its own when none is given (that unit times 0.8 becomes its
+  // default ms duration; see that function's own comment), so doubling
+  // it here scales proportionally with how far this particular country
+  // is, the same way leaving duration unset already did, just slower.
+  const duration = tourFlightPixelUnits(bounds.getCenter(), targetZoom) * 0.8 * 2;
   // flyTo, not setView — see goToWorld's own comment on why (no
   // zoomAnimationThreshold cutoff, so a distant search result still
   // animates instead of jumping).
   withSuppressedDismiss(() => {
-    flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), map.getBoundsZoom(bounds) - 0.5));
+    flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom, { duration }));
   });
   showCountryMetricsOverlay(countryName);
   return true;

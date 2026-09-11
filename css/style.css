@@ -260,7 +260,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
    before the animation actually kicks in, and holds identity afterward, so
    it never snaps to an unstyled state on either end. */
 .metrics-boxes.metrics-pop-in {
-  animation: metrics-pop-in 1.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: metrics-pop-in 2.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes metrics-pop-in {
   from { transform: scale(1.4) translateY(50px); }
