@@ -1492,6 +1492,31 @@ function addStaffRow(prefill = {}) {
   if (prefill.id != null) item.dataset.staffId = prefill.id;
   const nameInput = item.querySelector('.row-name');
   const metaInput = item.querySelector('.row-meta');
+
+  // Forces Role to the exact VOLUNTEER_ROLE text (js/utils.js) while
+  // checked, locking the field so it can't drift into something close
+  // but not quite matching — both staff-count computations (js/app.js's
+  // computeMetrics, report.js's own) exclude a row by comparing role
+  // text alone, with no separate is_volunteer field to keep in sync.
+  const volunteerField = document.createElement('div');
+  volunteerField.className = 'field field-checkbox';
+  const volunteerLabel = document.createElement('label');
+  const volunteerCheckbox = document.createElement('input');
+  volunteerCheckbox.type = 'checkbox';
+  volunteerLabel.append(volunteerCheckbox, ' Volunteer (Role is forced to "Volunteer College Coordinator", left out of the staff count)');
+  volunteerField.appendChild(volunteerLabel);
+  metaInput.closest('.field').insertAdjacentElement('afterend', volunteerField);
+  volunteerCheckbox.addEventListener('change', () => {
+    metaInput.readOnly = volunteerCheckbox.checked;
+    if (volunteerCheckbox.checked) {
+      metaInput.value = VOLUNTEER_ROLE;
+    } else if (metaInput.value === VOLUNTEER_ROLE) {
+      metaInput.value = '';
+    }
+  });
+  volunteerCheckbox.checked = prefill.role === VOLUNTEER_ROLE;
+  metaInput.readOnly = volunteerCheckbox.checked;
+
   const photoWidget = document.createElement('div');
   photoWidget.className = 'photo-widget';
   item.appendChild(photoWidget);

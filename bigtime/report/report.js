@@ -163,7 +163,11 @@ function pluralizeLabel(num, singular, plural) {
 function computeMetrics(rowsSubset) {
   const countries = new Set(rowsSubset.map((r) => r.country.trim()).filter(Boolean));
   const ministryAreaCount = rowsSubset.length;
-  const staffCount = rowsSubset.reduce((sum, r) => sum + r.staff.length, 0);
+  // Volunteers (role forced to VOLUNTEER_ROLE by the admin's own
+  // checkbox — see js/utils.js) are real staff shown in the ministry
+  // area listing above like anyone else, just left out of this count —
+  // mirrors js/app.js's own computeMetrics.
+  const staffCount = rowsSubset.reduce((sum, r) => sum + r.staff.filter((s) => s.role !== VOLUNTEER_ROLE).length, 0);
   const universityCount = rowsSubset.reduce((sum, r) => sum + r.universities.length, 0);
   return [
     { label: pluralizeLabel(countries.size, 'Country', 'Countries'), num: countries.size },

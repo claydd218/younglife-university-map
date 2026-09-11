@@ -659,7 +659,10 @@ function computeMetrics(rowsSubset, { includeCountries = true } = {}) {
     metrics.push({ label: pluralizeLabel(countries.size, 'Country', 'Countries'), num: countries.size });
   }
   const ministryAreaCount = rowsSubset.length;
-  const staffCount = rowsSubset.reduce((sum, r) => sum + parseParenList(r.staff).length, 0);
+  // Volunteers (role forced to VOLUNTEER_ROLE by the admin's own
+  // checkbox — see js/utils.js) are real staff shown on the map/popups
+  // like anyone else, just left out of this specific count.
+  const staffCount = rowsSubset.reduce((sum, r) => sum + parseParenList(r.staff).filter((s) => s.meta !== VOLUNTEER_ROLE).length, 0);
   const universityCount = rowsSubset.reduce((sum, r) => sum + parseParenList(r.universities).length, 0);
   metrics.push(
     { label: pluralizeLabel(ministryAreaCount, 'Ministry Area', 'Ministry Areas'), num: ministryAreaCount },

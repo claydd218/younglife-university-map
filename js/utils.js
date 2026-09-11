@@ -4,6 +4,16 @@
 // so it can be dropped into any page with a plain <script> tag.
 // ---------------------------------------------------------------------------
 
+// The exact role text the admin's staff-row Volunteer checkbox
+// (bigtime/admin.js) forces onto that row's Role field. Shared so every
+// staff-count computation (js/app.js's computeMetrics, bigtime/report/
+// report.js's own) can exclude a volunteer by comparing role text,
+// without a separate is_volunteer field needing to survive the packed
+// "Name (Role)" staff string the public API sends (see
+// worker/lib/db/ministries.js's own comment on why that shape stays as
+// simple as it already is).
+const VOLUNTEER_ROLE = 'Volunteer College Coordinator';
+
 // Parses the shared "Name (Meta); Name (Meta)" convention used by both the
 // staff column ("Jane Doe (Area Director)") and the universities column
 // ("University of Nairobi (2003)").

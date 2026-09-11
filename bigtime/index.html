@@ -517,6 +517,10 @@
   .field label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
   .field-checkbox label { display: flex; align-items: center; gap: 8px; font-weight: 400; margin-bottom: 0; }
   .field-checkbox input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: #1a1a1a; }
+  /* Role field while a staff row's own Volunteer checkbox has it forced
+     (bigtime/admin.js's addStaffRow) — reads as locked, not just plain
+     text, since it still looks like an input otherwise. */
+  .row-meta[readonly] { background: #eee; color: #666; cursor: default; }
   .field input[type="text"], .field input[type="number"], .field input[type="password"], .field textarea, .field input[list] {
     width: 100%;
     font: inherit;
