@@ -883,7 +883,7 @@ function dismissActivePinCard() {
 // Exposed so the title easter egg (wireTitleEasterEgg) can trigger the
 // exact same "World" reset — including the movestart-dismiss suppression
 // goToWorld already handles — without duplicating that logic. goToDivisionFn
-// is the same idea, for runQueryStringTour's own scripted tour below.
+// is the same idea, for initTourControls's own scripted tour below.
 let goToWorldFn = null;
 let goToDivisionFn = null;
 
@@ -1979,7 +1979,7 @@ function wireMinistryPhotoCarousel() {
   function showNext() { showIndex((index + 1) % photos.length); }
   function showPrev() { showIndex((index - 1 + photos.length) % photos.length); }
 
-  // Exposed so runQueryStringTour's own scripted tour can drive this
+  // Exposed so initTourControls's own scripted tour can drive this
   // carousel the same way a real viewer's clicks/arrow keys do, without
   // reaching into (or duplicating) this closure's own open/showNext/close.
   // Same window.__ convention this file already uses for other internal
@@ -2961,13 +2961,13 @@ async function init() {
 }
 
 // Chained with .then, not the bare fire-and-forget call this used to be —
-// runQueryStringTour (bottom of file) needs everything init() sets up
+// initTourControls (bottom of file) needs everything init() sets up
 // (state.markersByCountry, goToWorldFn/goToDivisionFn, the photo lightbox's
 // window.__ministryLightbox) to actually exist before it can start, which
 // only happens once the whole async function body — not just the
 // synchronous call to it — has finished.
 init().then(() => {
-  if (window.__mapReady) runQueryStringTour();
+  if (window.__mapReady) initTourControls();
 });
 
 // Keeps the metrics overlay honest about whatever ministry is actually in
@@ -4046,7 +4046,7 @@ function endTourInPlace(keepControlsVisible = false) {
 // without auto-starting — a visitor presses Play themselves, same as
 // clicking any other control. Shared by the nav-menu's own World/
 // division picks (wireNavMenu) and the ?tour=NAME deep link
-// (runQueryStringTour), so both land in the exact same ready state.
+// (initTourControls), so both land in the exact same ready state.
 function activateTourControls(divisionKeys) {
   currentTourDivisionKeys = divisionKeys;
   tourController.state = 'stopped';
@@ -4069,13 +4069,14 @@ function wireTourControls() {
   });
 }
 
-// Deep link — ?tour=NAME lands a visitor in the exact same ready state
-// picking World/a division from #nav-menu does (see activateTourControls),
-// without needing the menu at all. Still just press Play; nothing
-// auto-starts on load.
-function runQueryStringTour() {
-  const name = new URLSearchParams(location.search).get('tour');
-  if (!name) return;
+// Lands every visitor in the ready-to-play World tour state on load —
+// the exact same state picking World from #nav-menu does (see
+// activateTourControls) — without needing the menu at all. Still just
+// press Play; nothing auto-starts on load. ?tour=NAME overrides the
+// default with a specific division (or an explicit 'world'/'all'),
+// same deep-link behavior this used to be the only way to reach.
+function initTourControls() {
+  const name = new URLSearchParams(location.search).get('tour') || 'world';
 
   // 'lac' kept as a shorthand for the division this feature started
   // with; 'all'/'world' runs every division in one sweep (a "World

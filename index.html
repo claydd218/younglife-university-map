@@ -161,9 +161,11 @@
        everything else tour-related. -->
   <div id="tour-click-shield" aria-hidden="true"></div>
 
-  <!-- Hidden by default — shown once a visitor picks World or a division
-       from #nav-menu (see activateTourControls in js/app.js), or via the
-       ?tour=NAME deep link (runQueryStringTour). -->
+  <!-- hidden="" here is just the pre-JS/no-JS fallback — initTourControls
+       (js/app.js) unhides this on every load, defaulting to the World
+       tour unless ?tour=NAME picks a specific division, and picking
+       World/a division from #nav-menu afterward re-targets it the same
+       way (see activateTourControls). -->
   <!-- Plain hand-drawn SVGs (same convention as the hamburger/compass-rose/
        video-play icons above), not the Unicode glyphs these four used to
        be — those rendered at wildly different visual sizes/baselines
