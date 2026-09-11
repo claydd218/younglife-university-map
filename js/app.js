@@ -1187,7 +1187,18 @@ function computeMainLandBounds(feature) {
     const shiftedMaxLng = b.maxLng + shift;
     const dist = Math.hypot((centerLng + shift) - anchorCenterLng, (b.minLat + b.maxLat) / 2 - anchorCenterLat);
     const closeEnough = dist <= CLOSE_ENOUGH_DEGREES;
-    const bigEnough = b.area >= anchor.area * 0.1;
+    // 0.12, not a flat 0.1 — Svalbard sits 14deg from mainland Norway
+    // (too far for CLOSE_ENOUGH_DEGREES above) at 11% of the mainland's
+    // own bbox area, just over a 0.1 threshold, which pulled Norway's
+    // own zoom out to include an arctic territory ~10deg further north
+    // than the mainland itself — confirmed live as a real, wrong zoom.
+    // 0.12 excludes it while still safely including every other
+    // distance-reliant piece checked against this file's own data: Baffin
+    // Island (Canada, 13%), French Polynesia's own second-largest atoll
+    // group (16%), Peninsular Malaysia (38%), three separate Indonesian
+    // island groups (22-70%), and Alaska (US, 45%) — all comfortably
+    // above 0.12, none anywhere near Norway's 11%.
+    const bigEnough = b.area >= anchor.area * 0.12;
     if (b !== anchor && !closeEnough && !bigEnough) continue;
     if (shiftedMinLng < minLng) minLng = shiftedMinLng;
     if (shiftedMaxLng > maxLng) maxLng = shiftedMaxLng;
