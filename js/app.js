@@ -1527,8 +1527,6 @@ function wireMinistryPhotoCarousel() {
   // the real, currently-hidden-or-stale element) is close enough to
   // stack the photo and caption as one unit.
   const CAPTION_HEIGHT_ESTIMATE_PX = 52;
-  // Width for the no-photo case, which has no photo rect to match.
-  const CAPTION_DEFAULT_WIDTH_PX = 280;
   // Gap between the caption's own downward-pointing tip (::after, in
   // style.css) and the pin it's pointing at.
   const CAPTION_TIP_CLEARANCE_PX = 22;
@@ -1640,7 +1638,6 @@ function wireMinistryPhotoCarousel() {
     viewport.style.width = `${size.w}px`;
     viewport.style.height = `${size.h}px`;
     if (captionActive) {
-      const rect = slide.getBoundingClientRect();
       // .lightbox-content itself is normally positioned by its parent's
       // flex centering (#ministry-lightbox), not by slide's own
       // position:fixed left/top — the two happen to line up for a
@@ -1651,21 +1648,25 @@ function wireMinistryPhotoCarousel() {
       // photo in a regular view, but well below the actual (now higher
       // up) photo here. Pinning content's own box to match the slide's
       // exactly (fixed, same left/top/width/height) keeps dots correctly
-      // anchored to wherever the photo actually is.
+      // anchored to wherever the photo actually is — and since slide's own
+      // bottom edge and horizontal center are both independent of size.h/
+      // size.w (see the top/left math above), so is this box's, and so
+      // are the dots: they land in the exact same spot for every photo,
+      // never needing to hide for a resize the way .lightbox-close/
+      // .lightbox-nav do in the non-tour view (see the CSS override in
+      // style.css for .lightbox-dots specifically).
       content.style.position = 'fixed';
       content.style.left = slide.style.left;
       content.style.top = slide.style.top;
       content.style.width = slide.style.width;
       content.style.height = slide.style.height;
-      // transform cleared — the default CSS rule centers via
-      // left:50%/translateX(-50%), but `rect.left` here is already the
-      // photo's real left edge, not a center point; leaving that
-      // transform in place would shift the caption half its own width
-      // further left than intended.
-      captionEl.style.transform = 'none';
-      captionEl.style.left = `${rect.left}px`;
-      captionEl.style.top = `${rect.bottom}px`;
-      captionEl.style.width = `${rect.width}px`;
+      // The caption is a fixed-size card (CSS min-width + shrink-to-fit,
+      // centered via left:50%/transform — see .lightbox-tour-caption in
+      // style.css), not resized/repositioned to match each photo's own
+      // width like it used to be: only its vertical placement (stacked
+      // directly under wherever the photo's bottom edge actually is)
+      // needs setting here.
+      captionEl.style.top = `${captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX}px`;
     }
   }
 
@@ -1793,13 +1794,10 @@ function wireMinistryPhotoCarousel() {
       }
     }
     if (!photos.length && captionActive) {
-      // No photo to attach to, so no photo rect to size/position off of —
-      // same captionBottomTargetY() placement as the photo case (close to
-      // the pin, not centered on screen), at a fixed default width
-      // instead of a photo's own.
-      captionEl.style.transform = 'none';
-      captionEl.style.width = `${CAPTION_DEFAULT_WIDTH_PX}px`;
-      captionEl.style.left = `${(window.innerWidth - CAPTION_DEFAULT_WIDTH_PX) / 2}px`;
+      // No photo to attach to — same captionBottomTargetY() placement as
+      // the photo case (close to the pin, not centered on screen); left/
+      // width are the card's own CSS defaults (see .lightbox-tour-caption
+      // in style.css), same as when there is one.
       captionEl.style.top = `${captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX}px`;
     }
     renderDots();

@@ -1058,12 +1058,14 @@ img.popup-photo {
   display: flex;
 }
 
-/* left/top/width are always set explicitly by JS (applySlideSize and
-   open(), in wireMinistryPhotoCarousel) — flush under the active photo
-   and matching its width when there's one, or captionBottomTargetY()'s
-   own default width/position when there isn't (see those functions'
-   own comments) — never left to this rule's own box model, so no
-   max-width here to fight a JS-set width narrower than intended.
+/* Only `top` is ever set by JS (applySlideSize and open(), in
+   wireMinistryPhotoCarousel) — stacked directly under wherever the
+   active photo's bottom edge actually lands. left/width are this rule's
+   own: centered via left:50%/transform, sized by content with a
+   min-width floor so the card reads as one fixed, steady label a
+   visitor's eye can rest on while the photo above it grows and shrinks
+   from stop to stop — it used to stretch to match each photo's own
+   width instead, which read as the label itself resizing every time.
    Same card chrome as a real ministry popup (.leaflet-popup-content-
    wrapper/.popup-body h3) — parchment background, ink border, the same
    shadow — so this reads as a direct stand-in for that card's own <h3>
@@ -1074,6 +1076,9 @@ img.popup-photo {
    that gets its own separate grow animation. */
 .lightbox-tour-caption {
   position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 280px;
   z-index: 2;
   background: var(--card-bg);
   border: 1px solid var(--ink);
@@ -1085,6 +1090,7 @@ img.popup-photo {
   font-weight: 600;
   color: var(--ink);
   text-align: center;
+  white-space: nowrap;
   opacity: 0;
   pointer-events: none; /* never interactive — just a title, nothing to click */
   transition: opacity 400ms ease;
@@ -1238,6 +1244,20 @@ img.popup-photo {
 .lightbox-content.transitioning .lightbox-dots {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Tour mode is the one case where .lightbox-content's own box (which
+   .lightbox-dots is positioned against) never actually moves between
+   photos — its bottom edge and horizontal center are pinned to the
+   caption/pin below it regardless of each photo's own width/height (see
+   applySlideSize's captionActive branch in js/app.js) — so unlike the
+   general rule above, there's no jump to hide here. Higher specificity
+   than that rule (id + more classes), so this wins regardless of source
+   order. .lightbox-close/.lightbox-nav don't need the same override —
+   body.tour-active already hides them outright, further up this file. */
+body.tour-active #ministry-lightbox .lightbox-content.transitioning .lightbox-dots {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .lightbox-close,
