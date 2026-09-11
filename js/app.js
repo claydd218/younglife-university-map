@@ -3755,6 +3755,7 @@ async function runTour(divisionKeys) {
           : CONFIG.MAX_ZOOM;
         const pins = pinsInCountryByProximity(countryName);
         await tourGoToCountry(countryName);
+        await tourDwell(TOUR_DWELL_SECONDS);
         for (const pinEntry of pins) {
           await tourCheckpoint();
           await tourGoToPin(pinEntry, pinZoom);
