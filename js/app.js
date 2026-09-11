@@ -1803,27 +1803,28 @@ function wireMinistryPhotoCarousel() {
     // Loaded into whichever slide ISN'T currently active — same
     // otherSlide() pattern showIndex() already uses — not always slideA
     // regardless of what's already showing. Reusing the same element for
-    // both the outgoing and incoming photo (the bug this replaced) meant
+    // both the outgoing and incoming photo (an earlier bug here) meant
     // setting its .src swapped the actual pixels the instant the new
     // photo decoded, mid-fade-out and well before the crossfade's own
-    // opacity transition got anywhere near 0 — a visible flash/pop of
-    // the new photo partway faded in, not a clean crossfade, every time
-    // one pin's photo followed another's.
+    // opacity transition got anywhere near 0.
     const incoming = otherSlide();
-    const outgoing = activeSlide;
-    // A pin with its own photo lets the outgoing slide fade out normally
-    // — its old photo crossfades against the new one fading in below,
-    // same as ever. A pin with none has nothing for the fade to end on:
-    // letting it play out anyway meant genuinely seeing the *previous*
-    // pin's own photo, fading out over FADE_MS roughly where this pin's
-    // photo slot would be — reading as though it belonged here. Hiding
-    // instantly avoids that; see hideSlideInstantly's own comment.
-    if (photos.length) {
-      outgoing.classList.remove('active');
-    } else {
-      hideSlideInstantly(slideB);
-      hideSlideInstantly(slideA);
-    }
+    // Every open() is a fresh pin visit inside a container that just
+    // .close()d and is about to fade back in from scratch below (not a
+    // continuous crossfade against whatever this pin's predecessor left
+    // on screen) — close() only ever fades the *container*, it never
+    // resets the slide that was last .active, so without this it was
+    // still sitting at opacity:1 the instant the container's own faster
+    // 220ms fade-in (vs. a slide's own 500ms fade) started racing back
+    // up, genuinely showing the previous pin's photo again for a moment.
+    // Hiding both instantly first removes that race entirely — nothing
+    // is left competing with the container's own fade, and this pin's
+    // own photo (if it has one) still gets a clean fade-in of its own
+    // below, just with nothing crossfading underneath it. (Advancing
+    // between one pin's OWN multiple photos is unaffected — that's
+    // showIndex(), which the container stays open/visible throughout, so
+    // no such race exists there.)
+    hideSlideInstantly(slideA);
+    hideSlideInstantly(slideB);
     resetPinch();
     if (photos.length) {
       incoming.src = urlFor(0);
