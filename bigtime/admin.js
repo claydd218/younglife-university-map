@@ -2961,6 +2961,74 @@ function wireMissingPhotosCheck() {
   $('check-missing-photos-btn').addEventListener('click', checkMissingPhotos);
 }
 
+// Reads worker/routes/duplicate-photos.js's grouping of every R2 file by
+// content (not filename) — each group here is the same photo bytes
+// saved under two or more different names, whether that's one ministry's
+// city photo re-uploaded twice, a staff photo that happens to match a
+// city photo, or two different ministries sharing the same image.
+// Deleting a copy reuses the same DELETE /photos/:slug route (and the
+// same confirm-then-remove-the-row behavior) as Orphaned Photos above —
+// see renderOrphanedPhotosList's own comment for why that route is safe
+// to call on any of these regardless of what kind of photo it is.
+async function checkDuplicatePhotos() {
+  const status = $('duplicate-photos-status');
+  const list = $('duplicate-photos-list');
+  const btn = $('check-duplicate-photos-btn');
+  btn.disabled = true;
+  status.textContent = 'Checking…';
+  list.innerHTML = '';
+  try {
+    const result = await apiFetch('/duplicate-photos');
+    if (!result.groups.length) {
+      status.textContent = `No duplicate photos found (checked ${result.totalFiles} files).`;
+      return;
+    }
+    const copyCount = result.groups.reduce((sum, g) => sum + g.length, 0);
+    status.textContent = `${result.groups.length} duplicate photo${result.groups.length === 1 ? '' : 's'} found (${copyCount} copies, of ${result.totalFiles} files checked).`;
+    renderDuplicatePhotosList(result.groups);
+  } catch (err) {
+    status.textContent = err.message || String(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderDuplicatePhotosList(groups) {
+  const list = $('duplicate-photos-list');
+  list.innerHTML = groups.map((group) => `
+    <div class="duplicate-photo-group">
+      ${group.map((item) => `
+        <div class="orphaned-photo-item" data-filename="${escapeHtml(item.name)}">
+          <img src="../${CONFIG.IMAGES_DIR}${encodeURIComponent(item.name)}" alt="" loading="lazy">
+          <span class="orphaned-photo-filename">${escapeHtml(item.owner)} — ${escapeHtml(item.name)}</span>
+          <button type="button" class="btn danger btn-small" data-action="delete-duplicate">Delete</button>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  list.querySelectorAll('[data-action="delete-duplicate"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const item = btn.closest('.orphaned-photo-item');
+      const filename = item.dataset.filename;
+      if (!window.confirm(`Delete ${filename}? This can't be undone.`)) return;
+      btn.disabled = true;
+      try {
+        const slug = filename.replace(/\.[^.]+$/, '');
+        await apiFetch(`/photos/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+        item.remove();
+      } catch (err) {
+        showBanner('error', err.message || String(err));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function wireDuplicatePhotosCheck() {
+  $('check-duplicate-photos-btn').addEventListener('click', checkDuplicatePhotos);
+}
+
 // --- University bulk upload -----------------------------------------------
 // CSV columns: City, Country, University, Year (Year optional). Deliberately
 // additive-only — a university already in D1 but missing from the uploaded
@@ -3639,6 +3707,7 @@ wireAdminUsersTab();
 wirePhotosExportButton();
 wireOrphanedPhotosCheck();
 wireMissingPhotosCheck();
+wireDuplicatePhotosCheck();
 wireUniversityBulkUpload();
 wireSignOut();
 checkAdminAccess();

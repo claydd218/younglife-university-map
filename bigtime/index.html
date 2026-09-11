@@ -154,6 +154,21 @@
     border-radius: 6px;
     padding: 8px 10px;
   }
+  /* One group per set of same-content files (see worker/routes/
+     duplicate-photos.js) — a single outer border around the whole group,
+     with each copy inside reusing .orphaned-photo-item's own image/name/
+     button layout but no border/padding of its own, so a group of 2-3
+     copies doesn't read as 2-3 separately-boxed, unrelated rows. */
+  .duplicate-photos-list { display: flex; flex-direction: column; gap: 14px; }
+  .duplicate-photo-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .duplicate-photo-group .orphaned-photo-item { border: none; padding: 0; }
   .toolbar-left { display: flex; align-items: center; gap: 12px; }
   .ministries-search-wrap { position: relative; display: flex; align-items: center; }
   .ministries-search {
@@ -759,6 +774,14 @@
       <button type="button" id="check-missing-photos-btn" class="btn secondary">Check for Missing Photos</button>
     </div>
     <div id="missing-photos-list" class="orphaned-photos-list"></div>
+
+    <h2 class="admin-section-heading">Duplicate photos</h2>
+    <p class="admin-section-note">The same photo saved under more than one filename — often the same ministry's photo re-uploaded twice, but sometimes a staff photo and a city photo that happen to match, or two different ministries. Review each group and delete the copies you don't need.</p>
+    <div class="toolbar">
+      <span id="duplicate-photos-status" class="status-text"></span>
+      <button type="button" id="check-duplicate-photos-btn" class="btn secondary">Check for Duplicate Photos</button>
+    </div>
+    <div id="duplicate-photos-list" class="duplicate-photos-list"></div>
 
     <h2 class="admin-section-heading">University bulk upload</h2>
     <p class="admin-section-note">Add universities from a spreadsheet — matches each row against existing areas and previews everything before writing anything. Only ever adds; a university missing from the file is left alone, not removed.</p>
