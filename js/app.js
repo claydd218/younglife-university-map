@@ -584,7 +584,7 @@ function lightenHexColor(hex, amount) {
   return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
 }
 
-const HIGHLIGHTED_COUNTRY_LIGHTEN = 0.35;
+const HIGHLIGHTED_COUNTRY_LIGHTEN = 0.15;
 
 function styleCountryFeature(feature) {
   const name = normalizeCountryName(feature.properties.name);
