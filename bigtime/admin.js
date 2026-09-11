@@ -2907,6 +2907,60 @@ function wireOrphanedPhotosCheck() {
   $('check-orphaned-photos-btn').addEventListener('click', checkOrphanedPhotos);
 }
 
+// Reads worker/routes/missing-photos.js's comparison of what every
+// ministry's own `photos` column lists against what's actually in R2 —
+// the inverse of orphaned photos above (a file nothing points to vs. a
+// reference pointing at nothing). No thumbnail to show (that's the
+// point — there's no matching file), so this just names the ministry
+// and the missing filename, with an Edit button straight into that
+// ministry's own dialog to fix it (re-upload the real photo, or remove
+// the stale reference from its photo list) rather than a delete action —
+// there's nothing in storage to delete.
+async function checkMissingPhotos() {
+  const status = $('missing-photos-status');
+  const list = $('missing-photos-list');
+  const btn = $('check-missing-photos-btn');
+  btn.disabled = true;
+  status.textContent = 'Checking…';
+  list.innerHTML = '';
+  try {
+    const result = await apiFetch('/missing-photos');
+    if (!result.missing.length) {
+      status.textContent = `No missing photos found (checked ${result.totalFiles} files in storage).`;
+      return;
+    }
+    status.textContent = `${result.missing.length} missing photo reference${result.missing.length === 1 ? '' : 's'} found.`;
+    renderMissingPhotosList(result.missing);
+  } catch (err) {
+    status.textContent = err.message || String(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderMissingPhotosList(items) {
+  const list = $('missing-photos-list');
+  list.innerHTML = items.map((item, i) => `
+    <div class="missing-photo-item" data-index="${i}">
+      <span class="orphaned-photo-filename">${escapeHtml(item.city)}, ${escapeHtml(item.country)} — ${escapeHtml(item.filename)}</span>
+      <button type="button" class="btn secondary btn-small" data-action="edit-ministry-for-missing-photo">Edit</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('[data-action="edit-ministry-for-missing-photo"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const index = Number(btn.closest('.missing-photo-item').dataset.index);
+      const row = state.rows.find((r) => r.id === items[index].ministryId);
+      if (row) openDialog(row);
+      else showBanner('error', 'Could not find that ministry — try reloading the Ministries tab.');
+    });
+  });
+}
+
+function wireMissingPhotosCheck() {
+  $('check-missing-photos-btn').addEventListener('click', checkMissingPhotos);
+}
+
 // --- University bulk upload -----------------------------------------------
 // CSV columns: City, Country, University, Year (Year optional). Deliberately
 // additive-only — a university already in D1 but missing from the uploaded
@@ -3584,6 +3638,7 @@ wireLogTab();
 wireAdminUsersTab();
 wirePhotosExportButton();
 wireOrphanedPhotosCheck();
+wireMissingPhotosCheck();
 wireUniversityBulkUpload();
 wireSignOut();
 checkAdminAccess();

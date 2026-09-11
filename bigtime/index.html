@@ -142,6 +142,18 @@
     border: 1px solid #ccc;
   }
   .orphaned-photo-filename { font-size: 13px; word-break: break-all; }
+  /* No file to preview for one of these (that's the whole point — the
+     reference doesn't match anything in storage), so a simpler 2-column
+     grid than .orphaned-photo-item's own image/name/button layout. */
+  .missing-photo-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
   .toolbar-left { display: flex; align-items: center; gap: 12px; }
   .ministries-search-wrap { position: relative; display: flex; align-items: center; }
   .ministries-search {
@@ -739,6 +751,14 @@
       <button type="button" id="check-orphaned-photos-btn" class="btn secondary">Check for Orphaned Photos</button>
     </div>
     <div id="orphaned-photos-list" class="orphaned-photos-list"></div>
+
+    <h2 class="admin-section-heading">Missing photos</h2>
+    <p class="admin-section-note">Ministry photo references that don't match any file in storage — the public map falls back to an initials placeholder for these, but they're worth fixing at the source.</p>
+    <div class="toolbar">
+      <span id="missing-photos-status" class="status-text"></span>
+      <button type="button" id="check-missing-photos-btn" class="btn secondary">Check for Missing Photos</button>
+    </div>
+    <div id="missing-photos-list" class="orphaned-photos-list"></div>
 
     <h2 class="admin-section-heading">University bulk upload</h2>
     <p class="admin-section-note">Add universities from a spreadsheet — matches each row against existing areas and previews everything before writing anything. Only ever adds; a university missing from the file is left alone, not removed.</p>
