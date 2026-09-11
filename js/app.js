@@ -3845,10 +3845,12 @@ async function runTour(divisionKeys) {
 
     if (!tourController.loop) break;
   }
-  // Reaching the end of a non-looping run is its own kind of stop —
-  // same cleanup stopTour's Stop button triggers, just arrived at
-  // naturally instead of by interrupting mid-flight.
-  endTourInPlace();
+  // Reaching the end of a non-looping run is its own kind of stop — same
+  // cleanup stopTour's Stop button triggers, just arrived at naturally
+  // instead of by interrupting mid-flight — except the controls stay up
+  // afterward, ready to play again, rather than vanishing like an
+  // explicit Stop (see endTourInPlace's own comment on keepControlsVisible).
+  endTourInPlace(true);
 }
 
 let tourRunPromise = null;
@@ -3965,7 +3967,15 @@ function stopTour() {
   endTourInPlace();
 }
 
-function endTourInPlace() {
+// keepControlsVisible: true only for a non-looping run's own natural end
+// (see runTour) — unlike an explicit Stop (which functions as a close,
+// per stopTour's own comment) or navigating away via the nav menu
+// (wireNavMenu), finishing on its own is a natural resting point the
+// same tour could just be played again from, so the controls stay up
+// (Play re-enabled, Stop disabled) instead of vanishing — picking
+// World/a division again is still what re-summons them if they ever do
+// get dismissed some other way.
+function endTourInPlace(keepControlsVisible = false) {
   tourController.state = 'stopped';
   // The fullscreen lightbox (tourGoToPin's own open() call) can still
   // be open, waiting out one of its own dwell timers, when Stop
@@ -3986,8 +3996,16 @@ function endTourInPlace() {
   // un-hide the backdrop, so there's nothing left to flash.
   if (window.__ministryLightbox && window.__ministryLightbox.isVisible()) window.__ministryLightbox.close();
   document.body.classList.remove('tour-active');
-  clearTimeout(tourControlsIdleTimer);
-  document.getElementById('tour-controls').hidden = true;
+  if (keepControlsVisible) {
+    // Brought back to full opacity, not left however active playback's
+    // own idle-fade (scheduleTourControlsHide) happened to leave them —
+    // clearTimeout below only stops a fade that hasn't fired yet, it
+    // doesn't undo one already in effect.
+    showTourControlsNow();
+  } else {
+    clearTimeout(tourControlsIdleTimer);
+    document.getElementById('tour-controls').hidden = true;
+  }
   updateTourControlsUI();
   restoreTourClustering();
   map.closePopup();
