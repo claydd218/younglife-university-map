@@ -1557,21 +1557,26 @@ function wireMinistryPhotoCarousel() {
 
   function urlFor(i) { return CONFIG.IMAGES_DIR + photos[i]; }
 
-  // Resolves once `img` has actually loaded (or failed to — a broken
-  // image is as "settled" as one that decoded, for our purposes here).
-  // img.decode() looks like the textbook tool for this but isn't used:
-  // it can hang indefinitely on an element inside a currently-opacity:0
-  // container (the lightbox is exactly that until open() finishes),
-  // apparently a Chromium quirk tying decode scheduling to paint
-  // eligibility. The .complete fast path also means this resolves
-  // synchronously-ish for anything already cached — the common case,
-  // since a photo shown here was almost always already visible inline in
-  // the popup a moment earlier.
+  // Resolves once `img` has settled — loaded or failed to — with
+  // whether it actually loaded, so callers can tell the two apart
+  // (a missing/broken photo file used to be treated as "as settled as
+  // one that decoded" and shown anyway: a correctly-sized, bordered
+  // frame with nothing actually in it, since a failed <img> renders
+  // blank/a tiny broken-image glyph rather than throwing — read as an
+  // empty frame flickering in for a dwell's worth of time before the
+  // tour moved on). img.decode() looks like the textbook tool for this
+  // but isn't used: it can hang indefinitely on an element inside a
+  // currently-opacity:0 container (the lightbox is exactly that until
+  // open() finishes), apparently a Chromium quirk tying decode
+  // scheduling to paint eligibility. The .complete fast path also means
+  // this resolves synchronously-ish for anything already cached — the
+  // common case, since a photo shown here was almost always already
+  // visible inline in the popup a moment earlier.
   function whenLoaded(img) {
     return new Promise((resolve) => {
-      if (img.complete && img.naturalWidth) { resolve(); return; }
-      img.addEventListener('load', resolve, { once: true });
-      img.addEventListener('error', resolve, { once: true });
+      if (img.complete && img.naturalWidth) { resolve(true); return; }
+      img.addEventListener('load', () => resolve(true), { once: true });
+      img.addEventListener('error', () => resolve(false), { once: true });
     });
   }
 
@@ -1697,7 +1702,13 @@ function wireMinistryPhotoCarousel() {
     resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
     const incoming = otherSlide();
     incoming.src = urlFor(index);
-    await whenLoaded(incoming);
+    if (!(await whenLoaded(incoming))) {
+      // Broken/missing photo file — leave the current slide showing
+      // rather than swapping to an empty frame (see whenLoaded's own
+      // comment).
+      transitioning = false;
+      return;
+    }
     const size = computeSlideSize(incoming);
     // Hidden for the transition's duration (see .lightbox-content's own
     // comment in style.css) — but only when the box is actually about to
@@ -1769,10 +1780,19 @@ function wireMinistryPhotoCarousel() {
     resetPinch();
     if (photos.length) {
       slideA.src = urlFor(0);
-      await whenLoaded(slideA);
-      applySlideSize(slideA, computeSlideSize(slideA));
-      slideA.classList.add('active');
-    } else if (captionActive) {
+      if (await whenLoaded(slideA)) {
+        applySlideSize(slideA, computeSlideSize(slideA));
+        slideA.classList.add('active');
+      } else {
+        // Broken/missing photo file — don't show an empty bordered frame
+        // for it (see whenLoaded's own comment). Falls through to the
+        // no-photo caption placement below, same as if this pin had no
+        // photos listed at all.
+        photos = [];
+        slideA.removeAttribute('src');
+      }
+    }
+    if (!photos.length && captionActive) {
       // No photo to attach to, so no photo rect to size/position off of —
       // same captionBottomTargetY() placement as the photo case (close to
       // the pin, not centered on screen), at a fixed default width
