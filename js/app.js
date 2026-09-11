@@ -3751,7 +3751,13 @@ const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 // TESTING ONLY — see its one use in tourGoToPin above. Flip to true to
 // evaluate pin flight/landing motion in isolation again, with the
 // caption/carousel card skipped entirely (not just its photos).
-const TOUR_TESTING_SUPPRESS_CARD = false;
+const TOUR_TESTING_SUPPRESS_CARD = true;
+
+// TESTING ONLY — see its one use in runTour below. Looping behavior is
+// easier to watch/debug over just a couple of countries per division
+// than a whole division's worth — flip back to Infinity (or remove) for
+// real behavior.
+const TOUR_TESTING_MAX_COUNTRIES_PER_DIVISION = 2;
 
 // TESTING ONLY — see its one use in runTour below. Back for another
 // round of pacing checks (the first-leg skip just below); flip back to
@@ -3791,7 +3797,8 @@ async function runTour(divisionKeys) {
       else await tourGoToDivision(divisionKey);
       await tourDwell(TOUR_DWELL_SECONDS);
 
-      const countries = countriesInDivisionByProximity(divisionKey);
+      const countries = countriesInDivisionByProximity(divisionKey)
+        .slice(0, TOUR_TESTING_MAX_COUNTRIES_PER_DIVISION);
       for (const countryName of countries) {
         await tourCheckpoint();
         // One step in from tourGoToCountry's own zoom, not the same
