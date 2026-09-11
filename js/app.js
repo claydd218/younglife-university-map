@@ -1369,12 +1369,45 @@ function flyToCountry(countryName) {
 // own comment above, next to clampSouth) — a zoom deep enough to reveal a
 // clustered pin can transiently cross the map's own south/north viewing
 // limits mid-flight even when its settled end state is fine.
+// group.zoomToShowLayer (below) drives the map itself via Leaflet.
+// markercluster's own internal calls — plain map.setView/map.fitBounds
+// for the zoom-changing case, map.panTo for the "already-visible-at-a-
+// shallower-zoom, just pan" case (see the vendored zoomToBounds/
+// zoomToShowLayer source) — none of which INTERACTIVE_SPEED_SCALE
+// above ever touches, so a search result revealing a clustered pin
+// still snapped in at Leaflet's fixed ~0.25s CSS zoom transition
+// regardless. setView/fitBounds' own zoom animation has no tunable
+// duration of its own (same finding the cluster-click handler's own
+// comment already documents) — redirected to flyTo/flyToBounds here
+// instead, which do. panTo's pan-only animation DOES honor a plain
+// `duration` option, so that one's just handed one rather than
+// redirected. Patched only for the span of this one call (Leaflet.
+// markercluster calls at most one of the three per zoomToShowLayer
+// invocation, so there's no reentrancy to worry about here) and
+// restored the instant its callback fires — same "patch a Leaflet
+// internal, deliberately and narrowly" precedent already used elsewhere
+// in this file (see L.Popup.prototype.onRemove's own patch).
 function zoomToShowMarker(marker, divisionKey) {
   const group = state.clusterGroups[divisionKey];
   return new Promise((resolve) => {
     suppressMapClamp = true;
+    const originalSetView = map.setView;
+    const originalPanTo = map.panTo;
+    const originalFitBounds = map.fitBounds;
+    map.setView = (center, zoom) => map.flyTo(center, zoom, { duration: interactiveFlyDuration(L.latLng(center), zoom) });
+    map.panTo = (latlng, options) => originalPanTo.call(map, latlng, { ...options, duration: interactiveFlyDuration(L.latLng(latlng), map.getZoom()) });
+    map.fitBounds = (bounds, options) => {
+      const llBounds = L.latLngBounds(bounds);
+      return map.flyToBounds(bounds, { ...options, duration: interactiveFlyDuration(llBounds.getCenter(), map.getBoundsZoom(llBounds)) });
+    };
+    const restore = () => {
+      map.setView = originalSetView;
+      map.panTo = originalPanTo;
+      map.fitBounds = originalFitBounds;
+    };
     withSuppressedDismiss(() => {
       group.zoomToShowLayer(marker, () => {
+        restore();
         suppressMapClamp = false;
         clampSouth();
         clampNorth();
@@ -3143,7 +3176,11 @@ map.on('popupopen', (e) => {
     panX = Math.min(panX, ceiling);
   }
 
-  map.panBy([panX, panY], { animate: true, duration: 0.2 });
+  // A little slower than before (0.2s), same "too abrupt" complaint as
+  // the other interactive moves above — panBy's own animation genuinely
+  // does honor `duration` (unlike setView's zoom animation — see
+  // zoomToShowMarker's own comment), so no special handling needed here.
+  map.panBy([panX, panY], { animate: true, duration: 0.35 });
 });
 
 // Mobile browsers resize the visual viewport after load as the address bar
