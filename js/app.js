@@ -1896,6 +1896,18 @@ function wireMinistryPhotoCarousel() {
     const multi = photos.length > 1;
     prevBtn.hidden = !multi;
     nextBtn.hidden = !multi;
+    // Stop can land while this same open() call is still in flight (e.g.
+    // waiting on whenLoaded for a photo) — endTourInPlace's own
+    // isVisible()-then-close() check runs synchronously the instant Stop
+    // is clicked, so it can only close what's *already* visible then; it
+    // has no way to know this call is about to reveal one a moment
+    // later. By the time that happens, body.tour-active (which is what
+    // hides the plain backdrop/close button during a tour — see that
+    // selector in style.css) is already gone, so this would otherwise
+    // flash both, unsuppressed, until this pin's own dwell/close()
+    // eventually ran — confirmed live, "goes away on its own" after a
+    // beat, matching exactly that path. Bail instead of ever showing it.
+    if (captionActive && tourController.state !== 'playing') return;
     lightbox.classList.add('visible');
     // Fades in via its own opacity transition, same as the photo does
     // via .active — see window.__ministryLightbox's own comment on why
