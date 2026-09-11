@@ -1204,21 +1204,29 @@ function flyToCountryBounds(countryName) {
   if (!countryLayer) return false;
   const bounds = computeMainLandBounds(countryLayer.feature);
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
-  // EXPERIMENTAL: explicit duration, twice Leaflet's own natural pace for
-  // this specific hop — tourFlightPixelUnits reimplements the same van
-  // Wijk pixel-distance unit flyTo computes internally to pick a duration
-  // on its own when none is given (that unit times 0.8 becomes its
-  // default ms duration; see that function's own comment), so doubling
-  // it here scales proportionally with how far this particular country
-  // is, the same way leaving duration unset already did, just slower.
-  const duration = tourFlightPixelUnits(bounds.getCenter(), targetZoom) * 0.8 * 2;
   // flyTo, not setView — see goToWorld's own comment on why (no
   // zoomAnimationThreshold cutoff, so a distant search result still
-  // animates instead of jumping).
+  // animates instead of jumping). Duration left to Leaflet's own natural
+  // pace, same as ever — only the metrics reveal below is slowed/delayed.
   withSuppressedDismiss(() => {
-    flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom, { duration }));
+    flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom));
   });
-  showCountryMetricsOverlay(countryName);
+  // EXPERIMENTAL: revealed on arrival, not the instant the flight starts
+  // — showing it immediately meant its own count-up/pop-in-then-settle
+  // (now 2x slower, see METRIC_COUNT_UP_MS/.metrics-boxes' animation)
+  // played out while the camera was still mid-flight, unrelated to
+  // whether it had actually gotten there yet. 'moveend' is this flight's
+  // own real completion; the fixed 8s timeout is only a safety net in
+  // case that somehow never fires — same fallback flyToWithRedrawWatch
+  // itself already uses, for the same reason.
+  let revealed = false;
+  const reveal = () => {
+    if (revealed) return;
+    revealed = true;
+    showCountryMetricsOverlay(countryName);
+  };
+  map.once('moveend', reveal);
+  setTimeout(reveal, 8000);
   return true;
 }
 
