@@ -21,6 +21,14 @@ const state = {
   clusterGroups: {}, // division key -> L.markerClusterGroup
   markersByCountry: new Map(), // country name -> [{ marker, row }]
   openCountryTooltipLayer: null, // the one country layer whose tooltip is open, if any
+  // The one country currently "in focus" (tapped, a pin's popup open, or
+  // the tour's current country) — styleCountryFeature lightens its fill
+  // a shade above its division's own color so it reads as singled out.
+  // Sticky by design (see setHighlightedCountry): stays lit after its own
+  // popup/tooltip closes, replaced only once a different country becomes
+  // the new focus or the view explicitly leaves country-level context
+  // (World/division, or the tour zooming out between countries).
+  highlightedCountry: null,
   // name -> {meta: role}, for whichever ministry row lists them as home
   // staff — lets a popup resolve someone assigned there from elsewhere
   // (row.assigned_staff, just names) without a search per popup. See
@@ -564,13 +572,28 @@ function shiftGeoJSONLng(geojson, offsetDeg) {
   return shifted;
 }
 
+// Blends `hex` toward white by `amount` (0-1) — used to lighten a
+// highlighted country's own division color a shade (styleCountryFeature)
+// rather than switching it to some unrelated accent.
+function lightenHexColor(hex, amount) {
+  const num = parseInt(hex.slice(1), 16);
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  const mix = (channel) => Math.round(channel + (255 - channel) * amount);
+  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+const HIGHLIGHTED_COUNTRY_LIGHTEN = 0.35;
+
 function styleCountryFeature(feature) {
   const name = normalizeCountryName(feature.properties.name);
   const present = state.countriesWithVisiblePins.get(name);
   if (present && present.size) {
     const divisionKey = present.values().next().value;
+    const baseFill = DIVISIONS[divisionKey].country;
     return {
-      fillColor: DIVISIONS[divisionKey].country,
+      fillColor: name === state.highlightedCountry ? lightenHexColor(baseFill, HIGHLIGHTED_COUNTRY_LIGHTEN) : baseFill,
       fillOpacity: 0.85,
       color: HIGHLIGHT_BORDER,
       weight: 0.8,
@@ -609,6 +632,17 @@ function refreshCountryStyles() {
       layer.setStyle(styleCountryFeature(layer.feature));
     });
   }
+}
+
+// Sets (or clears, with null) which country's fill reads lightened — see
+// state.highlightedCountry's own comment for the lifecycle every caller
+// here is expected to follow. A no-op when the value isn't actually
+// changing, since some callers (e.g. the popupopen listener) fire on
+// every popup open regardless of whether it's the same country's.
+function setHighlightedCountry(name) {
+  if (state.highlightedCountry === name) return;
+  state.highlightedCountry = name;
+  refreshCountryStyles();
 }
 
 function recomputeCountriesWithVisiblePins(rows) {
@@ -875,6 +909,12 @@ function wireMetricsOverlayDismiss() {
 function dismissActivePinCard() {
   map.closePopup();
   if (window.__ministryLightbox) window.__ministryLightbox.close();
+  // Cleared here too, same reasoning as the popup/lightbox above — every
+  // call site is "leaving wherever we were," whether that's back out to
+  // World/a division (nothing to re-highlight) or on to a specific new
+  // country (the country-click handler and flyToCountryBounds each set
+  // their own target right back afterward, in the same click/call).
+  setHighlightedCountry(null);
 }
 
 // Upper-right hamburger menu: "World" re-centers on the default view and
@@ -1252,6 +1292,7 @@ function flyToCountryBounds(countryName) {
   // either was open left it sitting there, stale, over wherever the map
   // just flew to. Confirmed live as the reported bug.
   dismissActivePinCard();
+  setHighlightedCountry(countryName);
   const bounds = computeMainLandBounds(countryLayer.feature);
   const targetZoom = map.getBoundsZoom(bounds) - 0.5;
   // flyTo, not setView — see goToWorld's own comment on why (no
@@ -2337,6 +2378,7 @@ async function init() {
             // left either sitting there, stale, over the new country
             // this just flew to.
             dismissActivePinCard();
+            setHighlightedCountry(name);
             // A touch out from a tight fit, so the country reads with a
             // little breathing room and its neighbors are visible for
             // context, without backing off as far as a full zoom level.
@@ -3022,7 +3064,10 @@ map.on('popupopen', (e) => {
   }
 
   const country = e.popup._source && e.popup._source.ministryCountry;
-  if (country) showCountryMetricsOverlay(country);
+  if (country) {
+    showCountryMetricsOverlay(country);
+    setHighlightedCountry(country);
+  }
 });
 
 // If a popup opens close enough to any edge that part of it would land
@@ -3517,6 +3562,7 @@ async function tourGoToWorld() {
   // live as reading better with a beat of nothing showing while actually
   // in transit, same reasoning as tourGoToCountry's own hide-on-departure.
   hideMetricsOverlay();
+  setHighlightedCountry(null);
   const target = L.latLng(CONFIG.MAP_CENTER);
   const duration = tourLegDuration(target, CONFIG.MAP_ZOOM);
   await tourFlyToAndWait(() => map.flyTo(target, CONFIG.MAP_ZOOM, { duration }), duration);
@@ -3591,6 +3637,7 @@ async function tourGoToDivision(divisionKey) {
 async function tourGoToDivisionOverview(divisionKey) {
   restoreTourClustering();
   hideMetricsOverlay();
+  setHighlightedCountry(null);
   const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
   const flight = tourFlyToDivisionBounds(divisionKey);
   if (flight) {
@@ -3633,6 +3680,7 @@ async function tourGoToCountry(name) {
   // (every country after) behind, same reasoning as tourGoToWorld's own
   // hide-on-departure.
   hideMetricsOverlay();
+  setHighlightedCountry(name);
   const info = countryBoundsAndZoom(name);
   if (!info) return;
   const duration = tourCountryLegDuration(info.target, info.targetZoom);
@@ -4043,6 +4091,7 @@ function endTourInPlace(keepControlsVisible = false) {
   updateTourControlsUI();
   restoreTourClustering();
   map.closePopup();
+  setHighlightedCountry(null);
 }
 
 // Reveals the tour controls and preselects `divisionKeys` for Play,
