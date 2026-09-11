@@ -249,6 +249,32 @@ h1, h2, h3, .legend-label, .cluster-badge {
   gap: 8px;
   max-width: 520px;
   margin: 0 auto;
+  transform-origin: top center;
+}
+
+/* EXPERIMENTAL: starts larger and lower on screen, then settles into its
+   normal in-header position as the count-up (METRIC_COUNT_UP_MS, js/app.js)
+   finishes — restarted on every renderMetrics call (that function removes
+   then re-adds this class) since the container itself is reused, not
+   recreated. `both` holds the enlarged starting transform for the instant
+   before the animation actually kicks in, and holds identity afterward, so
+   it never snaps to an unstyled state on either end. */
+.metrics-boxes.metrics-pop-in {
+  animation: metrics-pop-in 1.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes metrics-pop-in {
+  from { transform: scale(1.4) translateY(50px); }
+  to { transform: scale(1) translateY(0); }
+}
+/* Scaling up by the same amount here would push .metrics-boxes' own
+   flex-wrap into wrapping the whole time it's enlarged — this stays a
+   flourish, not disruptive layout, on a small phone where the boxes are
+   already close to one-line-wide at their normal size. */
+@media (max-width: 640px) {
+  @keyframes metrics-pop-in {
+    from { transform: scale(1.12) translateY(14px); }
+    to { transform: scale(1) translateY(0); }
+  }
 }
 
 .metric-box {

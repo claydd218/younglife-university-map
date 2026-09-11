@@ -681,7 +681,7 @@ function computeMetrics(rowsSubset, { includeCountries = true } = {}) {
 // box that's since been replaced (renderMetrics rebuilds .metrics-boxes'
 // whole innerHTML on every call) just harmlessly finishes writing to a
 // detached node — nothing to cancel, nothing left visible.
-const METRIC_COUNT_UP_MS = 950;
+const METRIC_COUNT_UP_MS = 1400;
 
 function animateCountUp(el, target) {
   if (!target) {
@@ -710,6 +710,18 @@ function renderMetrics(metrics, accentColor) {
   `).join('');
   const numEls = container.querySelectorAll('.metric-box-num');
   metrics.forEach((m, i) => animateCountUp(numEls[i], m.num));
+
+  // EXPERIMENTAL: pops in larger/lower on screen, then settles into its
+  // normal in-header spot as the count-up finishes — see .metrics-boxes'
+  // own animation in style.css (far more modest on narrow phones there,
+  // to stay clear of wrapping). This container is reused, not recreated,
+  // on every metrics update (only its innerHTML above changes), so a
+  // plain CSS animation on it would only ever play once on page load —
+  // removing the class, forcing a reflow, then re-adding it is what
+  // makes it replay every time renderMetrics runs.
+  container.classList.remove('metrics-pop-in');
+  void container.offsetWidth;
+  container.classList.add('metrics-pop-in');
 }
 
 // labelHtml identifies *what* the metrics below it describe — a division
