@@ -3753,6 +3753,11 @@ const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
 // caption/carousel card skipped entirely (not just its photos).
 const TOUR_TESTING_SUPPRESS_CARD = false;
 
+// TESTING ONLY — see its one use in runTour below. Back for another
+// round of pacing checks (the first-leg skip just below); flip back to
+// false for real behavior once confirmed.
+const TOUR_TESTING_ONE_PIN_PER_COUNTRY = true;
+
 // divisionKeys is an array, not a single key — a "World Tour" (every
 // division) and a single-division tour are the exact same code, just a
 // different-length list. Divisions flow straight from one to the next
@@ -3766,11 +3771,24 @@ async function runTour(divisionKeys) {
   // within that division, never detouring through World at all.
   const isWorldTour = divisionKeys.length > 1;
   await tourCheckpoint();
-  if (isWorldTour) await tourGoToWorld();
+  // Play is only reachable after picking World/a division from the nav
+  // menu, and that pick's own flyTo (activateTourControls) already left
+  // the camera exactly where this run's very first navigational leg
+  // would otherwise fly it — World Tour's tourGoToWorld() here, or a
+  // single-division tour's first tourGoToDivision() in the loop below.
+  // Re-flying to a view already sitting on screen just repeated a move
+  // that already happened, so exactly that one leg is skipped: a World
+  // Tour still flies to its actual first *division* normally (World's
+  // own view isn't any specific division's), and everything after —
+  // every later division, every later country/pin, a loop's eventual
+  // return to the top — flies normally too, since the camera has
+  // genuinely moved on by then.
+  let skipFirstDivisionArrival = !isWorldTour;
   for (;;) {
     for (const divisionKey of divisionKeys) {
       await tourCheckpoint();
-      await tourGoToDivision(divisionKey);
+      if (skipFirstDivisionArrival) skipFirstDivisionArrival = false;
+      else await tourGoToDivision(divisionKey);
       await tourDwell(TOUR_DWELL_SECONDS);
 
       const countries = countriesInDivisionByProximity(divisionKey);
@@ -3784,7 +3802,9 @@ async function runTour(divisionKeys) {
         const pinZoom = countryInfo
           ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
           : CONFIG.MAX_ZOOM;
-        const pins = pinsInCountryByProximity(countryName);
+        const pins = TOUR_TESTING_ONE_PIN_PER_COUNTRY
+          ? pinsInCountryByProximity(countryName).slice(0, 1)
+          : pinsInCountryByProximity(countryName);
         await tourGoToCountry(countryName);
         await tourDwell(TOUR_DWELL_SECONDS);
         for (const pinEntry of pins) {
