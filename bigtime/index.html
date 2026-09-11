@@ -426,6 +426,71 @@
   .crop-zoom-row input[type="range"] { flex: 1; }
   .crop-zoom-icon { font-size: 17px; color: #888; user-select: none; line-height: 1; }
   .crop-hint { font-size: 12.5px; color: #888; margin: 6px 0 0; text-align: center; }
+
+  /* Ministry/city photos: a free-form rectangle crop (openFreeCropDialog
+     in admin.js), not the staff dialog's fixed-square pan/zoom above —
+     the whole image is shown at once (no forced fill/zoom), with a
+     resizable, draggable selection rect the admin drags out over
+     whatever region they want to keep. Sized wider than the staff
+     dialog since a real ministry photo's own aspect varies a lot more
+     than a headshot's. */
+  dialog#free-crop-photo-dialog {
+    width: min(640px, 94vw);
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+  }
+  dialog#free-crop-photo-dialog[open] { display: flex; flex-direction: column; }
+  dialog#free-crop-photo-dialog::backdrop { background: rgba(0,0,0,0.4); }
+  /* inline-block + the image's own natural width/height (capped) is what
+     makes the stage shrink-wrap to the image's real aspect ratio instead
+     of a fixed box — position:relative just gives the rect/handles below
+     a positioning root exactly matching the image's own rendered size.
+     text-align:center on the dialog body (below) centers this inline-
+     block horizontally, since margin:auto only centers block-level
+     elements. */
+  #free-crop-photo-dialog .dialog-body { text-align: center; }
+  .free-crop-stage {
+    position: relative;
+    display: inline-block;
+    margin: 4px auto 0;
+    line-height: 0;
+    touch-action: none;
+  }
+  .free-crop-stage img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 60vh;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  /* box-shadow with a huge spread is the dim-everything-outside-the-rect
+     trick — cheaper than four separate overlay divs, and it can't drift
+     out of sync with the rect's own position/size since it's the same
+     element. Clipped to .free-crop-stage's own overflow:hidden. */
+  .free-crop-rect {
+    position: absolute;
+    border: 1.5px solid #fff;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    cursor: move;
+  }
+  .free-crop-handle {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin: -8px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1.5px solid #1a1a1a;
+  }
+  .free-crop-handle-nw { top: 0; left: 0; cursor: nwse-resize; }
+  .free-crop-handle-ne { top: 0; right: 0; left: auto; margin-right: -8px; margin-left: 0; cursor: nesw-resize; }
+  .free-crop-handle-sw { bottom: 0; left: 0; margin-bottom: -8px; margin-top: 0; cursor: nesw-resize; }
+  .free-crop-handle-se { bottom: 0; right: 0; left: auto; margin: -8px; cursor: nwse-resize; }
   .field-inline-btn { display: flex; gap: 8px; align-items: center; }
   .field-inline-btn input { flex: 1; }
   /* 16:9 is standard for both YouTube and Vimeo — aspect-ratio keeps the
@@ -568,13 +633,22 @@
     border-radius: 6px;
     padding: 8px 10px;
   }
+  /* No forced aspect-ratio/object-fit:cover here — this used to crop
+     every photo into a 4:3 box regardless of its real shape, hiding
+     exactly the sides/top/bottom a free-form crop (see openFreeCropDialog
+     in admin.js) is meant to let the admin control deliberately. Natural
+     width/height at the column's own width, capped so a very tall
+     portrait doesn't dwarf its row — object-fit:contain (not cover) is
+     only reached once that cap actually applies, so it letterboxes
+     rather than cropping even then. */
   .ministry-photo-item img {
     width: 100%;
     height: auto;
-    aspect-ratio: 4 / 3;
-    object-fit: cover;
+    max-height: 260px;
+    object-fit: contain;
     border-radius: 4px;
     border: 1px solid #ccc;
+    cursor: pointer;
   }
   .ministry-photo-main-badge {
     display: inline-block;
@@ -1007,6 +1081,29 @@
         <span class="crop-zoom-icon">&plus;</span>
       </div>
       <p class="crop-hint">Drag to reposition, use the slider to zoom.</p>
+    </div>
+  </dialog>
+
+  <dialog id="free-crop-photo-dialog">
+    <div class="dialog-header">
+      <h2>Crop Photo</h2>
+      <div class="dialog-header-actions">
+        <button type="button" class="btn secondary" id="free-crop-reset-btn">Reset</button>
+        <button type="button" class="btn secondary" id="free-crop-cancel-btn">Cancel</button>
+        <button type="button" class="btn" id="free-crop-save-btn">Save</button>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <div class="free-crop-stage" id="free-crop-stage">
+        <img id="free-crop-image" alt="">
+        <div class="free-crop-rect" id="free-crop-rect">
+          <div class="free-crop-handle free-crop-handle-nw" data-handle="nw"></div>
+          <div class="free-crop-handle free-crop-handle-ne" data-handle="ne"></div>
+          <div class="free-crop-handle free-crop-handle-sw" data-handle="sw"></div>
+          <div class="free-crop-handle free-crop-handle-se" data-handle="se"></div>
+        </div>
+      </div>
+      <p class="crop-hint">Drag the selection to reposition, corners to resize.</p>
     </div>
   </dialog>
 

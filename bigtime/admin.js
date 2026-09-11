@@ -420,6 +420,177 @@ function openCropDialog(file, { isAdd = false } = {}) {
   });
 }
 
+// Ministry/city photos: a free-form rectangle crop, not the staff
+// dialog's fixed-square pan/zoom above — a real ministry photo's own
+// shape varies far more than a headshot's, and there's no fixed circular
+// slot it has to fill anywhere it's shown (see .ministry-photo-item img
+// in index.html, which shows each one at its own real aspect now rather
+// than force-cropping to 4:3). The whole image is shown at once — no
+// forced zoom/fill — and the admin drags a resizable selection rect over
+// whatever region they want to keep. Defaults to the full image, so
+// clicking Save without touching anything is a no-op crop; the tool
+// doesn't force a decision on a photo that's already framed fine.
+//
+// Wired at both photo add (handleAddMinistryPhotos) and re-crop of an
+// already-uploaded or still-pending photo (recropMinistryPhoto) — see
+// those functions for how each resolves the result into
+// currentMinistryPhotos.
+//
+// Resolves to a cropped Blob (JPEG, at the selected region's own full
+// source resolution — reencodeImage's own resize/compression pass right
+// after this handles final sizing same as any other photo), or null if
+// cancelled.
+function openFreeCropDialog(file) {
+  return new Promise((resolve, reject) => {
+    const dialog = $('free-crop-photo-dialog');
+    const stage = $('free-crop-stage');
+    const img = $('free-crop-image');
+    const rectEl = $('free-crop-rect');
+    const resetBtn = $('free-crop-reset-btn');
+    const cancelBtn = $('free-crop-cancel-btn');
+    const saveBtn = $('free-crop-save-btn');
+    const MIN_SIZE = 24; // px, in stage (displayed) coordinates
+
+    let bitmap;
+    let stageW = 0;
+    let stageH = 0;
+    let rect = { x: 0, y: 0, w: 0, h: 0 }; // stage-pixel coordinates
+    let settled = false;
+    let objectUrl = null;
+
+    function applyRectStyle() {
+      rectEl.style.left = `${rect.x}px`;
+      rectEl.style.top = `${rect.y}px`;
+      rectEl.style.width = `${rect.w}px`;
+      rectEl.style.height = `${rect.h}px`;
+    }
+    function resetRect() {
+      rect = { x: 0, y: 0, w: stageW, h: stageH };
+      applyRectStyle();
+    }
+
+    let mode = null; // null | 'move' | 'nw' | 'ne' | 'sw' | 'se'
+    let startX = 0;
+    let startY = 0;
+    let startRect = null;
+
+    function onPointerDown(e) {
+      const handle = e.target.closest('.free-crop-handle');
+      mode = handle ? handle.dataset.handle : 'move';
+      startX = e.clientX;
+      startY = e.clientY;
+      startRect = { ...rect };
+      rectEl.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
+    function onPointerMove(e) {
+      if (!mode) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (mode === 'move') {
+        const x = Math.min(Math.max(0, startRect.x + dx), stageW - startRect.w);
+        const y = Math.min(Math.max(0, startRect.y + dy), stageH - startRect.h);
+        rect = { x, y, w: startRect.w, h: startRect.h };
+      } else {
+        // Resize from whichever corner, anchored at the opposite one —
+        // clamped to the stage bounds and a minimum size on each axis
+        // independently, so dragging past either never collapses or
+        // flips the rectangle.
+        let left = startRect.x;
+        let top = startRect.y;
+        let right = startRect.x + startRect.w;
+        let bottom = startRect.y + startRect.h;
+        if (mode === 'nw') { left += dx; top += dy; }
+        else if (mode === 'ne') { right += dx; top += dy; }
+        else if (mode === 'sw') { left += dx; bottom += dy; }
+        else if (mode === 'se') { right += dx; bottom += dy; }
+        left = Math.max(0, Math.min(left, right - MIN_SIZE));
+        top = Math.max(0, Math.min(top, bottom - MIN_SIZE));
+        right = Math.min(stageW, Math.max(right, left + MIN_SIZE));
+        bottom = Math.min(stageH, Math.max(bottom, top + MIN_SIZE));
+        rect = { x: left, y: top, w: right - left, h: bottom - top };
+      }
+      applyRectStyle();
+    }
+    function onPointerUp(e) {
+      mode = null;
+      rectEl.releasePointerCapture(e.pointerId);
+    }
+
+    function cleanup() {
+      rectEl.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      resetBtn.removeEventListener('click', resetRect);
+      cancelBtn.removeEventListener('click', onCancel);
+      saveBtn.removeEventListener('click', onSave);
+      dialog.removeEventListener('close', onNativeClose);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+    function onCancel() {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      dialog.close();
+      resolve(null);
+    }
+    // Covers Escape/native dismissal, which closes the dialog without
+    // running onCancel — without this the returned promise would just
+    // hang forever instead of resolving null like an explicit Cancel.
+    function onNativeClose() {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(null);
+    }
+    function onSave() {
+      if (settled) return;
+      settled = true;
+      const scaleX = bitmap.width / stageW;
+      const scaleY = bitmap.height / stageH;
+      const sx = rect.x * scaleX;
+      const sy = rect.y * scaleY;
+      const sw = rect.w * scaleX;
+      const sh = rect.h * scaleY;
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = Math.max(1, Math.round(sw));
+      outCanvas.height = Math.max(1, Math.round(sh));
+      outCanvas.getContext('2d').drawImage(bitmap, sx, sy, sw, sh, 0, 0, outCanvas.width, outCanvas.height);
+      outCanvas.toBlob((blob) => {
+        cleanup();
+        dialog.close();
+        resolve(blob);
+      }, 'image/jpeg', 0.92);
+    }
+
+    loadImageBitmap(file).then((loaded) => {
+      bitmap = loaded;
+      // Opened before the image finishes loading (not after, like the
+      // staff dialog) — img.clientWidth/Height below need real layout,
+      // which a <dialog> that isn't open yet never produces (it's
+      // display:none until shown, per index.html's [open] rule), so
+      // measuring first and showing second would always read 0x0.
+      dialog.showModal();
+      objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
+      const onImgLoad = () => {
+        stageW = img.clientWidth;
+        stageH = img.clientHeight;
+        resetRect();
+        rectEl.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+        resetBtn.addEventListener('click', resetRect);
+        cancelBtn.addEventListener('click', onCancel);
+        saveBtn.addEventListener('click', onSave);
+        dialog.addEventListener('close', onNativeClose);
+      };
+      if (img.complete) onImgLoad();
+      else img.onload = onImgLoad;
+    }).catch(reject);
+  });
+}
+
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -780,6 +951,35 @@ function discardPendingMinistryPhotoUploads() {
   }
 }
 
+// Re-crops a photo already in the list — either one already uploaded
+// (a plain filename string) or one still staged from this same session
+// (a {pendingId, blob} object not uploaded yet). Either way this
+// replaces the array entry in place (same index, so a re-cropped "Main
+// photo" stays the main photo) with a fresh pending entry; for an
+// already-uploaded photo, that means its old filename simply no longer
+// appears in currentMinistryPhotos, which commitPendingMinistryPhotos'
+// existing removed-photo diff already treats as "delete this one" —
+// no separate re-crop-specific server call needed, it's the same
+// remove-and-add Save already does for any other photo swap.
+async function recropMinistryPhoto(index) {
+  const entry = currentMinistryPhotos[index];
+  const sourceBlob = typeof entry === 'string'
+    ? await (await fetch(ministryPhotoSrc(entry))).blob()
+    : entry.blob;
+  const cropped = await openFreeCropDialog(sourceBlob);
+  if (!cropped) return; // cancelled — leave this photo untouched
+  const jpeg = await reencodeImage(cropped, 'city');
+  const oldKey = ministryPhotoKey(entry);
+  if (ministryPhotoBlobUrls[oldKey]) {
+    URL.revokeObjectURL(ministryPhotoBlobUrls[oldKey]);
+    delete ministryPhotoBlobUrls[oldKey];
+  }
+  const pendingId = `pending-${Date.now()}-${index}`;
+  ministryPhotoBlobUrls[pendingId] = URL.createObjectURL(jpeg);
+  currentMinistryPhotos[index] = { pendingId, blob: jpeg };
+  renderMinistryPhotos();
+}
+
 function renderMinistryPhotos() {
   const container = $('ministry-photos');
   container.innerHTML = '';
@@ -795,6 +995,7 @@ function renderMinistryPhotos() {
     const img = document.createElement('img');
     img.src = ministryPhotoSrc(entry);
     img.alt = '';
+    img.addEventListener('click', () => recropMinistryPhoto(index));
 
     const infoCol = document.createElement('div');
     infoCol.className = 'photo-col-info';
@@ -871,7 +1072,12 @@ async function handleAddMinistryPhotos(files) {
     for (let i = 0; i < files.length; i++) {
       addBtn.textContent = files.length > 1 ? `Processing ${i + 1} of ${files.length}…` : 'Processing…';
       try {
-        const jpeg = await reencodeImage(files[i], 'city');
+        // Defaults to the full image (see openFreeCropDialog) — cancelling
+        // just skips this one file rather than adding it uncropped, same
+        // as declining the staff crop dialog leaves that photo untouched.
+        const cropped = await openFreeCropDialog(files[i]);
+        if (!cropped) continue;
+        const jpeg = await reencodeImage(cropped, 'city');
         const pendingId = `pending-${Date.now()}-${i}`;
         ministryPhotoBlobUrls[pendingId] = URL.createObjectURL(jpeg);
         currentMinistryPhotos.push({ pendingId, blob: jpeg });
