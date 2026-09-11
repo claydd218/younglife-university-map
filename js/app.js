@@ -3777,24 +3777,33 @@ async function runTour(divisionKeys) {
   // within that division, never detouring through World at all.
   const isWorldTour = divisionKeys.length > 1;
   await tourCheckpoint();
-  // Play is only reachable after picking World/a division from the nav
-  // menu, and that pick's own flyTo (activateTourControls) already left
-  // the camera exactly where this run's very first navigational leg
-  // would otherwise fly it — World Tour's tourGoToWorld() here, or a
-  // single-division tour's first tourGoToDivision() in the loop below.
-  // Re-flying to a view already sitting on screen just repeated a move
-  // that already happened, so exactly that one leg is skipped: a World
-  // Tour still flies to its actual first *division* normally (World's
-  // own view isn't any specific division's), and everything after —
-  // every later division, every later country/pin, a loop's eventual
-  // return to the top — flies normally too, since the camera has
-  // genuinely moved on by then.
-  let skipFirstDivisionArrival = !isWorldTour;
+  // A single-division tour's own tourGoToDivision() here is skipped
+  // every pass, not just the first — it's always flying to a target the
+  // camera is already sitting at: on the very first pass, that's
+  // activateTourControls' own nav-menu flyTo (Play is only reachable
+  // after picking that division); on every pass after, it's this same
+  // division's own tourGoToDivisionOverview() call, at the end of the
+  // loop below — identical bounds/target to tourGoToDivision itself
+  // (see both functions' own bodies), since it's the same division
+  // either way. Only skipping once left a loop restart's own metrics
+  // reveal+count-up racing ahead of an almost-zero-distance "flight"
+  // back to a spot already on screen — confirmed live, reading as
+  // running before the tour had actually gone anywhere.
+  //
+  // A World Tour never skips tourGoToDivision — every one of its own
+  // divisions is a real move to a genuinely different division, first
+  // one included (World's own view, which is where a World Tour's own
+  // Play is reachable from, isn't any specific division's).
+  // tourGoToWorld() is the one leg a World Tour itself skips, but only
+  // for its very first-ever call — simply never called at the top here,
+  // since the camera's already at World from that same nav-menu flyTo;
+  // its later, end-of-pass bookend call further down still flies
+  // normally every time, a real move back from whatever division just
+  // finished.
   for (;;) {
     for (const divisionKey of divisionKeys) {
       await tourCheckpoint();
-      if (skipFirstDivisionArrival) skipFirstDivisionArrival = false;
-      else await tourGoToDivision(divisionKey);
+      if (isWorldTour) await tourGoToDivision(divisionKey);
       await tourDwell(TOUR_DWELL_SECONDS);
 
       const countries = countriesInDivisionByProximity(divisionKey)
