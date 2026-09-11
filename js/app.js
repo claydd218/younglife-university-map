@@ -1628,7 +1628,13 @@ function wireMinistryPhotoCarousel() {
       h = maxH;
       w = h * ratio;
     }
-    return { w, h };
+    // Rounded to whole pixels — left as fractional CSS values (e.g.
+    // 463.7px), the browser's own sub-pixel rasterization of the box vs.
+    // its object-fit:contain content could land a fraction of a device
+    // pixel apart, visible as a hairline gap between the photo and its
+    // own border on one edge. Whole pixels removes that mismatch at the
+    // source.
+    return { w: Math.round(w), h: Math.round(h) };
   }
 
   // Sizes and centers `slide` to `size` (from computeSlideSize) —
