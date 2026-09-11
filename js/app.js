@@ -1538,8 +1538,18 @@ function wireMinistryPhotoCarousel() {
   // no room to also fit a caption underneath. Also keeps the photo from
   // covering #site-header's own title/metrics overlay, which sits at
   // the very top of the screen the whole time a tour is running — 80px
-  // wasn't enough clearance for it.
-  const TOUR_CARD_TOP_MARGIN_PX = 170;
+  // wasn't enough clearance for it, though the overlay doesn't need this
+  // whole 170px either; trimmed down a bit to let photos run taller.
+  const TOUR_CARD_TOP_MARGIN_PX = 140;
+  // How far the caption is pulled up into the photo's own bottom edge —
+  // both boxes land at the exact same Y otherwise (border-box, touching
+  // edge to edge), which reads as one fat, doubled-up border where the
+  // photo's own 2px bottom border and the caption's 1px top border sit
+  // immediately next to each other. Pulling the caption (z-index above
+  // the photo) up by the photo's own border width instead lets it paint
+  // over that sliver, leaving just the caption's own single thin border
+  // visible at the seam.
+  const CAPTION_PHOTO_OVERLAP_PX = 2;
 
   // The Y (viewport px) the caption's own bottom edge — and its tip —
   // should land on: a fixed gap above the exact spot tourPinLandingLatLng
@@ -1681,8 +1691,9 @@ function wireMinistryPhotoCarousel() {
       // style.css), not resized/repositioned to match each photo's own
       // width like it used to be: only its vertical placement (stacked
       // directly under wherever the photo's bottom edge actually is)
-      // needs setting here.
-      captionEl.style.top = `${captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX}px`;
+      // needs setting here. Pulled up CAPTION_PHOTO_OVERLAP_PX into the
+      // photo's own bottom border — see that constant's own comment.
+      captionEl.style.top = `${captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX - CAPTION_PHOTO_OVERLAP_PX}px`;
     }
   }
 
