@@ -1841,7 +1841,13 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 220px;
+  /* Shrunk from 220px — with every other field this dialog has picked up
+     since (Tour Speed, Skip Country View, Photo Display Style/Length),
+     220px pushed the whole dialog body past its own max-height, making
+     .tour-settings-body itself scroll instead of just this list. Own
+     internal scroll still kicks in for a division with more countries
+     than fit here. */
+  max-height: 130px;
   overflow-y: auto;
   border: 1px solid var(--border-soft);
 }
