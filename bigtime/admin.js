@@ -3945,6 +3945,7 @@ async function renderRestrictedCountriesSection() {
         </label>
       `).join('');
     }
+    $('restricted-access-mode').value = current.mode || 'full_country';
     $('restricted-access-password').value = current.password || '';
     $('restricted-access-password').placeholder = current.password
       ? ''
@@ -3961,10 +3962,11 @@ async function saveRestrictedCountries() {
   const btn = $('restricted-access-save-btn');
   const countries = [...document.querySelectorAll('#restricted-countries-list input[type="checkbox"]:checked')].map((cb) => cb.value);
   const password = $('restricted-access-password').value;
+  const mode = $('restricted-access-mode').value;
   btn.disabled = true;
   status.textContent = 'Saving…';
   try {
-    await apiFetch('/restricted-access', { method: 'PUT', body: JSON.stringify({ countries, password }) });
+    await apiFetch('/restricted-access', { method: 'PUT', body: JSON.stringify({ countries, password, mode }) });
     status.textContent = 'Saved.';
     await renderRestrictedCountriesSection();
   } catch (err) {

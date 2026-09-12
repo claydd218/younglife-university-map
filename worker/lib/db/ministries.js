@@ -8,9 +8,9 @@
 // value instead of a GitHub blob SHA — see updateMinistry()'s own comment.
 
 import { setAssignment, removeAssignment, upsertHomeStaff, staffRowsForMinistry, assignedStaffNamesForMinistry, getStaffIdByName } from './staff.js';
-import { joinParenList } from '../text.js';
+import { joinParenList, slugify } from '../text.js';
 import { deletePhotoFile, deletePhotosBySlug } from '../photoCleanup.js';
-import { getRestrictedCountries } from './restrictedAccess.js';
+import { getRestrictedCountries, getRestrictedMode } from './restrictedAccess.js';
 import { hasValidRestrictedUnlock } from '../restrictedSession.js';
 
 export class ConflictError extends Error {
@@ -88,14 +88,8 @@ export async function listMinistries(env) {
 // genuinely have no request to check against (none exist today; kept
 // this way so a future internal/background caller doesn't need to fake
 // one) get the safe, fails-closed default rather than an error.
-export async function listMinistriesPublic(env, request) {
-  const admin = await listMinistries(env);
-  const restricted = new Set(await getRestrictedCountries(env));
-  // Skips the unlock check entirely when nothing's actually restricted —
-  // the common case, and no reason to read/verify a cookie for it.
-  const unlocked = restricted.size === 0 || (request ? await hasValidRestrictedUnlock(request, env) : false);
-  const visible = unlocked ? admin : admin.filter((r) => !restricted.has(r.country));
-  return visible.map((r) => ({
+function packMinistryRow(r) {
+  return {
     id: r.id,
     city: r.city,
     country: r.country,
@@ -111,7 +105,90 @@ export async function listMinistriesPublic(env, request) {
     video_url: r.video_url,
     video_label: r.video_label,
     updated_at: r.updated_at,
-  }));
+  };
+}
+
+// A stub row for one restricted country under 'country_highlight' mode —
+// one per country, not one per real area. country-highlighted-but-
+// otherwise-blank fields, blank lat/lng so js/app.js's marker-placement
+// loop (parseFloat(row.lat)) skips it entirely (no marker ever placed),
+// while still registering in recomputeCountriesWithVisiblePins (built from
+// every row's own .country, regardless of whether it got a marker) so the
+// country still highlights on the map and counts toward the metrics
+// overlay's "Countries"/"Ministry Areas" totals.
+function countryHighlightStubRow(country) {
+  return {
+    id: `restricted-${slugify(country)}`,
+    city: '',
+    country,
+    lat: '',
+    lng: '',
+    date_opened: '',
+    is_developing: 'false',
+    universities: '',
+    staff: '',
+    assigned_staff: '',
+    blurb: '',
+    photos: '',
+    video_url: '',
+    video_label: '',
+    updated_at: '',
+  };
+}
+
+export async function listMinistriesPublic(env, request) {
+  const admin = await listMinistries(env);
+  const restricted = new Set(await getRestrictedCountries(env));
+  // Skips the unlock check entirely when nothing's actually restricted —
+  // the common case, and no reason to read/verify a cookie for it.
+  const unlocked = restricted.size === 0 || (request ? await hasValidRestrictedUnlock(request, env) : false);
+  if (unlocked) return admin.map(packMinistryRow);
+
+  // Four restriction strengths, admin-configurable and applied uniformly
+  // to every restricted country (not per-country) — see
+  // worker/lib/db/restrictedAccess.js's RESTRICTED_MODES, most to least
+  // restrictive:
+  //   full_country     — the row is omitted entirely (unchanged from
+  //                       before modes existed): no pin, no highlight, no
+  //                       metrics contribution, nothing.
+  //   country_highlight — every real row is dropped in favor of one
+  //                       synthetic stub per country (see
+  //                       countryHighlightStubRow) — the country still
+  //                       highlights, nothing else does.
+  //   staff_areas       — real row kept (so its actual pin still places),
+  //                       but city/universities/photos/blurb/video are all
+  //                       blanked alongside staff — a bare, unlabeled pin.
+  //   staff             — real row kept with only staff/assigned_staff
+  //                       blanked — everything else (pins, city, photos,
+  //                       universities) shows normally.
+  const mode = await getRestrictedMode(env);
+  const rows = [];
+  const highlightedCountries = new Set();
+  for (const r of admin) {
+    if (!restricted.has(r.country)) {
+      rows.push(packMinistryRow(r));
+      continue;
+    }
+    if (mode === 'full_country') continue;
+    if (mode === 'country_highlight') {
+      highlightedCountries.add(r.country);
+      continue;
+    }
+    const packed = packMinistryRow(r);
+    packed.staff = '';
+    packed.assigned_staff = '';
+    if (mode === 'staff_areas') {
+      packed.city = '';
+      packed.universities = '';
+      packed.photos = '';
+      packed.blurb = '';
+      packed.video_url = '';
+      packed.video_label = '';
+    }
+    rows.push(packed);
+  }
+  for (const country of highlightedCountries) rows.push(countryHighlightStubRow(country));
+  return rows;
 }
 
 export async function getMinistry(env, id) {

@@ -3578,10 +3578,16 @@ function orderByProximity(points) {
 
 // Every country in `divisionKey` that actually has a ministry pin, ordered
 // by orderByProximity above.
+// Checked against state.countriesWithVisiblePins, not markersByCountry —
+// a restricted country in Country Highlight Only mode has zero real
+// markers (see listMinistriesPublic's stub row) but still needs to appear
+// here, both for the tour settings dialog's country picker and for
+// runTour itself (which falls back to a plain country-level visit when a
+// country turns out to have no visitable pins — see its own comment).
 function countriesInDivisionByProximity(divisionKey) {
   const names = [];
-  for (const [countryName, entries] of state.markersByCountry) {
-    if (entries.length && state.countryDivisionByName.get(countryName) === divisionKey) {
+  for (const countryName of state.countriesWithVisiblePins.keys()) {
+    if (state.countryDivisionByName.get(countryName) === divisionKey) {
       names.push(countryName);
     }
   }
@@ -3599,11 +3605,15 @@ function countriesInDivisionByProximity(divisionKey) {
 // Every division that actually has at least one ministry pin, ordered by
 // orderByProximity above (same NW-start nearest-neighbor chain used for
 // countries within a division) — used for a "World Tour" that sweeps
-// through every division in turn instead of just one.
+// through every division in turn instead of just one. Checked against
+// state.countriesWithVisiblePins, not markersByCountry, so a restricted
+// country in Country Highlight Only mode (zero real markers — see
+// listMinistriesPublic's stub row) still gets its division included, and
+// a World Tour visits it at the country level.
 function divisionsByProximity() {
   const keys = Object.keys(DIVISIONS).filter((key) => {
-    for (const countryName of state.markersByCountry.keys()) {
-      if (state.markersByCountry.get(countryName).length && state.countryDivisionByName.get(countryName) === key) return true;
+    for (const countryName of state.countriesWithVisiblePins.keys()) {
+      if (state.countryDivisionByName.get(countryName) === key) return true;
     }
     return false;
   });
@@ -4390,6 +4400,20 @@ async function runTour(divisionKeys) {
       if (!countries.length) countries = allDivisionCountries;
       for (const countryName of countries) {
         await tourCheckpoint();
+        const pins = pinsInCountryByProximity(countryName);
+        // A restricted country with nothing visitable at the pin level —
+        // Country Highlight Only has no pins at all, Hide Staff and
+        // Ministry Areas has pins but every one's city is blanked out
+        // (see listMinistriesPublic) — just gets a plain country-level
+        // visit and moves straight on to the next country. Skip Country
+        // View is deliberately ignored for this one case: honoring it
+        // would skip straight to a per-pin loop that then has nothing to
+        // visit either, so the whole country would show nothing at all.
+        if (!pins.some((p) => p.row.city)) {
+          await tourGoToCountry(countryName);
+          await tourDwell(tourArrivalDwellSeconds());
+          continue;
+        }
         // Tied to Skip Country View rather than its own separate setting
         // (deliberately not exposing both): with the wide country view
         // skipped, pins are visited at the country's own zoom level —
@@ -4402,7 +4426,6 @@ async function runTour(divisionKeys) {
         const pinZoom = countryInfo
           ? (tourSettings.skipCountryView ? countryInfo.targetZoom : Math.min(countryInfo.targetZoom + 1, map.getMaxZoom()))
           : CONFIG.MAX_ZOOM;
-        const pins = pinsInCountryByProximity(countryName);
         if (tourSettings.skipCountryView) {
           tourPrepCountrySkipView(countryName);
         } else {

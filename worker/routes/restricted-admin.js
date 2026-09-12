@@ -3,7 +3,11 @@
 // is_admin gate as worker/routes/users.js.
 
 import { jsonResponse, errorResponse } from '../lib/http.js';
-import { getRestrictedCountries, setRestrictedCountries, getRestrictedPassword, setRestrictedPassword } from '../lib/db/restrictedAccess.js';
+import {
+  getRestrictedCountries, setRestrictedCountries,
+  getRestrictedPassword, setRestrictedPassword,
+  getRestrictedMode, setRestrictedMode, RESTRICTED_MODES,
+} from '../lib/db/restrictedAccess.js';
 
 function requireAdmin(user) {
   if (!user || !user.is_admin) return errorResponse(403, 'Admin access required');
@@ -16,14 +20,15 @@ export async function onRequestGet({ env, user }) {
   return jsonResponse({
     countries: await getRestrictedCountries(env),
     password: await getRestrictedPassword(env),
+    mode: await getRestrictedMode(env),
   });
 }
 
-// Accepts either or both of {countries: [...]} and {password: "..."} — the
-// admin UI always shows the current password back (see
-// restrictedAccess.js's own comment on why it's plain text, not hashed),
-// so there's no "blank means leave it alone" special case here: whatever
-// string comes through is saved as-is.
+// Accepts any of {countries: [...]}, {password: "..."}, {mode: "..."} — the
+// admin UI always shows the current password/mode back (see
+// restrictedAccess.js's own comment on why the password is plain text, not
+// hashed), so there's no "blank means leave it alone" special case here:
+// whatever value comes through is saved as-is.
 export async function onRequestPut({ request, env, user }) {
   const denied = requireAdmin(user);
   if (denied) return denied;
@@ -41,10 +46,15 @@ export async function onRequestPut({ request, env, user }) {
   if (typeof body.password === 'string') {
     await setRestrictedPassword(env, body.password);
   }
+  if (typeof body.mode === 'string') {
+    if (!RESTRICTED_MODES.includes(body.mode)) return errorResponse(400, `Invalid mode: ${body.mode}`);
+    await setRestrictedMode(env, body.mode);
+  }
 
   return jsonResponse({
     ok: true,
     countries: await getRestrictedCountries(env),
     password: await getRestrictedPassword(env),
+    mode: await getRestrictedMode(env),
   });
 }

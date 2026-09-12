@@ -51,6 +51,35 @@ export async function setRestrictedPassword(env, password) {
   ).bind(password).run();
 }
 
+// One global mode, not per-country — applies to every country in
+// restricted_countries at once. See worker/lib/db/ministries.js's
+// listMinistriesPublic for what each mode actually reshapes a restricted
+// row into. Ordered here from most to least restrictive; RESTRICTED_MODES
+// is the validation source of truth, exported for restricted-admin.js.
+export const RESTRICTED_MODES = ['full_country', 'country_highlight', 'staff_areas', 'staff'];
+const DEFAULT_RESTRICTED_MODE = 'full_country';
+
+export async function getRestrictedMode(env) {
+  try {
+    const row = await env.DB.prepare('SELECT mode FROM restricted_access WHERE id = 1').first();
+    return row && RESTRICTED_MODES.includes(row.mode) ? row.mode : DEFAULT_RESTRICTED_MODE;
+  } catch (err) {
+    console.error('getRestrictedMode (treating as default/most restrictive):', err);
+    return DEFAULT_RESTRICTED_MODE;
+  }
+}
+
+export async function setRestrictedMode(env, mode) {
+  if (!RESTRICTED_MODES.includes(mode)) throw new Error(`Invalid restricted mode: ${mode}`);
+  // password has a NOT NULL constraint — ON CONFLICT's excluded.password
+  // resolves to '' the very first time this is called before any password
+  // has ever been set, same empty-string default setRestrictedPassword's
+  // own first call would produce.
+  await env.DB.prepare(
+    "INSERT INTO restricted_access (id, password, mode) VALUES (1, '', ?) ON CONFLICT(id) DO UPDATE SET mode = excluded.mode"
+  ).bind(mode).run();
+}
+
 // No password configured yet -> nothing can ever unlock (fails closed,
 // not open) — a country marked restricted with no password set stays
 // restricted rather than becoming accidentally unlockable by anyone.

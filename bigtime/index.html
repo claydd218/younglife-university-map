@@ -535,7 +535,7 @@
      (bigtime/admin.js's addStaffRow) — reads as locked, not just plain
      text, since it still looks like an input otherwise. */
   .row-meta[readonly] { background: #eee; color: #666; cursor: default; }
-  .field input[type="text"], .field input[type="number"], .field textarea, .field input[list] {
+  .field input[type="text"], .field input[type="number"], .field textarea, .field input[list], .field select {
     width: 100%;
     font: inherit;
     font-size: 14px;
@@ -866,8 +866,17 @@
     </table>
 
     <h2 class="admin-section-heading">Restricted countries</h2>
-    <p class="admin-section-note">A checked country is entirely omitted from the public map — no pins, no country color, no metrics contribution — until a visitor enters the password below. One shared password unlocks every restricted country at once.</p>
+    <p class="admin-section-note">A checked country is hidden from the public map (how much is hidden depends on the restriction level below) until a visitor enters the password. One shared password and restriction level apply to every restricted country at once.</p>
     <div id="restricted-countries-list" class="restricted-countries-list"></div>
+    <div class="field" style="max-width: 420px;">
+      <label for="restricted-access-mode">Restriction level</label>
+      <select id="restricted-access-mode">
+        <option value="full_country">Hide Full Country — no pins, no highlight, nothing</option>
+        <option value="country_highlight">Country Highlight Only — country colored, no pins/staff/areas</option>
+        <option value="staff_areas">Hide Staff and Ministry Areas — bare pins, no names/universities/photos</option>
+        <option value="staff">Hide Staff — pins/areas/universities/photos show, staff names hidden</option>
+      </select>
+    </div>
     <div class="field" style="max-width: 320px;">
       <label for="restricted-access-password">Unlock password</label>
       <input type="text" id="restricted-access-password" autocomplete="off">
