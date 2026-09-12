@@ -181,22 +181,12 @@
          left in place since the button is the only thing pulled out
          here) — may come back later. -->
     <button type="button" id="tour-loop-btn" class="tour-control-btn" aria-label="Loop" aria-pressed="false">
-      <!-- True circle, split into two symmetric 120° arcs with a real
-           60° gap on each side (up from the first two-arrow attempt's
-           30°) — one arrowhead each, stroke-based/thin like the
-           original single-arrow refresh icon this started as. Each
-           arrowhead is a properly constructed triangle aligned to the
-           arc's own tangent direction at that endpoint (computed, not
-           eyeballed — the previous attempt's triangles weren't actually
-           tangent to the curve, which read as "angled oddly"). The
-           bottom arc + arrowhead is exactly the top one rotated 180°
-           about the icon's own center. -->
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-        <path d="M5.07,8 A8,8 0 0 1 18.93,8"/>
-        <polygon points="20.9,11.5 16.3,9.5 21.5,6.5" fill="currentColor" stroke="none"/>
-        <path d="M18.93,16 A8,8 0 0 1 5.07,16"/>
-        <polygon points="3.1,12.5 7.7,14.5 2.5,17.5" fill="currentColor" stroke="none"/>
-      </svg>
+      <!-- Real vector data this time, not hand-derived arcs — the glyph
+           path from the Twemoji "repeat button" emoji (🔁, CC-BY 4.0),
+           background square dropped since .tour-control-btn already
+           supplies its own. Native 36x36 viewBox; .tour-control-btn svg
+           scales any viewBox to the same 22x22 as every other icon here. -->
+      <svg viewBox="0 0 36 36" aria-hidden="true"><path fill="currentColor" d="M30.2 10L23 4v4h-8C9.477 8 5 12.477 5 18c0 1.414.297 2.758.827 3.978l3.3-2.75A6 6 0 0 1 15 12h8v4l7.2-6zm-.026 4.023l-3.301 2.75A6 6 0 0 1 21 24h-8v-4l-7.2 6l7.2 6v-4h8c5.522 0 10-4.478 10-10a9.965 9.965 0 0 0-.826-3.977z"/></svg>
     </button>
     <button type="button" id="tour-stop-btn" class="tour-control-btn" aria-label="Stop tour">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="currentColor"/></svg>
