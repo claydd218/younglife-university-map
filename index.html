@@ -183,17 +183,19 @@
     <button type="button" id="tour-loop-btn" class="tour-control-btn" aria-label="Loop" aria-pressed="false">
       <!-- Classic two-arrow "repeat" racetrack glyph (filled, like Play/
            Stop — not stroke-based like the circular-arrow icon this
-           replaced). Two actual separate paths (each a straight run plus
-           a short curved hook, round-capped at its open/tail end) with a
-           real gap between them on each side — not one continuous ring
-           with triangles merely overlaid on top, which left the
-           arrowheads reading as fused into the border with no
-           separation. The bottom path is exactly the top one rotated
-           180° about the icon's own center. -->
+           replaced). Two actual separate paths with a real gap between
+           them on each side (not one continuous ring with triangles
+           merely overlaid on top, which fused the arrowheads into the
+           border with no separation at all) — but each end now also
+           gets a short hook (rather than starting cold with a flat
+           round-capped stub) to pull the two arrows closer together
+           than that first gapped version, without going back to zero
+           gap. The bottom path is exactly the top one rotated 180°
+           about the icon's own center. -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M8,6 L16,6 A6,6 0 0 1 20.2,7.8" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M2.8,9 A6,6 0 0 1 8,6 L16,6 A6,6 0 0 1 20.2,7.8" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
         <polygon points="23,7 17.5,3.8 17.5,10.2" fill="currentColor"/>
-        <path d="M16,18 L8,18 A6,6 0 0 1 3.8,16.2" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M21.2,15 A6,6 0 0 1 16,18 L8,18 A6,6 0 0 1 3.8,16.2" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
         <polygon points="1,17 6.5,20.2 6.5,13.8" fill="currentColor"/>
       </svg>
     </button>
