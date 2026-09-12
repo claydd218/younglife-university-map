@@ -1021,10 +1021,22 @@ function wireRestrictedAccessWidget() {
   let unlocked = false;
   let revealTimer = null;
 
+  // Plain setAttribute/removeAttribute, not the .hidden DOM property —
+  // .hidden is an HTMLElement thing; on an inline <svg> (an SVGElement) it
+  // doesn't reliably reflect to the real hidden="" attribute in every
+  // browser, so toggling it here silently did nothing and the icon stuck
+  // on whatever the static HTML started it as (confirmed: restricted-
+  // status correctly came back {"unlocked":true} but the key icon never
+  // switched to the padlock).
   function setIcon(isUnlocked) {
     unlocked = isUnlocked;
-    lockedIcon.hidden = isUnlocked;
-    unlockedIcon.hidden = !isUnlocked;
+    if (isUnlocked) {
+      lockedIcon.setAttribute('hidden', '');
+      unlockedIcon.removeAttribute('hidden');
+    } else {
+      lockedIcon.removeAttribute('hidden');
+      unlockedIcon.setAttribute('hidden', '');
+    }
     btn.setAttribute('aria-label', isUnlocked ? 'Hide restricted countries' : 'Unlock restricted countries');
     btn.title = btn.getAttribute('aria-label');
   }
