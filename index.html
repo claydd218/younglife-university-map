@@ -247,9 +247,9 @@
         </div>
         <div class="tour-settings-field">
           <!-- Disabled (not hidden) whenever Photos Per Pin is None — see
-               renderTourSettingsDialog — since there's nothing to time,
-               though the stored value still quietly governs how long the
-               no-photo pause itself lasts (tourPhotoDwellSeconds). -->
+               renderTourSettingsDialog — since there's nothing to time; a
+               photo-less pin's own brief pause is governed by Tour Speed
+               instead (tourNoPhotoDwellSeconds), not this setting. -->
           <span class="tour-settings-label">Photo Display Length</span>
           <div class="tour-settings-options" id="tour-setting-photo-seconds"></div>
         </div>

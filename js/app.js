@@ -3955,7 +3955,7 @@ async function tourGoToPin(entry, targetZoom) {
   if (window.__ministryLightbox) {
     let photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
     // Photos Per Pin: 'none' behaves exactly like a pin with no photos at
-    // all (see tourPhotoDwellSeconds' own comment — same dwell either
+    // all (see tourNoPhotoDwellSeconds' own comment — same dwell either
     // way); 'all' is the unlimited default; '1'/'2'/'3' caps to that many
     // of the ministry's own photos, in their existing order.
     if (tourSettings.photosPerPin === 'none') photos = [];
@@ -3969,7 +3969,7 @@ async function tourGoToPin(entry, targetZoom) {
         await tourDwell(tourPhotoDwellSeconds());
       }
     } else {
-      await tourDwell(tourPhotoDwellSeconds());
+      await tourDwell(tourNoPhotoDwellSeconds());
     }
     window.__ministryLightbox.close();
   }
@@ -4083,12 +4083,23 @@ function saveTourSettings() {
 }
 
 // How long each of a ministry's photos stays up in the fullscreen
-// lightbox during a pin visit (tourGoToPin), and (same value — there's
-// only one "Photo Display Length" setting, not two) how long it holds on
-// the header-only lightbox when there are no photos to cycle through
-// (either a genuinely photo-less ministry, or Photos Per Pin: None).
+// lightbox during a pin visit (tourGoToPin) — the user-configurable
+// "Photo Display Length" setting.
 function tourPhotoDwellSeconds() {
   return tourSettings.photoSeconds;
+}
+
+// How long tourGoToPin holds on the header-only lightbox when there's no
+// photo to show (either a genuinely photo-less ministry, or Photos Per
+// Pin: None) — deliberately NOT tourPhotoDwellSeconds: reported as too
+// long at its fixed length (there's nothing to actually look at), so
+// instead of another standalone setting this rides the existing Tour
+// Speed slider — Slowest's own multiplier (1.5) down to Fastest's (0.5),
+// reused directly as seconds rather than as a multiplier this time, so a
+// no-photo pin briefly pauses more or less in step with how brisk the
+// rest of the tour's motion currently is.
+function tourNoPhotoDwellSeconds() {
+  return TOUR_SPEED_STEPS[tourSettings.speedStep].multiplier;
 }
 
 // TESTING ONLY — see its one use in tourGoToPin above. Flip to true to
@@ -4431,10 +4442,10 @@ function renderTourSettingsDialog() {
       renderTourSettingsDialog();
     },
   );
-  // Disabled (not hidden) rather than removed — None still has a pause at
-  // each pin (see tourPhotoDwellSeconds' own comment), just no photo to
-  // time, so choosing a length doesn't mean anything to configure right
-  // now even though the stored value keeps quietly governing that pause.
+  // Disabled (not hidden) rather than removed — None still has a brief
+  // pause at each pin (see tourNoPhotoDwellSeconds), just governed by
+  // Tour Speed instead, so choosing a length doesn't mean anything to
+  // configure right now.
   renderTourSettingsOptionRow(
     document.getElementById('tour-setting-photo-seconds'),
     TOUR_PHOTO_SECONDS_OPTIONS,
