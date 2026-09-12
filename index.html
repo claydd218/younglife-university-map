@@ -210,6 +210,15 @@
       </div>
       <div class="tour-settings-body">
         <div class="tour-settings-field">
+          <!-- Five discrete notches (TOUR_SPEED_STEPS in js/app.js), not a
+               true continuous slider — a native range input with step=1
+               snapping between them is the simplest way to get that,
+               without inventing a custom-drawn slider control. -->
+          <span class="tour-settings-label">Tour Speed: <span id="tour-setting-speed-value"></span></span>
+          <input type="range" id="tour-setting-speed" class="tour-settings-slider" min="0" max="4" step="1">
+          <div class="tour-settings-slider-ends"><span>Slow</span><span>Fast</span></div>
+        </div>
+        <div class="tour-settings-field">
           <span class="tour-settings-label">Photos Per Pin</span>
           <div class="tour-settings-options" id="tour-setting-photos-per-pin"></div>
         </div>

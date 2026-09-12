@@ -3370,7 +3370,7 @@ function tourFlightPixelUnits(targetLatLng, targetZoom) {
 
 function tourLegDuration(targetLatLng, targetZoom) {
   const units = tourFlightPixelUnits(targetLatLng, targetZoom);
-  return Math.min(TOUR_MAX_LEG_SECONDS, Math.max(TOUR_MIN_LEG_SECONDS, units * TOUR_SPEED_SCALE));
+  return Math.min(TOUR_MAX_LEG_SECONDS, Math.max(TOUR_MIN_LEG_SECONDS, units * TOUR_SPEED_SCALE)) * tourSpeedMultiplier();
 }
 
 // Pin-to-pin hops are much shorter than any other leg (within one already-
@@ -3385,7 +3385,7 @@ const TOUR_PIN_MAX_LEG_SECONDS = 2.5;
 
 function tourPinLegDuration(targetLatLng, targetZoom) {
   const units = tourFlightPixelUnits(targetLatLng, targetZoom);
-  return Math.min(TOUR_PIN_MAX_LEG_SECONDS, Math.max(TOUR_PIN_MIN_LEG_SECONDS, units * TOUR_PIN_SPEED_SCALE));
+  return Math.min(TOUR_PIN_MAX_LEG_SECONDS, Math.max(TOUR_PIN_MIN_LEG_SECONDS, units * TOUR_PIN_SPEED_SCALE)) * tourSpeedMultiplier();
 }
 
 // Country-to-country and division-level hops, sped up from the original
@@ -3402,7 +3402,7 @@ const TOUR_COUNTRY_MAX_LEG_SECONDS = 4.5;
 
 function tourCountryLegDuration(targetLatLng, targetZoom) {
   const units = tourFlightPixelUnits(targetLatLng, targetZoom);
-  return Math.min(TOUR_COUNTRY_MAX_LEG_SECONDS, Math.max(TOUR_COUNTRY_MIN_LEG_SECONDS, units * TOUR_COUNTRY_SPEED_SCALE));
+  return Math.min(TOUR_COUNTRY_MAX_LEG_SECONDS, Math.max(TOUR_COUNTRY_MIN_LEG_SECONDS, units * TOUR_COUNTRY_SPEED_SCALE)) * tourSpeedMultiplier();
 }
 
 // A regular visitor's own tap/search moves (goToWorld, goToDivision, a
@@ -3898,9 +3898,18 @@ async function tourDwell(seconds) {
   await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 }
 
-// Shared pause length for every tourDwell() call in the tour — one place
-// to retune the pacing.
+// Shared pause length for every arrival-dwell tourDwell() call in the
+// tour (division/country arrivals — NOT the photo dwell, which has its
+// own separate user-configurable tourPhotoDwellSeconds() below) — one
+// place to retune the base pacing. Scaled by the same speed-step
+// multiplier as every flight duration, so the whole tour speeds up or
+// slows down together rather than legs shortening while the pauses
+// between them stay fixed.
 const TOUR_DWELL_SECONDS = 1;
+
+function tourArrivalDwellSeconds() {
+  return TOUR_DWELL_SECONDS * tourSpeedMultiplier();
+}
 
 // --- Tour settings (gear icon on #tour-controls) ------------------------
 // Persisted per-browser (localStorage), not per-session — a visitor's
@@ -3911,8 +3920,25 @@ const TOUR_DWELL_SECONDS = 1;
 // for World, per its own spec (see renderTourSettingsDialog).
 const TOUR_PHOTO_SECONDS_OPTIONS = [1, 2, 3, 4, 5];
 const TOUR_PHOTOS_PER_PIN_OPTIONS = ['none', '1', '2', '3', 'all'];
+// Motion speed — a few discrete notches rather than a true continuous
+// slider, applied as a flat multiplier on top of every existing tour
+// duration (tourLegDuration/tourPinLegDuration/tourCountryLegDuration's
+// own already-clamped result, plus the arrival dwell between legs — see
+// each one's own call site below) rather than exposing any of those raw
+// numbers. Multiplying AFTER each function's own MIN/MAX clamp (not
+// folded into the clamp bounds themselves) means Fastest still meaningfully
+// shortens even the shortest legs instead of every leg type collapsing to
+// the same floor and losing its relative pacing.
+const TOUR_SPEED_STEPS = [
+  { label: 'Slowest', multiplier: 1.5 },
+  { label: 'Slow', multiplier: 1.25 },
+  { label: 'Normal', multiplier: 1 },
+  { label: 'Fast', multiplier: 0.75 },
+  { label: 'Fastest', multiplier: 0.5 },
+];
+const DEFAULT_SPEED_STEP = 2; // 'Normal' — matches every duration constant's own tuned pace as-is
 const TOUR_SETTINGS_STORAGE_KEY = 'tourSettings.v1';
-const DEFAULT_TOUR_SETTINGS = { photoSeconds: 2, photosPerPin: 'all' };
+const DEFAULT_TOUR_SETTINGS = { photoSeconds: 2, photosPerPin: 'all', speedStep: DEFAULT_SPEED_STEP };
 
 function loadTourSettings() {
   try {
@@ -3921,11 +3947,16 @@ function loadTourSettings() {
     return {
       photoSeconds: TOUR_PHOTO_SECONDS_OPTIONS.includes(parsed.photoSeconds) ? parsed.photoSeconds : DEFAULT_TOUR_SETTINGS.photoSeconds,
       photosPerPin: TOUR_PHOTOS_PER_PIN_OPTIONS.includes(parsed.photosPerPin) ? parsed.photosPerPin : DEFAULT_TOUR_SETTINGS.photosPerPin,
+      speedStep: Number.isInteger(parsed.speedStep) && TOUR_SPEED_STEPS[parsed.speedStep] ? parsed.speedStep : DEFAULT_SPEED_STEP,
       excludedCountriesByDivision: (parsed.excludedCountriesByDivision && typeof parsed.excludedCountriesByDivision === 'object') ? parsed.excludedCountriesByDivision : {},
     };
   } catch {
     return { ...DEFAULT_TOUR_SETTINGS, excludedCountriesByDivision: {} };
   }
+}
+
+function tourSpeedMultiplier() {
+  return TOUR_SPEED_STEPS[tourSettings.speedStep].multiplier;
 }
 
 let tourSettings = loadTourSettings();
@@ -3993,7 +4024,7 @@ async function runTour(divisionKeys) {
     for (const divisionKey of divisionKeys) {
       await tourCheckpoint();
       if (isWorldTour) await tourGoToDivision(divisionKey);
-      await tourDwell(TOUR_DWELL_SECONDS);
+      await tourDwell(tourArrivalDwellSeconds());
 
       // A World tour ignores any per-division country exclusions entirely
       // (there's no picker for it — see renderTourSettingsDialog) rather
@@ -4013,7 +4044,7 @@ async function runTour(divisionKeys) {
           : CONFIG.MAX_ZOOM;
         const pins = pinsInCountryByProximity(countryName);
         await tourGoToCountry(countryName);
-        await tourDwell(TOUR_DWELL_SECONDS);
+        await tourDwell(tourArrivalDwellSeconds());
         for (const pinEntry of pins) {
           await tourCheckpoint();
           await tourGoToPin(pinEntry, pinZoom);
@@ -4260,6 +4291,8 @@ function renderTourSettingsOptionRow(container, options, currentValue, labelFor,
 // whichever division is actually queued up right now rather than whatever
 // it was the last time the dialog happened to be open.
 function renderTourSettingsDialog() {
+  document.getElementById('tour-setting-speed').value = tourSettings.speedStep;
+  document.getElementById('tour-setting-speed-value').textContent = TOUR_SPEED_STEPS[tourSettings.speedStep].label;
   renderTourSettingsOptionRow(
     document.getElementById('tour-setting-photos-per-pin'),
     TOUR_PHOTOS_PER_PIN_OPTIONS,
@@ -4343,6 +4376,11 @@ function wireTourSettingsDialog() {
     else closeTourSettingsDialog();
   });
   document.getElementById('tour-settings-close').addEventListener('click', closeTourSettingsDialog);
+  document.getElementById('tour-setting-speed').addEventListener('input', (e) => {
+    tourSettings.speedStep = Number(e.target.value);
+    saveTourSettings();
+    document.getElementById('tour-setting-speed-value').textContent = TOUR_SPEED_STEPS[tourSettings.speedStep].label;
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !document.getElementById('tour-settings-modal').hidden) closeTourSettingsDialog();
   });
