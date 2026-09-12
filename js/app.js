@@ -3007,17 +3007,25 @@ async function init() {
     // A Country Highlight Only restricted country's own synthetic stub row
     // (see listMinistriesPublic's countryHighlightStubRow) is deliberately
     // still in ministryRows above — recomputeCountriesWithVisiblePins needs
-    // it so the country highlights — but carries no real data, so every
-    // metrics count below (world, division, per-country) excludes it
-    // rather than silently padding "Countries"/"Ministry Areas" by one.
+    // it so the country highlights — but carries no real area/staff/
+    // university data, so metricsRows excludes it from those counts.
+    // "Countries" is the one figure that SHOULD still count it (the
+    // country is real and visibly on the map, just with nothing pin-level
+    // shown) — built separately from the full, unfiltered row set rather
+    // than through computeMetrics's own country-counting branch.
     const metricsRows = ministryRows.filter((row) => !row.restricted_stub);
+    function countriesMetric(rows) {
+      const countries = new Set(rows.map((r) => normalizeCountryName(r.country)).filter(Boolean));
+      return { label: pluralizeLabel(countries.size, 'Country', 'Countries'), num: countries.size };
+    }
 
-    state.worldMetrics = computeMetrics(metricsRows);
+    state.worldMetrics = [countriesMetric(ministryRows), ...computeMetrics(metricsRows, { includeCountries: false })];
     for (const key of Object.keys(DIVISIONS)) {
-      const divisionRows = metricsRows.filter(
+      const divisionRows = ministryRows.filter(
         (row) => state.countryDivisionByName.get(normalizeCountryName(row.country)) === key
       );
-      state.metricsByDivision.set(key, computeMetrics(divisionRows));
+      const divisionMetricsRows = divisionRows.filter((row) => !row.restricted_stub);
+      state.metricsByDivision.set(key, [countriesMetric(divisionRows), ...computeMetrics(divisionMetricsRows, { includeCountries: false })]);
     }
     // Same idea, one level narrower — computed for every country that has
     // at least one ministry row, not just ones with a visible pin (a
@@ -3114,9 +3122,16 @@ async function init() {
     // markers that don't have any ministries of their own yet.
     const STRICT_MARKER_DIVISIONS = new Set(['europe', 'asia']);
 
+    // Checked against state.countriesWithVisiblePins, not markersByCountry
+    // — a Country Highlight Only restricted country (see
+    // listMinistriesPublic's stub row) has zero real markers but should
+    // still count as "in frame" for its own division's zoom, same as it
+    // counts toward the Countries metric now. See the markerPoints loop
+    // below for how it also earns an actual spot in the fitted bounds
+    // despite having no real marker to anchor on.
     function divisionMarkerCountries(divisionKey) {
       const result = new Set();
-      for (const countryName of state.markersByCountry.keys()) {
+      for (const countryName of state.countriesWithVisiblePins.keys()) {
         if (state.countryDivisionByName.get(countryName) === divisionKey) result.add(countryName);
       }
       return result;
@@ -3220,6 +3235,24 @@ async function init() {
           const shift = Math.round((anchorCenterLng - ll.lng) / 360) * 360;
           markerPoints.push({ lng: ll.lng + shift, lat: ll.lat, countryName });
         }
+      }
+      // A Country Highlight Only country has no real marker to place here,
+      // but markerCountries (built from countriesWithVisiblePins) already
+      // counts it as "in frame" — without a point of its own, the
+      // containsOwnMarker check just below would still exclude every one
+      // of its pieces (unless it happened to be the anchor). Its own
+      // polygon centroid stands in, same trick countriesInDivisionByProximity
+      // uses to place a country on the map at all.
+      for (const countryName of markerCountries) {
+        if (state.markersByCountry.has(countryName)) continue;
+        let countryLayer;
+        state.geoLayer.eachLayer((layer) => {
+          if (normalizeCountryName(layer.feature.properties.name) === countryName) countryLayer = layer;
+        });
+        if (!countryLayer) continue;
+        const center = computeMainLandBounds(countryLayer.feature).getCenter();
+        const shift = Math.round((anchorCenterLng - center.lng) / 360) * 360;
+        markerPoints.push({ lng: center.lng + shift, lat: center.lat, countryName });
       }
       const MARKER_PROXIMITY_DEGREES = 15;
 
