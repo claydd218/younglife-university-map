@@ -2567,7 +2567,16 @@ async function init() {
     const [countryGeo, divisionRows, { rows: ministryRows }] = await Promise.all([
       fetchJson(CONFIG.COUNTRIES_GEOJSON_URL),
       fetchCsv(CONFIG.COUNTRY_DIVISIONS_CSV_URL),
-      fetchJson(CONFIG.MINISTRIES_API_URL),
+      // Deliberately bypasses the browser's HTTP cache — this response's
+      // Cache-Control (worker/routes/public-ministries.js) is scoped
+      // 'private, max-age=30' because it now varies by the restricted-
+      // countries unlock cookie; a plain fetch() here could otherwise
+      // serve a same-browser cached response from moments before a
+      // lock/unlock reload, showing stale restricted-country state.
+      fetch(CONFIG.MINISTRIES_API_URL, { cache: 'no-store' }).then((r) => {
+        if (!r.ok) throw new Error(`Failed to load ${CONFIG.MINISTRIES_API_URL}: ${r.status}`);
+        return r.json();
+      }),
     ]);
 
     for (const row of divisionRows) {
