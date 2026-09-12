@@ -44,6 +44,11 @@ import { getSessionUser, createSessionCookie } from './lib/session.js';
 import { siteLogin, siteLogout } from './routes/site-login.js';
 import { hasValidSiteSession, createSiteSessionCookie } from './lib/siteSession.js';
 import { MAINTENANCE_MODE } from './lib/maintenance.js';
+import { restrictedStatus, restrictedUnlock, restrictedLock } from './routes/restricted-access.js';
+import {
+  onRequestGet as restrictedAdminGet,
+  onRequestPut as restrictedAdminPut,
+} from './routes/restricted-admin.js';
 
 function jsonError(status, message) {
   return new Response(JSON.stringify({ error: 'error', message }), {
@@ -240,6 +245,11 @@ export default {
           if (method === 'DELETE') return await usersDelete({ env, params, user: sessionUser });
         }
 
+        if (pathname === '/bigtime/api/restricted-access') {
+          if (method === 'GET') return await restrictedAdminGet({ env, user: sessionUser });
+          if (method === 'PUT') return await restrictedAdminPut({ request, env, user: sessionUser });
+        }
+
         if (pathname === '/bigtime/api/upload' && method === 'POST') {
           return await uploadPost({ request, env, ctx });
         }
@@ -283,7 +293,20 @@ export default {
         }
 
         if (pathname === '/api/ministries' && method === 'GET') {
-          return await publicMinistriesGet({ env });
+          return await publicMinistriesGet({ request, env });
+        }
+
+        // Same site-gating as /api/ministries above — not in
+        // PUBLIC_SITE_PATHS, so these three inherit the existing
+        // temporary site-wide password check first.
+        if (pathname === '/api/restricted-status' && method === 'GET') {
+          return await restrictedStatus({ request, env });
+        }
+        if (pathname === '/api/restricted-unlock' && method === 'POST') {
+          return await restrictedUnlock({ request, env });
+        }
+        if (pathname === '/api/restricted-lock' && method === 'POST') {
+          return await restrictedLock();
         }
 
         // favicon.svg and apple-touch-icon.png are real site branding, not

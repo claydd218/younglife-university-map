@@ -10,6 +10,8 @@
 import { setAssignment, removeAssignment, upsertHomeStaff, staffRowsForMinistry, assignedStaffNamesForMinistry, getStaffIdByName } from './staff.js';
 import { joinParenList } from '../text.js';
 import { deletePhotoFile, deletePhotosBySlug } from '../photoCleanup.js';
+import { getRestrictedCountries } from './restrictedAccess.js';
+import { hasValidRestrictedUnlock } from '../restrictedSession.js';
 
 export class ConflictError extends Error {
   constructor(message) {
@@ -81,9 +83,19 @@ export async function listMinistries(env) {
 // js/app.js already parses exactly this shape (parseParenList, .split(';'),
 // String(is_developing) === 'true'), so this is the one place that still
 // needs the paren-list join, purely to keep that client code unchanged.
-export async function listMinistriesPublic(env) {
+// `request` is optional (undefined skips the unlock check entirely,
+// treating every restricted country as still locked) — callers that
+// genuinely have no request to check against (none exist today; kept
+// this way so a future internal/background caller doesn't need to fake
+// one) get the safe, fails-closed default rather than an error.
+export async function listMinistriesPublic(env, request) {
   const admin = await listMinistries(env);
-  return admin.map((r) => ({
+  const restricted = new Set(await getRestrictedCountries(env));
+  // Skips the unlock check entirely when nothing's actually restricted —
+  // the common case, and no reason to read/verify a cookie for it.
+  const unlocked = restricted.size === 0 || (request ? await hasValidRestrictedUnlock(request, env) : false);
+  const visible = unlocked ? admin : admin.filter((r) => !restricted.has(r.country));
+  return visible.map((r) => ({
     id: r.id,
     city: r.city,
     country: r.country,

@@ -996,6 +996,114 @@ function withSuppressedDismiss(moveFn) {
   moveFn();
 }
 
+// Top-left lock/unlock widget for restricted countries (see
+// worker/routes/restricted-access.js). Deliberately always present
+// regardless of whether any country is currently restricted — there's no
+// public "is anything restricted right now" endpoint (that would itself
+// leak which countries exist to hide), so this just reflects whatever
+// restrictedStatus reports for this visitor's own cookie.
+//
+// A page reload (not a live re-render) is used to reveal/re-hide restricted
+// content after a successful unlock/lock — everything downstream of
+// ministryRows (pins, country coloring, metrics) is built once during
+// init() with no existing "rebuild from fresh data" entry point, and this
+// action is rare/deliberate enough that a reload is a perfectly fine cost.
+function wireRestrictedAccessWidget() {
+  const widget = document.getElementById('restricted-access-widget');
+  const btn = document.getElementById('restricted-access-btn');
+  const lockedIcon = document.getElementById('restricted-access-icon-locked');
+  const unlockedIcon = document.getElementById('restricted-access-icon-unlocked');
+  const form = document.getElementById('restricted-access-form');
+  const input = document.getElementById('restricted-access-input');
+  const errorEl = document.getElementById('restricted-access-error');
+  if (!widget) return;
+
+  let unlocked = false;
+  let revealTimer = null;
+
+  function setIcon(isUnlocked) {
+    unlocked = isUnlocked;
+    lockedIcon.hidden = isUnlocked;
+    unlockedIcon.hidden = !isUnlocked;
+    btn.setAttribute('aria-label', isUnlocked ? 'Hide restricted countries' : 'Unlock restricted countries');
+    btn.title = btn.getAttribute('aria-label');
+  }
+
+  function reveal() {
+    widget.classList.add('active');
+    clearTimeout(revealTimer);
+    revealTimer = setTimeout(() => {
+      if (form.hidden) widget.classList.remove('active');
+    }, 2500);
+  }
+
+  function closeForm() {
+    form.hidden = true;
+    errorEl.hidden = true;
+    input.value = '';
+  }
+
+  widget.addEventListener('mouseenter', reveal);
+  widget.addEventListener('touchstart', reveal, { passive: true });
+  widget.addEventListener('mouseleave', () => {
+    if (form.hidden) widget.classList.remove('active');
+  });
+  document.addEventListener('click', (e) => {
+    if (!widget.contains(e.target)) {
+      closeForm();
+      widget.classList.remove('active');
+    }
+  });
+
+  btn.addEventListener('click', async () => {
+    reveal();
+    if (unlocked) {
+      // Already unlocked — this click re-locks directly, no password
+      // needed (a real padlock doesn't ask for the key to close it).
+      try {
+        await fetch('/api/restricted-lock', { method: 'POST' });
+      } catch {
+        // Nothing more useful to do — worst case the cookie just expires
+        // naturally on its own schedule instead.
+      }
+      window.location.reload();
+      return;
+    }
+    form.hidden = !form.hidden;
+    errorEl.hidden = true;
+    if (!form.hidden) input.focus();
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = input.value;
+    if (!password) return;
+    errorEl.hidden = true;
+    try {
+      const res = await fetch('/api/restricted-unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        errorEl.textContent = (body && body.message) || 'Incorrect password';
+        errorEl.hidden = false;
+        return;
+      }
+      window.location.reload();
+    } catch {
+      errorEl.textContent = 'Something went wrong — try again.';
+      errorEl.hidden = false;
+    }
+  });
+
+  fetch('/api/restricted-status', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : { unlocked: false }))
+    .then((data) => setIcon(!!data.unlocked))
+    .catch(() => setIcon(false));
+}
+
 function wireNavMenu() {
   const toggle = document.getElementById('nav-menu-toggle');
   const menu = document.getElementById('nav-menu');
@@ -2861,6 +2969,7 @@ async function init() {
     showMetricsOverlay(state.worldMetrics, null);
     wireMetricsOverlayDismiss();
     wireNavMenu();
+    wireRestrictedAccessWidget();
     wireTourControls();
     wireTourSettingsDialog();
 

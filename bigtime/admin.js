@@ -167,7 +167,7 @@ function wireTabs() {
       $('tab-admin').hidden = tab !== 'admin';
       if (tab === 'images') renderImagesTab();
       if (tab === 'log') renderLogTab();
-      if (tab === 'admin') renderAdminUsersTab();
+      if (tab === 'admin') { renderAdminUsersTab(); renderRestrictedCountriesSection(); }
     });
   });
 }
@@ -3920,6 +3920,64 @@ function wireAdminUsersTab() {
   $('admin-user-form').addEventListener('submit', saveAdminUser);
 }
 
+// --- Restricted countries -------------------------------------------------
+// Reads/writes worker/routes/restricted-admin.js. The country checklist is
+// built from whatever countries already appear in state.rows (loaded by
+// loadMinistries() at startup) rather than a server round-trip of its own —
+// there's no separate "list of all countries" concept anywhere else in the
+// app, so this just derives it the same way the Ministries filter bar's
+// country dropdown does.
+
+async function renderRestrictedCountriesSection() {
+  const list = $('restricted-countries-list');
+  list.innerHTML = '<span class="status-text">Loading…</span>';
+  try {
+    const countries = [...new Set(state.rows.map((r) => r.country).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const current = await apiFetch('/restricted-access');
+    const restricted = new Set(current.countries);
+    if (!countries.length) {
+      list.innerHTML = '<span class="status-text">No countries found yet — add a ministry area first.</span>';
+    } else {
+      list.innerHTML = countries.map((country) => `
+        <label>
+          <input type="checkbox" value="${escapeHtml(country)}" ${restricted.has(country) ? 'checked' : ''}>
+          ${escapeHtml(country)}
+        </label>
+      `).join('');
+    }
+    $('restricted-access-password').placeholder = current.passwordSet
+      ? 'Leave blank to keep the current password'
+      : 'No password set yet — restricted countries will stay locked for everyone until one is set';
+    $('restricted-access-status').textContent = '';
+  } catch (err) {
+    list.innerHTML = '';
+    $('restricted-access-status').textContent = err.message || String(err);
+  }
+}
+
+async function saveRestrictedCountries() {
+  const status = $('restricted-access-status');
+  const btn = $('restricted-access-save-btn');
+  const countries = [...document.querySelectorAll('#restricted-countries-list input[type="checkbox"]:checked')].map((cb) => cb.value);
+  const password = $('restricted-access-password').value;
+  btn.disabled = true;
+  status.textContent = 'Saving…';
+  try {
+    await apiFetch('/restricted-access', { method: 'PUT', body: JSON.stringify({ countries, password: password || undefined }) });
+    $('restricted-access-password').value = '';
+    status.textContent = 'Saved.';
+    await renderRestrictedCountriesSection();
+  } catch (err) {
+    status.textContent = err.message || String(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function wireRestrictedCountries() {
+  $('restricted-access-save-btn').addEventListener('click', saveRestrictedCountries);
+}
+
 function wireSignOut() {
   $('sign-out-btn').addEventListener('click', async () => {
     if (!window.confirm('Sign out?')) return;
@@ -3951,6 +4009,7 @@ wireOrphanedPhotosCheck();
 wireMissingPhotosCheck();
 wireDuplicatePhotosCheck();
 wireUniversityBulkUpload();
+wireRestrictedCountries();
 wireSignOut();
 checkAdminAccess();
 loadMinistries();

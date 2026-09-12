@@ -17,7 +17,15 @@
 import { jsonResponse } from '../lib/http.js';
 import { listMinistriesPublic } from '../lib/db/ministries.js';
 
-export async function onRequestGet({ env }) {
-  const rows = await listMinistriesPublic(env);
-  return jsonResponse({ rows }, { headers: { 'Cache-Control': 'public, max-age=30' } });
+export async function onRequestGet({ request, env }) {
+  const rows = await listMinistriesPublic(env, request);
+  // private, not public, now that the response can vary by the
+  // restricted-unlock cookie (see listMinistriesPublic) — a shared/CDN
+  // cache serving one visitor's unlocked response to another visitor who
+  // hasn't unlocked (or vice versa) would defeat the whole gate. Browser-
+  // level caching for this same visitor is still fine, hence max-age
+  // rather than no-store — js/app.js's own unlock/lock flow explicitly
+  // bypasses it anyway (cache: 'no-store') for the one re-fetch that
+  // actually needs guaranteed-fresh data.
+  return jsonResponse({ rows }, { headers: { 'Cache-Control': 'private, max-age=30' } });
 }
