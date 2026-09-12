@@ -1934,14 +1934,21 @@ function wireMinistryPhotoCarousel() {
     img.style.transform = '';
   }
 
-  // A gentle, randomized pan+zoom over the photo's own display duration
-  // (tourPhotoDwellSeconds — the same "Photo Display Length" setting
-  // governs both, so the motion finishes right as the photo does).
-  // MIN_SCALE is a floor, not a suggestion: object-fit:cover (see
-  // .lightbox-slide.motion-crop in style.css) already crops the photo to
-  // exactly fill its frame with zero transform, so ANY pan at scale 1
-  // would immediately expose a gap on one edge — keeping the smaller end
-  // of the zoom range comfortably above 1 is what leaves room to pan
+  // A gentle, randomized pan+zoom, running FADE_MS longer than the
+  // photo's own dwell (tourPhotoDwellSeconds — the "Photo Display
+  // Length" setting) rather than ending exactly with it. Ending exactly
+  // together meant the motion reached its own final frame and visibly
+  // stopped right as the crossfade to the next photo (or the lightbox's
+  // own close()) began, then sat frozen for that whole fade — reported
+  // as wanting constant motion instead. Running past the dwell means
+  // showIndex's crossfade (or close's own fade) always starts while this
+  // is still actively animating, so the outgoing photo keeps moving
+  // throughout its own fade instead of freezing first. MIN_SCALE is a
+  // floor, not a suggestion: object-fit:cover (see .lightbox-slide.
+  // motion-crop in style.css) already crops the photo to exactly fill
+  // its frame with zero transform, so ANY pan at scale 1 would
+  // immediately expose a gap on one edge — keeping the smaller end of
+  // the zoom range comfortably above 1 is what leaves room to pan
   // without ever doing that, on every photo this runs on regardless of
   // its own real aspect ratio.
   function applyKenBurns(slide) {
@@ -1962,7 +1969,7 @@ function wireMinistryPhotoCarousel() {
       { transform: `scale(${startScale}) translate(${(-dx).toFixed(2)}%, ${(-dy).toFixed(2)}%)` },
       { transform: `scale(${endScale}) translate(${dx.toFixed(2)}%, ${dy.toFixed(2)}%)` },
     ], {
-      duration: tourPhotoDwellSeconds() * 1000,
+      duration: tourPhotoDwellSeconds() * 1000 + FADE_MS,
       easing: 'ease-in-out',
       fill: 'forwards',
     });
