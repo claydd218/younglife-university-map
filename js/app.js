@@ -3040,11 +3040,11 @@ async function init() {
     }
     for (const [name, rows] of rowsByCountry) {
       let metrics = computeMetrics(rows, { includeCountries: false });
-      // Hide Staff and Photos mode (listMinistriesPublic's
-      // restricted_staff_mode) already zeroes out this country's own Staff
-      // count for free (staff is blanked server-side), but Universities
-      // would still show a real number — trimmed down to just Ministry
-      // Areas here so this country's overlay doesn't show anything beyond
+      // "Show Pins, Hide Photo, Staff and Universities" mode
+      // (listMinistriesPublic's restricted_staff_mode) already zeroes out
+      // this country's own Staff and Universities counts for free (both
+      // blanked server-side) — trimmed down to just Ministry Areas here
+      // regardless, so this country's overlay doesn't show anything beyond
       // "how many areas," staff or not.
       if (rows.some((r) => r.restricted_staff_mode)) {
         metrics = metrics.filter((m) => m.label.startsWith('Ministry Area'));

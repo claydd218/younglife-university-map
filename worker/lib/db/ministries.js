@@ -151,20 +151,20 @@ export async function listMinistriesPublic(env, request) {
   const unlocked = restricted.size === 0 || (request ? await hasValidRestrictedUnlock(request, env) : false);
   if (unlocked) return admin.map(packMinistryRow);
 
-  // Four restriction strengths, admin-configurable and applied uniformly
+  // Three restriction strengths, admin-configurable and applied uniformly
   // to every restricted country (not per-country) — see
   // worker/lib/db/restrictedAccess.js's RESTRICTED_MODES, most to least
   // restrictive:
-  //   full_country     — the row is omitted entirely (unchanged from
+  //   full_country      — the row is omitted entirely (unchanged from
   //                       before modes existed): no pin, no highlight, no
   //                       metrics contribution, nothing.
   //   country_highlight — every real row is dropped in favor of one
   //                       synthetic stub per country (see
   //                       countryHighlightStubRow) — the country still
   //                       highlights, nothing else does.
-  //   staff             — real row kept (pin, city, universities all show
-  //                       normally) with staff/assigned_staff and photos
-  //                       blanked.
+  //   staff             — real row kept (pin/city still show, so the area
+  //                       itself is findable) with photos, staff/
+  //                       assigned_staff, and universities all blanked.
   const mode = await getRestrictedMode(env);
   const rows = [];
   const highlightedCountries = new Set();
@@ -182,10 +182,11 @@ export async function listMinistriesPublic(env, request) {
     packed.staff = '';
     packed.assigned_staff = '';
     packed.photos = '';
+    packed.universities = '';
     // Not part of the legacy packed shape — js/app.js checks this to
     // reduce this country's own metrics overlay down to just "Ministry
-    // Areas" (staff is already correctly 0 above, but the real
-    // university count would otherwise still show).
+    // Areas" (staff and universities are already correctly 0 above, but
+    // keeping this explicit rather than relying on that incidentally).
     packed.restricted_staff_mode = 'true';
     rows.push(packed);
   }
