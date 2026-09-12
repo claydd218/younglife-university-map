@@ -232,6 +232,14 @@
           <div class="tour-settings-options" id="tour-setting-photos-per-pin"></div>
         </div>
         <div class="tour-settings-field">
+          <!-- Full Size = today's behavior (slide sized to the photo's
+               own aspect ratio). Motion = a fixed 4:3 frame with a
+               subtle randomized Ken Burns pan/zoom — see applyKenBurns
+               in js/app.js. -->
+          <span class="tour-settings-label">Photo Display</span>
+          <div class="tour-settings-options" id="tour-setting-photo-display"></div>
+        </div>
+        <div class="tour-settings-field">
           <!-- Disabled (not hidden) whenever Photos Per Pin is None — see
                renderTourSettingsDialog — since there's nothing to time,
                though the stored value still quietly governs how long the

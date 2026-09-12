@@ -1789,8 +1789,17 @@ function wireMinistryPhotoCarousel() {
     slide.style.transition = '';
   }
 
+  // Tour-only (captionActive) — a real visitor's own manual photo view
+  // always gets 'full', regardless of what a tour was last set to.
+  function motionModeActive() {
+    return captionActive && tourSettings.photoDisplay === 'motion';
+  }
+
   // Pure calculation, no DOM writes — the size `img` would render at
-  // within the 92vw/85vh bounds, computed from its own real aspect ratio.
+  // within the 92vw/85vh bounds, computed from its own real aspect ratio
+  // (or, in Motion mode, a fixed 4:3 ratio instead — see motionModeActive
+  // above and .lightbox-slide.motion-crop in style.css, which is what
+  // actually crops the photo to that frame rather than stretching it).
   // Split out from applySlideSize below so showIndex can compare an
   // incoming photo's target size against the current one *before*
   // deciding whether the arrows/close need to hide for the transition at
@@ -1804,7 +1813,7 @@ function wireMinistryPhotoCarousel() {
     const maxH = captionActive
       ? Math.max(120, captionBottomTargetY() - CAPTION_HEIGHT_ESTIMATE_PX - tourCardTopMarginPx())
       : window.innerHeight * 0.85;
-    const ratio = img.naturalWidth / img.naturalHeight;
+    const ratio = motionModeActive() ? 4 / 3 : img.naturalWidth / img.naturalHeight;
     let w = maxW;
     let h = w / ratio;
     if (h > maxH) {
@@ -1834,6 +1843,7 @@ function wireMinistryPhotoCarousel() {
   // off of. No transition on any of this — it's instant, so there's
   // nothing to read as a box visibly growing.
   function applySlideSize(slide, size) {
+    slide.classList.toggle('motion-crop', motionModeActive());
     slide.style.width = `${size.w}px`;
     slide.style.height = `${size.h}px`;
     slide.style.left = `${(window.innerWidth - size.w) / 2}px`;
@@ -1886,6 +1896,55 @@ function wireMinistryPhotoCarousel() {
     }
   }
 
+  // Ken Burns (Motion mode) — a currently-running Web Animations API
+  // Animation per slide, tracked so a later reuse of that same element
+  // (both slides are reused across every pin visit, never recreated) can
+  // .cancel() it first rather than leaving its fill:'forwards' end-state
+  // transform stuck on an element that's about to display an ordinary
+  // Full Size photo instead. Keyed by the slide element itself.
+  const kenBurnsAnimations = new WeakMap();
+
+  function resetKenBurns(slide) {
+    const anim = kenBurnsAnimations.get(slide);
+    if (anim) anim.cancel();
+    kenBurnsAnimations.delete(slide);
+    slide.style.transform = '';
+  }
+
+  // A gentle, randomized pan+zoom over the photo's own display duration
+  // (tourPhotoDwellSeconds — the same "Photo Display Length" setting
+  // governs both, so the motion finishes right as the photo does).
+  // MIN_SCALE is a floor, not a suggestion: object-fit:cover (see
+  // .lightbox-slide.motion-crop in style.css) already crops the photo to
+  // exactly fill its frame with zero transform, so ANY pan at scale 1
+  // would immediately expose a gap on one edge — keeping the smaller end
+  // of the zoom range comfortably above 1 is what leaves room to pan
+  // without ever doing that, on every photo this runs on regardless of
+  // its own real aspect ratio.
+  function applyKenBurns(slide) {
+    const MIN_SCALE = 1.08;
+    const maxScale = MIN_SCALE + 0.06 + Math.random() * 0.08; // 1.14–1.22
+    const zoomIn = Math.random() < 0.5;
+    const startScale = zoomIn ? MIN_SCALE : maxScale;
+    const endScale = zoomIn ? maxScale : MIN_SCALE;
+    // Any direction at all, including diagonals — an angle picked
+    // uniformly at random rather than choosing among a fixed set of
+    // compass directions.
+    const PAN_PCT = 2.5;
+    const angle = Math.random() * Math.PI * 2;
+    const dx = Math.cos(angle) * PAN_PCT;
+    const dy = Math.sin(angle) * PAN_PCT;
+    const anim = slide.animate([
+      { transform: `scale(${startScale}) translate(${(-dx).toFixed(2)}%, ${(-dy).toFixed(2)}%)` },
+      { transform: `scale(${endScale}) translate(${dx.toFixed(2)}%, ${dy.toFixed(2)}%)` },
+    ], {
+      duration: tourPhotoDwellSeconds() * 1000,
+      easing: 'ease-in-out',
+      fill: 'forwards',
+    });
+    kenBurnsAnimations.set(slide, anim);
+  }
+
   function renderDots() {
     dotsEl.innerHTML = '';
     const multi = photos.length > 1;
@@ -1918,6 +1977,7 @@ function wireMinistryPhotoCarousel() {
     index = i;
     resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
     const incoming = otherSlide();
+    resetKenBurns(incoming); // clear whatever this reused slide was left with from its own last turn
     incoming.src = urlFor(index);
     if (!(await whenLoaded(incoming))) {
       // Broken/missing photo file — leave the current slide showing
@@ -1949,6 +2009,7 @@ function wireMinistryPhotoCarousel() {
     }
     applySlideSize(incoming, size);
     incoming.classList.add('active');
+    if (motionModeActive()) applyKenBurns(incoming);
     activeSlide.classList.remove('active');
     activeSlide = incoming;
     renderDots();
@@ -2015,12 +2076,15 @@ function wireMinistryPhotoCarousel() {
     hideSlideInstantly(slideA);
     hideSlideInstantly(slideB);
     resetPinch();
+    resetKenBurns(slideA);
+    resetKenBurns(slideB);
     if (photos.length) {
       incoming.src = urlFor(0);
       if (await whenLoaded(incoming)) {
         applySlideSize(incoming, computeSlideSize(incoming));
         incoming.classList.add('active');
         activeSlide = incoming;
+        if (motionModeActive()) applyKenBurns(incoming);
       } else {
         // Broken/missing photo file — don't show an empty bordered frame
         // for it (see whenLoaded's own comment). Falls through to the
@@ -3934,6 +3998,13 @@ function tourArrivalDwellSeconds() {
 // for World, per its own spec (see renderTourSettingsDialog).
 const TOUR_PHOTO_SECONDS_OPTIONS = [1, 2, 3, 4, 5];
 const TOUR_PHOTOS_PER_PIN_OPTIONS = ['none', '1', '2', '3', 'all'];
+// 'full' = today's behavior, the slide sized exactly to the photo's own
+// aspect ratio. 'motion' = a fixed 4:3 frame with a subtle randomized
+// Ken Burns pan/zoom over the photo's own display duration — see
+// applyKenBurns below. Tour-only either way (captionActive) — a real
+// visitor's own manual photo view (with pinch-zoom of its own) always
+// gets 'full' regardless of this setting.
+const TOUR_PHOTO_DISPLAY_OPTIONS = ['full', 'motion'];
 // Motion speed — a few discrete notches rather than a true continuous
 // slider, applied as a flat multiplier on top of every existing tour
 // duration (tourLegDuration/tourPinLegDuration/tourCountryLegDuration's
@@ -3952,7 +4023,7 @@ const TOUR_SPEED_STEPS = [
 ];
 const DEFAULT_SPEED_STEP = 2; // 'Normal' — matches every duration constant's own tuned pace as-is
 const TOUR_SETTINGS_STORAGE_KEY = 'tourSettings.v1';
-const DEFAULT_TOUR_SETTINGS = { photoSeconds: 2, photosPerPin: 'all', speedStep: DEFAULT_SPEED_STEP };
+const DEFAULT_TOUR_SETTINGS = { photoSeconds: 2, photosPerPin: 'all', speedStep: DEFAULT_SPEED_STEP, photoDisplay: 'full' };
 
 function loadTourSettings() {
   try {
@@ -3962,6 +4033,7 @@ function loadTourSettings() {
       photoSeconds: TOUR_PHOTO_SECONDS_OPTIONS.includes(parsed.photoSeconds) ? parsed.photoSeconds : DEFAULT_TOUR_SETTINGS.photoSeconds,
       photosPerPin: TOUR_PHOTOS_PER_PIN_OPTIONS.includes(parsed.photosPerPin) ? parsed.photosPerPin : DEFAULT_TOUR_SETTINGS.photosPerPin,
       speedStep: Number.isInteger(parsed.speedStep) && TOUR_SPEED_STEPS[parsed.speedStep] ? parsed.speedStep : DEFAULT_SPEED_STEP,
+      photoDisplay: TOUR_PHOTO_DISPLAY_OPTIONS.includes(parsed.photoDisplay) ? parsed.photoDisplay : DEFAULT_TOUR_SETTINGS.photoDisplay,
       excludedCountriesByDivision: (parsed.excludedCountriesByDivision && typeof parsed.excludedCountriesByDivision === 'object') ? parsed.excludedCountriesByDivision : {},
     };
   } catch {
@@ -4318,6 +4390,17 @@ function renderTourSettingsDialog() {
     (v) => (v === 'none' ? 'None' : v === 'all' ? 'All' : v),
     (v) => {
       tourSettings.photosPerPin = v;
+      saveTourSettings();
+      renderTourSettingsDialog();
+    },
+  );
+  renderTourSettingsOptionRow(
+    document.getElementById('tour-setting-photo-display'),
+    TOUR_PHOTO_DISPLAY_OPTIONS,
+    tourSettings.photoDisplay,
+    (v) => (v === 'motion' ? 'Motion' : 'Full Size'),
+    (v) => {
+      tourSettings.photoDisplay = v;
       saveTourSettings();
       renderTourSettingsDialog();
     },

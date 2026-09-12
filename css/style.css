@@ -1245,6 +1245,17 @@ img.popup-photo {
   opacity: 1;
 }
 
+/* Motion mode (tour settings' Photo Display) — the slide's own box is a
+   fixed 4:3 frame here (computeSlideSize in js/app.js), not sized to the
+   photo's own ratio like the default `fill` above, so it needs an actual
+   crop instead of a stretch: cover fills the frame from the photo's real
+   aspect ratio, cropping whichever axis overflows, which is also exactly
+   what the Ken Burns pan/zoom (applyKenBurns) needs room to move within
+   without ever exposing an edge. */
+.lightbox-slide.motion-crop {
+  object-fit: cover;
+}
+
 /* Hidden for the duration of a photo transition (see showIndex in
    wireMinistryPhotoCarousel, which toggles .transitioning on
    .lightbox-content) — the box these anchor to resizes per active photo,
