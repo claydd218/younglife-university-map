@@ -1055,13 +1055,31 @@ function wireRestrictedAccessWidget() {
     }
   });
 
+  // These three endpoints inherit the site's own temporary whole-site
+  // password gate (worker/index.js's PUBLIC_SITE_PATHS deliberately
+  // excludes them — see worker/routes/restricted-access.js's own
+  // comment). If a visitor's site-session cookie is missing/invalid,
+  // that gate 302s to /site-login, which itself is a normal 200 HTML
+  // page — fetch() follows the redirect silently and res.ok comes back
+  // true, so without checking res.redirected here a locked-out visitor's
+  // "unlock" would look like it succeeded (and reload back to the still-
+  // locked state) instead of surfacing the real problem.
+  function sessionExpiredMessage() {
+    return 'Your session has expired — reload the page and try again.';
+  }
+
   btn.addEventListener('click', async () => {
     reveal();
     if (unlocked) {
       // Already unlocked — this click re-locks directly, no password
       // needed (a real padlock doesn't ask for the key to close it).
       try {
-        await fetch('/api/restricted-lock', { method: 'POST' });
+        const res = await fetch('/api/restricted-lock', { method: 'POST' });
+        if (res.redirected) {
+          errorEl.textContent = sessionExpiredMessage();
+          errorEl.hidden = false;
+          return;
+        }
       } catch {
         // Nothing more useful to do — worst case the cookie just expires
         // naturally on its own schedule instead.
@@ -1085,6 +1103,11 @@ function wireRestrictedAccessWidget() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       });
+      if (res.redirected) {
+        errorEl.textContent = sessionExpiredMessage();
+        errorEl.hidden = false;
+        return;
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         errorEl.textContent = (body && body.message) || 'Incorrect password';
@@ -1099,7 +1122,7 @@ function wireRestrictedAccessWidget() {
   });
 
   fetch('/api/restricted-status', { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : { unlocked: false }))
+    .then((r) => (r.ok && !r.redirected ? r.json() : { unlocked: false }))
     .then((data) => setIcon(!!data.unlocked))
     .catch(() => setIcon(false));
 }
