@@ -49,6 +49,10 @@ import {
   onRequestGet as restrictedAdminGet,
   onRequestPut as restrictedAdminPut,
 } from './routes/restricted-admin.js';
+import {
+  onRequestGet as siteAccessAdminGet,
+  onRequestPut as siteAccessAdminPut,
+} from './routes/site-access-admin.js';
 
 function jsonError(status, message) {
   return new Response(JSON.stringify({ error: 'error', message }), {
@@ -248,6 +252,11 @@ export default {
         if (pathname === '/bigtime/api/restricted-access') {
           if (method === 'GET') return await restrictedAdminGet({ env, user: sessionUser });
           if (method === 'PUT') return await restrictedAdminPut({ request, env, user: sessionUser });
+        }
+
+        if (pathname === '/bigtime/api/site-access') {
+          if (method === 'GET') return await siteAccessAdminGet({ env, user: sessionUser });
+          if (method === 'PUT') return await siteAccessAdminPut({ request, env, user: sessionUser });
         }
 
         if (pathname === '/bigtime/api/upload' && method === 'POST') {

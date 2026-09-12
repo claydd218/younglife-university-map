@@ -9,6 +9,7 @@
 
 import { checkPassword } from '../lib/session.js';
 import { createSiteSessionCookie, clearSiteSessionCookie } from '../lib/siteSession.js';
+import { getSitePassword } from '../lib/db/siteAccess.js';
 
 export async function siteLogin(request, env) {
   const form = await request.formData();
@@ -17,7 +18,12 @@ export async function siteLogin(request, env) {
   // mobile keyboard's autocomplete), and there's no legitimate reason a
   // real password here would need to start or end with whitespace.
   const password = (form.get('password') || '').trim();
-  const expected = (env.SITE_SHARED_PASSWORD || '').trim();
+  // D1's site_access takes priority once an admin has set one there (see
+  // scripts/schema-site-access.sql) — falls back to the original
+  // SITE_SHARED_PASSWORD Worker secret only when that table has no row
+  // yet, so this doesn't break the live gate the moment it deploys.
+  const dbPassword = await getSitePassword(env);
+  const expected = (dbPassword || env.SITE_SHARED_PASSWORD || '').trim();
 
   if (!checkPassword(password, expected)) {
     return Response.redirect(new URL('/site-login?error=1', request.url), 302);

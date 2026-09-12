@@ -167,7 +167,7 @@ function wireTabs() {
       $('tab-admin').hidden = tab !== 'admin';
       if (tab === 'images') renderImagesTab();
       if (tab === 'log') renderLogTab();
-      if (tab === 'admin') { renderAdminUsersTab(); renderRestrictedCountriesSection(); }
+      if (tab === 'admin') { renderAdminUsersTab(); renderRestrictedCountriesSection(); renderSiteAccessSection(); }
     });
   });
 }
@@ -3945,8 +3945,9 @@ async function renderRestrictedCountriesSection() {
         </label>
       `).join('');
     }
-    $('restricted-access-password').placeholder = current.passwordSet
-      ? 'Leave blank to keep the current password'
+    $('restricted-access-password').value = current.password || '';
+    $('restricted-access-password').placeholder = current.password
+      ? ''
       : 'No password set yet — restricted countries will stay locked for everyone until one is set';
     $('restricted-access-status').textContent = '';
   } catch (err) {
@@ -3963,8 +3964,7 @@ async function saveRestrictedCountries() {
   btn.disabled = true;
   status.textContent = 'Saving…';
   try {
-    await apiFetch('/restricted-access', { method: 'PUT', body: JSON.stringify({ countries, password: password || undefined }) });
-    $('restricted-access-password').value = '';
+    await apiFetch('/restricted-access', { method: 'PUT', body: JSON.stringify({ countries, password }) });
     status.textContent = 'Saved.';
     await renderRestrictedCountriesSection();
   } catch (err) {
@@ -3976,6 +3976,46 @@ async function saveRestrictedCountries() {
 
 function wireRestrictedCountries() {
   $('restricted-access-save-btn').addEventListener('click', saveRestrictedCountries);
+}
+
+// --- Site-wide password ---------------------------------------------------
+// Reads/writes worker/routes/site-access-admin.js — the temporary whole-
+// site password gate's password, moved out of the SITE_SHARED_PASSWORD
+// Worker secret into D1 so it's settable here instead of via wrangler.
+
+async function renderSiteAccessSection() {
+  const status = $('site-access-status');
+  try {
+    const current = await apiFetch('/site-access');
+    $('site-access-password').value = current.password || '';
+    status.textContent = '';
+  } catch (err) {
+    status.textContent = err.message || String(err);
+  }
+}
+
+async function saveSiteAccess() {
+  const status = $('site-access-status');
+  const btn = $('site-access-save-btn');
+  const password = $('site-access-password').value.trim();
+  if (!password) {
+    status.textContent = 'Password is required.';
+    return;
+  }
+  btn.disabled = true;
+  status.textContent = 'Saving…';
+  try {
+    await apiFetch('/site-access', { method: 'PUT', body: JSON.stringify({ password }) });
+    status.textContent = 'Saved.';
+  } catch (err) {
+    status.textContent = err.message || String(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function wireSiteAccess() {
+  $('site-access-save-btn').addEventListener('click', saveSiteAccess);
 }
 
 function wireSignOut() {
@@ -4010,6 +4050,7 @@ wireMissingPhotosCheck();
 wireDuplicatePhotosCheck();
 wireUniversityBulkUpload();
 wireRestrictedCountries();
+wireSiteAccess();
 wireSignOut();
 checkAdminAccess();
 loadMinistries();

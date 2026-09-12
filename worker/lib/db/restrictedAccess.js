@@ -8,7 +8,7 @@
 // request) would 500 the entire public map for however long the
 // migration lags behind the code that expects it.
 
-import { hashPassword, verifyPassword } from '../password.js';
+import { checkPassword } from '../session.js';
 
 export async function getRestrictedCountries(env) {
   try {
@@ -29,21 +29,26 @@ export async function setRestrictedCountries(env, countries) {
   return clean;
 }
 
-export async function hasRestrictedPassword(env) {
+// Stored (and returned to the admin UI) as plain text, not hashed —
+// deliberate, same tradeoff worker/lib/session.js's own SITE_SHARED_PASSWORD
+// already makes: this is one shared, low-stakes password gating a subset of
+// otherwise-public map data, not a real per-user login credential, and the
+// admin UI shows it back so there's no "leave blank to keep the current
+// one" guessing game.
+export async function getRestrictedPassword(env) {
   try {
-    const row = await env.DB.prepare('SELECT id FROM restricted_access WHERE id = 1').first();
-    return !!row;
+    const row = await env.DB.prepare('SELECT password FROM restricted_access WHERE id = 1').first();
+    return row ? row.password : '';
   } catch (err) {
-    console.error('hasRestrictedPassword (treating as unset):', err);
-    return false;
+    console.error('getRestrictedPassword (treating as unset):', err);
+    return '';
   }
 }
 
 export async function setRestrictedPassword(env, password) {
-  const hash = await hashPassword(password);
   await env.DB.prepare(
-    'INSERT INTO restricted_access (id, password_hash) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash'
-  ).bind(hash).run();
+    'INSERT INTO restricted_access (id, password) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET password = excluded.password'
+  ).bind(password).run();
 }
 
 // No password configured yet -> nothing can ever unlock (fails closed,
@@ -51,9 +56,9 @@ export async function setRestrictedPassword(env, password) {
 // restricted rather than becoming accidentally unlockable by anyone.
 export async function checkRestrictedPassword(env, password) {
   try {
-    const row = await env.DB.prepare('SELECT password_hash FROM restricted_access WHERE id = 1').first();
-    if (!row) return false;
-    return verifyPassword(password, row.password_hash);
+    const row = await env.DB.prepare('SELECT password FROM restricted_access WHERE id = 1').first();
+    if (!row || !row.password) return false;
+    return checkPassword(password, row.password);
   } catch (err) {
     console.error('checkRestrictedPassword (treating as no match):', err);
     return false;
