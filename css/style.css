@@ -405,7 +405,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
   display: none;
 }
 
-.restricted-access-form input[type="password"] {
+.restricted-access-form input[type="text"] {
   font: inherit;
   font-size: 13px;
   padding: 6px 8px;

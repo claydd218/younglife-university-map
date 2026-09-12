@@ -535,7 +535,7 @@
      (bigtime/admin.js's addStaffRow) — reads as locked, not just plain
      text, since it still looks like an input otherwise. */
   .row-meta[readonly] { background: #eee; color: #666; cursor: default; }
-  .field input[type="text"], .field input[type="number"], .field input[type="password"], .field textarea, .field input[list] {
+  .field input[type="text"], .field input[type="number"], .field textarea, .field input[list] {
     width: 100%;
     font: inherit;
     font-size: 14px;
@@ -863,7 +863,7 @@
     <div id="restricted-countries-list" class="restricted-countries-list"></div>
     <div class="field" style="max-width: 320px;">
       <label for="restricted-access-password">Set/change unlock password</label>
-      <input type="password" id="restricted-access-password" autocomplete="new-password" placeholder="Leave blank to keep the current password">
+      <input type="text" id="restricted-access-password" autocomplete="off" placeholder="Leave blank to keep the current password">
     </div>
     <div class="toolbar">
       <span id="restricted-access-status" class="status-text"></span>
@@ -934,7 +934,7 @@
         </div>
         <div class="field">
           <label for="admin-user-password">Password</label>
-          <input type="password" id="admin-user-password" autocomplete="new-password">
+          <input type="text" id="admin-user-password" autocomplete="off">
           <div class="field-note" id="admin-user-password-hint"></div>
         </div>
         <div class="field field-checkbox">

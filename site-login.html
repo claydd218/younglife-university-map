@@ -23,7 +23,7 @@
     border-radius: 4px;
     padding: 20px;
   }
-  input[type="password"] {
+  input[type="text"] {
     width: 100%;
     font: inherit;
     font-size: 15px;
@@ -59,7 +59,7 @@
   <p class="sub">This site is temporarily password-protected.</p>
   <form method="POST" action="/api/site-login">
     <div class="error" id="error" hidden>Wrong password — try again.</div>
-    <input type="password" name="password" placeholder="Password" autofocus required>
+    <input type="text" name="password" placeholder="Password" autofocus required>
     <button type="submit">Enter</button>
   </form>
   <script src="site-login.js"></script>
