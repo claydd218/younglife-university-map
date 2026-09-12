@@ -345,16 +345,18 @@ h1, h2, h3, .legend-label, .cluster-badge {
 /* Hidden by proximity, not by [hidden] — .active (set on hover/tap, see
    wireRestrictedAccessWidget in js/app.js) or the form being open keeps it
    visible; leaving the corner fades it back out via the opacity
-   transition. Deliberately understated placeholder icons — real ones are
-   being supplied separately and will just replace the two <svg> children
-   in index.html. */
+   transition. padding-right/bottom (not left/top — there's no viewport
+   room that direction anyway) enlarges the actual hover/tap target well
+   past the visible 38px button, toward the map the cursor approaches
+   from, without shifting the button's own top-left position at all — a
+   target the exact size of the button felt unresponsive, needing
+   pixel-precise aim right in the corner. */
 .restricted-access-widget {
   position: fixed;
   top: max(14px, env(safe-area-inset-top));
   left: max(16px, env(safe-area-inset-left));
   z-index: 960;
-  padding: 6px;
-  margin: -6px;
+  padding: 0 40px 40px 0;
 }
 
 .restricted-access-btn {
@@ -371,7 +373,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 300ms ease;
+  transition: opacity 100ms ease;
 }
 
 .restricted-access-widget:hover .restricted-access-btn,
@@ -391,7 +393,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
 .restricted-access-form {
   position: absolute;
   top: 44px;
-  left: 6px;
+  left: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;

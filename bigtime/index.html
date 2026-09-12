@@ -858,6 +858,18 @@
       <tbody id="admin-users-tbody"></tbody>
     </table>
 
+    <h2 class="admin-section-heading">Restricted countries</h2>
+    <p class="admin-section-note">A checked country is entirely omitted from the public map — no pins, no country color, no metrics contribution — until a visitor enters the password below. One shared password unlocks every restricted country at once.</p>
+    <div id="restricted-countries-list" class="restricted-countries-list"></div>
+    <div class="field" style="max-width: 320px;">
+      <label for="restricted-access-password">Set/change unlock password</label>
+      <input type="password" id="restricted-access-password" autocomplete="new-password" placeholder="Leave blank to keep the current password">
+    </div>
+    <div class="toolbar">
+      <span id="restricted-access-status" class="status-text"></span>
+      <button type="button" id="restricted-access-save-btn" class="btn">Save Restricted Countries</button>
+    </div>
+
     <h2 class="admin-section-heading">Data export</h2>
     <div class="toolbar">
       <span id="photos-export-status" class="status-text" hidden></span>
@@ -899,18 +911,6 @@
     </div>
     <input type="file" id="university-bulk-file-input" class="hidden-file-input" accept=".csv">
     <span id="university-bulk-status" class="status-text" hidden></span>
-
-    <h2 class="admin-section-heading">Restricted countries</h2>
-    <p class="admin-section-note">A checked country is entirely omitted from the public map — no pins, no country color, no metrics contribution — until a visitor enters the password below. One shared password unlocks every restricted country at once.</p>
-    <div id="restricted-countries-list" class="restricted-countries-list"></div>
-    <div class="field" style="max-width: 320px;">
-      <label for="restricted-access-password">Set/change unlock password</label>
-      <input type="password" id="restricted-access-password" autocomplete="new-password" placeholder="Leave blank to keep the current password">
-    </div>
-    <div class="toolbar">
-      <span id="restricted-access-status" class="status-text"></span>
-      <button type="button" id="restricted-access-save-btn" class="btn">Save Restricted Countries</button>
-    </div>
   </section>
 
   <dialog id="admin-user-dialog">
