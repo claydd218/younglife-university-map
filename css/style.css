@@ -1746,6 +1746,13 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
   margin-bottom: 6px;
 }
 
+.tour-settings-note {
+  margin: 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
 .tour-settings-options {
   display: flex;
   flex-wrap: wrap;

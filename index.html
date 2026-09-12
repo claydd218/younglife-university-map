@@ -253,13 +253,22 @@
           <span class="tour-settings-label">Photo Display Length</span>
           <div class="tour-settings-options" id="tour-setting-photo-seconds"></div>
         </div>
-        <div class="tour-settings-field" id="tour-settings-countries-field">
+        <div class="tour-settings-field">
           <span class="tour-settings-label">Select Countries</span>
-          <div class="tour-settings-country-actions">
-            <button type="button" id="tour-settings-countries-all" class="btn-link">Check All</button>
-            <button type="button" id="tour-settings-countries-none" class="btn-link">Check None</button>
+          <!-- Shown instead of the actual picker for a World tour — see
+               renderTourSettingsDialog — rather than silently hiding the
+               whole section with nothing explaining why it's missing
+               (confirmed live as genuinely confusing: reported as
+               possibly mistaking a World tour for a single-division one
+               with no picker showing up). -->
+          <p class="tour-settings-note" id="tour-settings-countries-note" hidden>Not available for a World tour — pick a specific division from the menu to choose its countries.</p>
+          <div id="tour-settings-countries-picker">
+            <div class="tour-settings-country-actions">
+              <button type="button" id="tour-settings-countries-all" class="btn-link">Check All</button>
+              <button type="button" id="tour-settings-countries-none" class="btn-link">Check None</button>
+            </div>
+            <ul class="tour-settings-country-list" id="tour-settings-country-list"></ul>
           </div>
-          <ul class="tour-settings-country-list" id="tour-settings-country-list"></ul>
         </div>
       </div>
     </div>

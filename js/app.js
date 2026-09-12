@@ -4473,9 +4473,13 @@ function renderTourSettingsDialog() {
   );
 
   // World tour (more than one division queued) has no per-country picker
-  // at all, per spec — hidden outright rather than shown-but-empty.
-  const countriesField = document.getElementById('tour-settings-countries-field');
-  countriesField.hidden = isWorldTour;
+  // at all, per spec — an explanatory note swaps in for the actual
+  // picker rather than the whole section just vanishing with nothing
+  // saying why (reported as genuinely confusing — a visitor mistaking a
+  // just-started World tour for a single-division one, since either can
+  // *look* the same for the first division it happens to visit).
+  document.getElementById('tour-settings-countries-note').hidden = !isWorldTour;
+  document.getElementById('tour-settings-countries-picker').hidden = isWorldTour;
   if (isWorldTour) return;
 
   const divisionKey = currentTourDivisionKeys[0];
