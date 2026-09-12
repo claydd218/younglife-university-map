@@ -1020,6 +1020,13 @@ function wireRestrictedAccessWidget() {
 
   let unlocked = false;
   let revealTimer = null;
+  let hoverDwellTimer = null;
+  // A normal visitor passing the cursor through this corner (reaching for
+  // a browser control, scrolling, whatever) shouldn't ever see this — only
+  // someone deliberately parking the cursor there for a beat should. The
+  // dwell lives here, not in CSS :hover (which used to reveal instantly on
+  // any passing hover), so incidental movement never triggers it at all.
+  const HOVER_DWELL_MS = 700;
 
   // Plain setAttribute/removeAttribute, not the .hidden DOM property —
   // .hidden is an HTMLElement thing; on an inline <svg> (an SVGElement) it
@@ -1055,9 +1062,16 @@ function wireRestrictedAccessWidget() {
     input.value = '';
   }
 
-  widget.addEventListener('mouseenter', reveal);
+  widget.addEventListener('mouseenter', () => {
+    clearTimeout(hoverDwellTimer);
+    hoverDwellTimer = setTimeout(reveal, HOVER_DWELL_MS);
+  });
+  // A tap is already a deliberate, precise action (unlike a mouse cursor
+  // that can drift through this corner on its way elsewhere) — no dwell
+  // needed for touch.
   widget.addEventListener('touchstart', reveal, { passive: true });
   widget.addEventListener('mouseleave', () => {
+    clearTimeout(hoverDwellTimer);
     if (form.hidden) widget.classList.remove('active');
   });
   document.addEventListener('click', (e) => {
