@@ -186,6 +186,47 @@
     <button type="button" id="tour-stop-btn" class="tour-control-btn" aria-label="Stop tour">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="currentColor"/></svg>
     </button>
+    <!-- Disabled while playing, same as Play — see updateTourControlsUI.
+         Standard gear/cog glyph, same stroke-based convention as Loop
+         above (not a filled shape like Play/Stop, since it has to read
+         as "configure" rather than "action"). -->
+    <button type="button" id="tour-settings-btn" class="tour-control-btn" aria-label="Tour settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13.09H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <!-- Tour settings dialog — same .directory-modal/.directory-card/
+       .directory-header/.directory-close pattern the search directory
+       (#directory-modal above) already uses, for a consistent look
+       without a second set of dialog styles. Populated/wired entirely
+       by js/app.js's wireTourSettingsDialog; #tour-settings-countries-
+       field is hidden outright for a World tour (currentTourDivisionKeys
+       spanning more than one division) per the user's own spec. -->
+  <div id="tour-settings-modal" class="directory-modal" hidden>
+    <div class="directory-card" role="dialog" aria-modal="true" aria-labelledby="tour-settings-title">
+      <div class="directory-header">
+        <h2 id="tour-settings-title">Tour Settings</h2>
+        <button id="tour-settings-close" class="directory-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="tour-settings-body">
+        <div class="tour-settings-field">
+          <span class="tour-settings-label">Photo Display Length</span>
+          <div class="tour-settings-options" id="tour-setting-photo-seconds"></div>
+        </div>
+        <div class="tour-settings-field">
+          <span class="tour-settings-label">Photos Per Pin</span>
+          <div class="tour-settings-options" id="tour-setting-photos-per-pin"></div>
+        </div>
+        <div class="tour-settings-field" id="tour-settings-countries-field">
+          <span class="tour-settings-label">Select Countries</span>
+          <div class="tour-settings-country-actions">
+            <button type="button" id="tour-settings-countries-all" class="btn-link">Check All</button>
+            <button type="button" id="tour-settings-countries-none" class="btn-link">Check None</button>
+          </div>
+          <ul class="tour-settings-country-list" id="tour-settings-country-list"></ul>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="vendor/leaflet/leaflet.js"></script>

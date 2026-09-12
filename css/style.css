@@ -1682,6 +1682,115 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
   color: var(--ink);
 }
 
+/* ---------- Tour settings dialog ---------- */
+/* Sits inside #tour-settings-modal's own .directory-card (see index.html
+   — same shared dialog shell the search directory uses), so only the
+   settings-specific body content needs its own rules here. */
+
+.tour-settings-body {
+  overflow-y: auto;
+  padding-top: 4px;
+}
+
+.tour-settings-field {
+  margin: 14px 0;
+}
+
+.tour-settings-field:first-child {
+  margin-top: 10px;
+}
+
+.tour-settings-label {
+  display: block;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: 'Cinzel', serif;
+  margin-bottom: 6px;
+}
+
+.tour-settings-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tour-settings-option-btn {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--parchment);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tour-settings-option-btn:hover {
+  border-color: var(--ink);
+}
+
+.tour-settings-option-btn.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--parchment);
+}
+
+.tour-settings-country-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  color: var(--ink);
+}
+
+.tour-settings-country-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-soft);
+}
+
+.tour-settings-country-item label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(59,42,26,0.06);
+}
+
+.tour-settings-country-item:last-child label {
+  border-bottom: none;
+}
+
+.tour-settings-country-item label:hover {
+  background: var(--parchment);
+}
+
+.tour-settings-country-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 640px) {

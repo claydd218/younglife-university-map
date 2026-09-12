@@ -2743,6 +2743,7 @@ async function init() {
     wireMetricsOverlayDismiss();
     wireNavMenu();
     wireTourControls();
+    wireTourSettingsDialog();
 
     wirePhotoPreview();
     wireMinistryPhotoCarousel();
@@ -3826,8 +3827,9 @@ function tourPinLandingLatLng(target, targetZoom) {
 // — exposed by wireMinistryPhotoCarousel), skipping the popup card
 // entirely, the instant the flight settles — no dwell before it starts:
 // pin motions never delay on their own, only the carousel's own viewing
-// time does (TOUR_PHOTO_DWELL_SECONDS/TOUR_PIN_NO_PHOTO_DWELL_SECONDS
-// below), same as only the division level gets a plain arrival dwell
+// time does (tourPhotoDwellSeconds() below — the user-configurable
+// "Photo Display Length" setting), same as only the division level gets
+// a plain arrival dwell
 // (TOUR_DWELL_SECONDS). open() fades the card in (with tourPinCaptionHtml's
 // flag/city caption below the photo, standing in for a popup's own <h3>),
 // steps through every photo once, then a plain close() fades it back out
@@ -3847,17 +3849,23 @@ async function tourGoToPin(entry, targetZoom) {
   if (TOUR_TESTING_SUPPRESS_CARD) return;
 
   if (window.__ministryLightbox) {
-    const photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+    let photos = (entry.row.photos || '').split(';').map((s) => s.trim()).filter(Boolean);
+    // Photos Per Pin: 'none' behaves exactly like a pin with no photos at
+    // all (see tourPhotoDwellSeconds' own comment — same dwell either
+    // way); 'all' is the unlimited default; '1'/'2'/'3' caps to that many
+    // of the ministry's own photos, in their existing order.
+    if (tourSettings.photosPerPin === 'none') photos = [];
+    else if (tourSettings.photosPerPin !== 'all') photos = photos.slice(0, Number(tourSettings.photosPerPin));
     const captionHtml = tourPinCaptionHtml(entry.row);
     await window.__ministryLightbox.open(photos, captionHtml);
     if (photos.length) {
-      await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
+      await tourDwell(tourPhotoDwellSeconds());
       for (let i = 1; i < photos.length; i++) {
         window.__ministryLightbox.showNext();
-        await tourDwell(TOUR_PHOTO_DWELL_SECONDS);
+        await tourDwell(tourPhotoDwellSeconds());
       }
     } else {
-      await tourDwell(TOUR_PIN_NO_PHOTO_DWELL_SECONDS);
+      await tourDwell(tourPhotoDwellSeconds());
     }
     window.__ministryLightbox.close();
   }
@@ -3894,17 +3902,51 @@ async function tourDwell(seconds) {
 // to retune the pacing.
 const TOUR_DWELL_SECONDS = 1;
 
-// How long each of a ministry's photos stays up in the fullscreen
-// lightbox during a pin visit (tourGoToPin) — its own constant since
-// there's actual content (a photo) to look at, unlike the division/
-// country arrival dwells above.
-const TOUR_PHOTO_DWELL_SECONDS = 2;
+// --- Tour settings (gear icon on #tour-controls) ------------------------
+// Persisted per-browser (localStorage), not per-session — a visitor's
+// chosen pace/photo count/country picks survive their next visit.
+// excludedCountriesByDivision is keyed by division key so each division's
+// exclusions are remembered independently; a World tour (more than one
+// division queued) never reads it at all — there's no per-country picker
+// for World, per its own spec (see renderTourSettingsDialog).
+const TOUR_PHOTO_SECONDS_OPTIONS = [1, 2, 3, 4, 5];
+const TOUR_PHOTOS_PER_PIN_OPTIONS = ['none', '1', '2', '3', 'all'];
+const TOUR_SETTINGS_STORAGE_KEY = 'tourSettings.v1';
+const DEFAULT_TOUR_SETTINGS = { photoSeconds: 2, photosPerPin: 'all' };
 
-// How long tourGoToPin holds on the header-only lightbox (no photos to
-// cycle through) before shrinking back into the pin — its own tunable
-// value, independent of TOUR_PHOTO_DWELL_SECONDS, since it's a much
-// quicker read (just a name/country, not a photo).
-const TOUR_PIN_NO_PHOTO_DWELL_SECONDS = 2;
+function loadTourSettings() {
+  try {
+    const raw = localStorage.getItem(TOUR_SETTINGS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      photoSeconds: TOUR_PHOTO_SECONDS_OPTIONS.includes(parsed.photoSeconds) ? parsed.photoSeconds : DEFAULT_TOUR_SETTINGS.photoSeconds,
+      photosPerPin: TOUR_PHOTOS_PER_PIN_OPTIONS.includes(parsed.photosPerPin) ? parsed.photosPerPin : DEFAULT_TOUR_SETTINGS.photosPerPin,
+      excludedCountriesByDivision: (parsed.excludedCountriesByDivision && typeof parsed.excludedCountriesByDivision === 'object') ? parsed.excludedCountriesByDivision : {},
+    };
+  } catch {
+    return { ...DEFAULT_TOUR_SETTINGS, excludedCountriesByDivision: {} };
+  }
+}
+
+let tourSettings = loadTourSettings();
+
+function saveTourSettings() {
+  try {
+    localStorage.setItem(TOUR_SETTINGS_STORAGE_KEY, JSON.stringify(tourSettings));
+  } catch {
+    // Private browsing / storage disabled — settings just won't survive a
+    // reload, no worse off than before this feature existed.
+  }
+}
+
+// How long each of a ministry's photos stays up in the fullscreen
+// lightbox during a pin visit (tourGoToPin), and (same value — there's
+// only one "Photo Display Length" setting, not two) how long it holds on
+// the header-only lightbox when there are no photos to cycle through
+// (either a genuinely photo-less ministry, or Photos Per Pin: None).
+function tourPhotoDwellSeconds() {
+  return tourSettings.photoSeconds;
+}
 
 // TESTING ONLY — see its one use in tourGoToPin above. Flip to true to
 // evaluate pin flight/landing motion in isolation again, with the
@@ -3953,7 +3995,12 @@ async function runTour(divisionKeys) {
       if (isWorldTour) await tourGoToDivision(divisionKey);
       await tourDwell(TOUR_DWELL_SECONDS);
 
-      const countries = countriesInDivisionByProximity(divisionKey);
+      // A World tour ignores any per-division country exclusions entirely
+      // (there's no picker for it — see renderTourSettingsDialog) rather
+      // than sometimes-honoring one division's own saved picks and not
+      // another's, which would read as an unpredictable bug.
+      const excluded = isWorldTour ? null : new Set(tourSettings.excludedCountriesByDivision[divisionKey] || []);
+      const countries = countriesInDivisionByProximity(divisionKey).filter((name) => !excluded || !excluded.has(name));
       for (const countryName of countries) {
         await tourCheckpoint();
         // One step in from tourGoToCountry's own zoom, not the same
@@ -4011,6 +4058,10 @@ function updateTourControlsUI() {
   const loopBtn = document.getElementById('tour-loop-btn');
   loopBtn.classList.toggle('active', tourController.loop);
   loopBtn.setAttribute('aria-pressed', String(tourController.loop));
+  // Settings only ever apply to the next Play press, never splicing into
+  // a run already in motion — disabled while playing, same as Play
+  // itself, rather than letting it open and silently do nothing useful.
+  document.getElementById('tour-settings-btn').disabled = playing;
 }
 
 // "A couple of seconds" of no interaction fades the controls out during
@@ -4180,6 +4231,116 @@ function wireTourControls() {
   document.addEventListener('mousemove', () => {
     showTourControlsNow();
     if (tourController.state === 'playing') scheduleTourControlsHide();
+  });
+}
+
+// Builds one row of pill buttons (Photo Display Length / Photos Per Pin)
+// — shared since both are "pick one of a fixed list" the same way.
+function renderTourSettingsOptionRow(container, options, currentValue, labelFor, onPick) {
+  container.innerHTML = '';
+  options.forEach((value) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tour-settings-option-btn';
+    btn.classList.toggle('active', value === currentValue);
+    btn.textContent = labelFor(value);
+    btn.addEventListener('click', () => onPick(value));
+    container.appendChild(btn);
+  });
+}
+
+// Re-run every time the dialog opens (and after any change inside it) —
+// cheap enough, and means the Select Countries list is always current for
+// whichever division is actually queued up right now rather than whatever
+// it was the last time the dialog happened to be open.
+function renderTourSettingsDialog() {
+  renderTourSettingsOptionRow(
+    document.getElementById('tour-setting-photo-seconds'),
+    TOUR_PHOTO_SECONDS_OPTIONS,
+    tourSettings.photoSeconds,
+    (v) => `${v}s`,
+    (v) => {
+      tourSettings.photoSeconds = v;
+      saveTourSettings();
+      renderTourSettingsDialog();
+    },
+  );
+  renderTourSettingsOptionRow(
+    document.getElementById('tour-setting-photos-per-pin'),
+    TOUR_PHOTOS_PER_PIN_OPTIONS,
+    tourSettings.photosPerPin,
+    (v) => (v === 'none' ? 'None' : v === 'all' ? 'All' : v),
+    (v) => {
+      tourSettings.photosPerPin = v;
+      saveTourSettings();
+      renderTourSettingsDialog();
+    },
+  );
+
+  // World tour (more than one division queued) has no per-country picker
+  // at all, per spec — hidden outright rather than shown-but-empty.
+  const countriesField = document.getElementById('tour-settings-countries-field');
+  const isWorldTour = !currentTourDivisionKeys || currentTourDivisionKeys.length > 1;
+  countriesField.hidden = isWorldTour;
+  if (isWorldTour) return;
+
+  const divisionKey = currentTourDivisionKeys[0];
+  const countries = countriesInDivisionByProximity(divisionKey).slice().sort();
+  const excluded = new Set(tourSettings.excludedCountriesByDivision[divisionKey] || []);
+  const list = document.getElementById('tour-settings-country-list');
+  list.innerHTML = '';
+  countries.forEach((name) => {
+    const item = document.createElement('li');
+    item.className = 'tour-settings-country-item';
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = !excluded.has(name);
+    checkbox.addEventListener('change', () => {
+      const current = new Set(tourSettings.excludedCountriesByDivision[divisionKey] || []);
+      if (checkbox.checked) current.delete(name); else current.add(name);
+      tourSettings.excludedCountriesByDivision[divisionKey] = Array.from(current);
+      saveTourSettings();
+    });
+    label.append(checkbox, document.createTextNode(name));
+    item.appendChild(label);
+    list.appendChild(item);
+  });
+}
+
+function openTourSettingsDialog() {
+  renderTourSettingsDialog();
+  document.getElementById('tour-settings-modal').hidden = false;
+}
+function closeTourSettingsDialog() {
+  document.getElementById('tour-settings-modal').hidden = true;
+}
+
+// Same backdrop-click/Escape pattern wireDirectoryControls already uses
+// for #directory-modal — kept as its own function (rather than folded
+// into wireTourControls) since it's dialog wiring, not playback control
+// wiring.
+function wireTourSettingsDialog() {
+  document.getElementById('tour-settings-btn').addEventListener('click', openTourSettingsDialog);
+  document.getElementById('tour-settings-close').addEventListener('click', closeTourSettingsDialog);
+  document.getElementById('tour-settings-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'tour-settings-modal') closeTourSettingsDialog();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('tour-settings-modal').hidden) closeTourSettingsDialog();
+  });
+  document.getElementById('tour-settings-countries-all').addEventListener('click', () => {
+    if (!currentTourDivisionKeys || currentTourDivisionKeys.length > 1) return;
+    delete tourSettings.excludedCountriesByDivision[currentTourDivisionKeys[0]];
+    saveTourSettings();
+    renderTourSettingsDialog();
+  });
+  document.getElementById('tour-settings-countries-none').addEventListener('click', () => {
+    if (!currentTourDivisionKeys || currentTourDivisionKeys.length > 1) return;
+    const divisionKey = currentTourDivisionKeys[0];
+    tourSettings.excludedCountriesByDivision[divisionKey] = countriesInDivisionByProximity(divisionKey).slice();
+    saveTourSettings();
+    renderTourSettingsDialog();
   });
 }
 
