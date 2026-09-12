@@ -133,6 +133,13 @@ function countryHighlightStubRow(country) {
     video_url: '',
     video_label: '',
     updated_at: '',
+    // Not part of the legacy packed shape — an extra field js/app.js
+    // checks to exclude this row from every metrics count (world,
+    // division, and per-country) while still letting it register in
+    // recomputeCountriesWithVisiblePins for the country's own highlight.
+    // Without this a restricted country would silently pad "Countries"
+    // and "Ministry Areas" by one with data that isn't real.
+    restricted_stub: 'true',
   };
 }
 

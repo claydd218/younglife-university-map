@@ -3004,9 +3004,17 @@ async function init() {
     buildDirectory();
     wireDirectoryControls();
 
-    state.worldMetrics = computeMetrics(ministryRows);
+    // A Country Highlight Only restricted country's own synthetic stub row
+    // (see listMinistriesPublic's countryHighlightStubRow) is deliberately
+    // still in ministryRows above — recomputeCountriesWithVisiblePins needs
+    // it so the country highlights — but carries no real data, so every
+    // metrics count below (world, division, per-country) excludes it
+    // rather than silently padding "Countries"/"Ministry Areas" by one.
+    const metricsRows = ministryRows.filter((row) => !row.restricted_stub);
+
+    state.worldMetrics = computeMetrics(metricsRows);
     for (const key of Object.keys(DIVISIONS)) {
-      const divisionRows = ministryRows.filter(
+      const divisionRows = metricsRows.filter(
         (row) => state.countryDivisionByName.get(normalizeCountryName(row.country)) === key
       );
       state.metricsByDivision.set(key, computeMetrics(divisionRows));
@@ -3017,7 +3025,7 @@ async function init() {
     // country that's already confirmed to have visible pins, but computing
     // the full set here up front is simpler than special-casing that).
     const rowsByCountry = new Map();
-    for (const row of ministryRows) {
+    for (const row of metricsRows) {
       const name = normalizeCountryName(row.country);
       if (!rowsByCountry.has(name)) rowsByCountry.set(name, []);
       rowsByCountry.get(name).push(row);
