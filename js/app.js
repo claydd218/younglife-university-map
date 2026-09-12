@@ -4181,12 +4181,18 @@ async function runTour(divisionKeys) {
       const countries = countriesInDivisionByProximity(divisionKey).filter((name) => !excluded || !excluded.has(name));
       for (const countryName of countries) {
         await tourCheckpoint();
-        // EXPERIMENTAL: pins visited at the country's own zoom level now,
-        // not one step in from it — was Math.min(countryInfo.targetZoom
-        // + 1, map.getMaxZoom()), trying the plain countryInfo.targetZoom
-        // instead to see how that reads.
+        // Tied to Skip Country View rather than its own separate setting
+        // (deliberately not exposing both): with the wide country view
+        // skipped, pins are visited at the country's own zoom level —
+        // one step in reads as too tight with no wider view beforehand
+        // to place them against. With the wide view still shown, pins
+        // step in one level from it, close enough to read them a little
+        // more clearly while cycling through, without zooming in as far
+        // as CONFIG.MAX_ZOOM (see tourGoToPin's own comment on that).
         const countryInfo = countryBoundsAndZoom(countryName);
-        const pinZoom = countryInfo ? countryInfo.targetZoom : CONFIG.MAX_ZOOM;
+        const pinZoom = countryInfo
+          ? (tourSettings.skipCountryView ? countryInfo.targetZoom : Math.min(countryInfo.targetZoom + 1, map.getMaxZoom()))
+          : CONFIG.MAX_ZOOM;
         const pins = pinsInCountryByProximity(countryName);
         if (tourSettings.skipCountryView) {
           tourPrepCountrySkipView(countryName);
