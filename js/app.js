@@ -1875,15 +1875,16 @@ function wireMinistryPhotoCarousel() {
   const CAPTION_PHOTO_OVERLAP_PX = 2;
 
   // The Y (viewport px) the caption's own bottom edge — and its tip —
-  // should land on: a fixed gap above the exact spot tourPinLandingLatLng
-  // (js/app.js, far below) already aims the pin itself at ("low-center on
-  // screen, just above the tour-controls bar"). Keeping the card up here
-  // rather than centered on screen is what leaves the pin visible below
-  // it, with the tip visually pointing down at it — same relationship a
-  // real Leaflet popup has with its own marker.
+  // should land on: a fixed gap above tourPinAnchorScreenY (js/app.js, far
+  // below) — the exact same point tourPinLandingLatLng already aims the
+  // pin itself at, so the tip keeps pointing down at it whether that's the
+  // far-low position (a photo's coming, filling the space above) or the
+  // lower-middle one (no photo — see that function's own comment). Keeping
+  // the card up here rather than centered on screen is what leaves the pin
+  // visible below it, with the tip visually pointing down at it — same
+  // relationship a real Leaflet popup has with its own marker.
   function captionBottomTargetY() {
-    const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
-    return controlsRect.top - 24 - CAPTION_TIP_CLEARANCE_PX;
+    return tourPinAnchorScreenY(!!photos.length) - CAPTION_TIP_CLEARANCE_PX;
   }
 
   function urlFor(i) { return CONFIG.IMAGES_DIR + photos[i]; }
@@ -4071,18 +4072,44 @@ function tourPinCaptionHtml(row) {
   return `${flag ? `${flag} ` : ''}${escapeHtml(row.city)}`;
 }
 
+// Shared reference point for both the pin's own on-screen landing Y (right
+// below) and the photo carousel's caption target Y (captionBottomTargetY,
+// in wireMinistryPhotoCarousel) — both need to agree on the same point so
+// the caption's downward tip keeps pointing at the actual pin regardless
+// of which of the two positions is in play. "Far low," just above the
+// tour-controls bar, leaves room above the caption for a photo to fill;
+// with no photo coming, that space would otherwise sit empty above a tiny
+// caption hugging the bottom edge, so the pair is lifted to a less
+// extreme, lower-middle point instead — still in the lower half of the
+// screen (not dead-centered, where the caption's tip already points), just
+// not crammed into the very bottom.
+function tourPinAnchorScreenY(willShowPhotos) {
+  const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
+  const farLowY = controlsRect.top - 24; // 24px clearance above the controls bar
+  if (willShowPhotos) return farLowY;
+  return (map.getSize().y / 2 + farLowY) / 2;
+}
+
+// Whether entry.row's photos will actually show for this pin's stop —
+// same photosPerPin logic tourGoToPin applies to build its real photos
+// list, just needed earlier (before that flight even starts) to pick the
+// right landing spot. Only cares whether the list ends up non-empty, so
+// the '1'/'2'/'3' cap doesn't need replicating here.
+function tourPinWillShowPhotos(row) {
+  if (tourSettings.photosPerPin === 'none') return false;
+  return (row.photos || '').split(';').map((s) => s.trim()).filter(Boolean).length > 0;
+}
+
 // Landing spot for a pin visit isn't the pin's own lat/lng — that would
 // center it in the middle of the screen, right where the caption's own
 // tip (see captionBottomTargetY) points down at it from above. Instead,
-// fly to a point shifted far enough north (at the target zoom) that the
-// pin itself ends up low-center on screen, just above the tour-controls
-// bar. Computed via project/unproject at the target zoom rather than a
-// fixed lat/lng offset, since the same screen-pixel gap means a
-// different real-world distance depending on zoom.
-function tourPinLandingLatLng(target, targetZoom) {
+// fly to a point shifted north (at the target zoom) that lands the pin at
+// tourPinAnchorScreenY. Computed via project/unproject at the target zoom
+// rather than a fixed lat/lng offset, since the same screen-pixel gap
+// means a different real-world distance depending on zoom.
+function tourPinLandingLatLng(target, targetZoom, willShowPhotos) {
   const mapSize = map.getSize();
-  const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
-  const desiredScreenY = controlsRect.top - 24; // 24px clearance above the controls bar
+  const desiredScreenY = tourPinAnchorScreenY(willShowPhotos);
   const targetPoint = map.project(target, targetZoom);
   const centerPoint = targetPoint.add([0, mapSize.y / 2 - desiredScreenY]);
   return map.unproject(centerPoint, targetZoom);
@@ -4112,8 +4139,9 @@ function tourPinLandingLatLng(target, targetZoom) {
 async function tourGoToPin(entry, targetZoom) {
   const target = entry.marker.getLatLng();
   const duration = tourPinLegDuration(target, targetZoom);
+  const willShowPhotos = tourPinWillShowPhotos(entry.row);
   await tourFlyToAndWait(() => {
-    const landing = tourPinLandingLatLng(target, targetZoom);
+    const landing = tourPinLandingLatLng(target, targetZoom, willShowPhotos);
     map.flyTo(landing, targetZoom, { duration });
   }, duration);
 
