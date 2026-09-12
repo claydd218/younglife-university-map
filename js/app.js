@@ -4181,14 +4181,12 @@ async function runTour(divisionKeys) {
       const countries = countriesInDivisionByProximity(divisionKey).filter((name) => !excluded || !excluded.has(name));
       for (const countryName of countries) {
         await tourCheckpoint();
-        // One step in from tourGoToCountry's own zoom, not the same
-        // level — close enough to read individual pins a little more
-        // clearly while cycling through them, without zooming in as far
-        // as CONFIG.MAX_ZOOM (see tourGoToPin's own comment on that).
+        // EXPERIMENTAL: pins visited at the country's own zoom level now,
+        // not one step in from it — was Math.min(countryInfo.targetZoom
+        // + 1, map.getMaxZoom()), trying the plain countryInfo.targetZoom
+        // instead to see how that reads.
         const countryInfo = countryBoundsAndZoom(countryName);
-        const pinZoom = countryInfo
-          ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
-          : CONFIG.MAX_ZOOM;
+        const pinZoom = countryInfo ? countryInfo.targetZoom : CONFIG.MAX_ZOOM;
         const pins = pinsInCountryByProximity(countryName);
         if (tourSettings.skipCountryView) {
           tourPrepCountrySkipView(countryName);
