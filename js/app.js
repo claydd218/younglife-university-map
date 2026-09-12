@@ -4068,10 +4068,10 @@ async function runTour(divisionKeys) {
     if (!tourController.loop) break;
   }
   // Reaching the end of a non-looping run is its own kind of stop — same
-  // cleanup stopTour's Stop button triggers, just arrived at naturally
-  // instead of by interrupting mid-flight — except the controls stay up
-  // afterward, ready to play again, rather than vanishing like an
-  // explicit Stop (see endTourInPlace's own comment on keepControlsVisible).
+  // cleanup stopTour's Stop button triggers (including keeping the
+  // controls up, ready to play again — see endTourInPlace's own comment
+  // on keepControlsVisible), just arrived at naturally instead of by
+  // interrupting mid-flight.
   endTourInPlace(true);
 }
 
@@ -4194,18 +4194,22 @@ function toggleTourLoop() {
 // specifically (unlike runTour's own natural end, which never did — see
 // endTourInPlace's own comment), but that read as the tour taking one
 // more action after being told to stop, not actually stopping.
+// Deliberately keeps the controls visible (keepControlsVisible=true) —
+// Stop used to also function as a close, but that's no longer how it
+// works: it only stops playback now, same resting state as a run ending
+// on its own. Tapping elsewhere (hideTourControlsIfNotPlaying, via
+// wireMetricsOverlayDismiss) is the only way to actually dismiss the bar.
 function stopTour() {
-  endTourInPlace();
+  endTourInPlace(true);
 }
 
-// keepControlsVisible: true only for a non-looping run's own natural end
-// (see runTour) — unlike an explicit Stop (which functions as a close,
-// per stopTour's own comment) or navigating away via the nav menu
-// (wireNavMenu), finishing on its own is a natural resting point the
-// same tour could just be played again from, so the controls stay up
-// (Play re-enabled, Stop disabled) instead of vanishing — picking
-// World/a division again is still what re-summons them if they ever do
-// get dismissed some other way.
+// keepControlsVisible: true for both an explicit Stop (see stopTour's own
+// comment) and a non-looping run's own natural end (see runTour) — either
+// way it's a resting point the same tour could just be played again from,
+// so the controls stay up (Play re-enabled, Stop disabled) instead of
+// vanishing. Only navigating away via the nav menu (wireNavMenu) or
+// tapping elsewhere while stopped (hideTourControlsIfNotPlaying) actually
+// dismisses them now.
 function endTourInPlace(keepControlsVisible = false) {
   tourController.state = 'stopped';
   // The fullscreen lightbox (tourGoToPin's own open() call) can still
