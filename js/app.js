@@ -2160,7 +2160,15 @@ function wireMinistryPhotoCarousel() {
     // next time this runs, when there's no active fade to interrupt.
     captionEl.classList.remove('visible');
     activeImg = null;
-    captionEl.innerHTML = '';
+    // NOT cleared here — same reasoning as skipping captionEl.hidden
+    // above: this text is still visibly fading out along with the box
+    // for the next several hundred ms (the .visible removal's own
+    // opacity transition), and wiping it synchronously left the box
+    // fading out empty, text gone a beat before the box was — reported
+    // as a half-empty caption right before it fully disappeared. open()
+    // already resets innerHTML on every real reveal (either the new
+    // caption or clearing it if there's none), so there's nothing here
+    // that actually needs resetting early.
     captionActive = false;
   }
 
