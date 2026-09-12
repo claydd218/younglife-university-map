@@ -206,6 +206,10 @@
     <!-- Pause removed for now (problematic — see js/app.js's pauseTour,
          left in place since the button is the only thing pulled out
          here) — may come back later. -->
+    <!-- Real vector data (svgrepo.com "stop" icon), native 32x32 viewBox. -->
+    <button type="button" id="tour-stop-btn" class="tour-control-btn" aria-label="Stop tour">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M5.92 24.096q0 0.832 0.576 1.408t1.44 0.608h16.128q0.832 0 1.44-0.608t0.576-1.408v-16.16q0-0.832-0.576-1.44t-1.44-0.576h-16.128q-0.832 0-1.44 0.576t-0.576 1.44v16.16z"/></svg>
+    </button>
     <button type="button" id="tour-loop-btn" class="tour-control-btn" aria-label="Loop" aria-pressed="false">
       <!-- Real vector data this time, not hand-derived arcs — the glyph
            path from the Twemoji "repeat button" emoji (🔁, CC-BY 4.0),
@@ -213,10 +217,6 @@
            supplies its own. Native 36x36 viewBox; .tour-control-btn svg
            scales any viewBox to the same 22x22 as every other icon here. -->
       <svg viewBox="0 0 36 36" aria-hidden="true"><path fill="currentColor" d="M30.2 10L23 4v4h-8C9.477 8 5 12.477 5 18c0 1.414.297 2.758.827 3.978l3.3-2.75A6 6 0 0 1 15 12h8v4l7.2-6zm-.026 4.023l-3.301 2.75A6 6 0 0 1 21 24h-8v-4l-7.2 6l7.2 6v-4h8c5.522 0 10-4.478 10-10a9.965 9.965 0 0 0-.826-3.977z"/></svg>
-    </button>
-    <!-- Real vector data (svgrepo.com "stop" icon), native 32x32 viewBox. -->
-    <button type="button" id="tour-stop-btn" class="tour-control-btn" aria-label="Stop tour">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M5.92 24.096q0 0.832 0.576 1.408t1.44 0.608h16.128q0.832 0 1.44-0.608t0.576-1.408v-16.16q0-0.832-0.576-1.44t-1.44-0.576h-16.128q-0.832 0-1.44 0.576t-0.576 1.44v16.16z"/></svg>
     </button>
     <!-- Disabled while playing, same as Play — see updateTourControlsUI.
          Real vector data (svgrepo.com "settings" icon: a circle + gear
