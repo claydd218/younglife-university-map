@@ -181,18 +181,21 @@
          left in place since the button is the only thing pulled out
          here) — may come back later. -->
     <button type="button" id="tour-loop-btn" class="tour-control-btn" aria-label="Loop" aria-pressed="false">
-      <!-- Back to a true circle (like the original single-arrow refresh
-           icon this whole thing started as), just split into two
-           symmetric ~150° arcs instead of one ~300° arc — one arrowhead
-           each, stroke-based/thin like the original rather than the
-           filled racetrack attempts that preceded this. The bottom arc
-           + arrowhead is exactly the top one rotated 180° about the
-           icon's own center. -->
+      <!-- True circle, split into two symmetric 120° arcs with a real
+           60° gap on each side (up from the first two-arrow attempt's
+           30°) — one arrowhead each, stroke-based/thin like the
+           original single-arrow refresh icon this started as. Each
+           arrowhead is a properly constructed triangle aligned to the
+           arc's own tangent direction at that endpoint (computed, not
+           eyeballed — the previous attempt's triangles weren't actually
+           tangent to the curve, which read as "angled oddly"). The
+           bottom arc + arrowhead is exactly the top one rotated 180°
+           about the icon's own center. -->
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-        <path d="M4.27,9.93 A8,8 0 0 1 19.73,9.93"/>
-        <polygon points="23,11 18,7.5 19,13" fill="currentColor" stroke="none"/>
-        <path d="M19.73,14.07 A8,8 0 0 1 4.27,14.07"/>
-        <polygon points="1,13 6,16.5 5,11" fill="currentColor" stroke="none"/>
+        <path d="M5.07,8 A8,8 0 0 1 18.93,8"/>
+        <polygon points="20.9,11.5 16.3,9.5 21.5,6.5" fill="currentColor" stroke="none"/>
+        <path d="M18.93,16 A8,8 0 0 1 5.07,16"/>
+        <polygon points="3.1,12.5 7.7,14.5 2.5,17.5" fill="currentColor" stroke="none"/>
       </svg>
     </button>
     <button type="button" id="tour-stop-btn" class="tour-control-btn" aria-label="Stop tour">
