@@ -181,7 +181,12 @@
          left in place since the button is the only thing pulled out
          here) — may come back later. -->
     <button type="button" id="tour-loop-btn" class="tour-control-btn" aria-label="Loop" aria-pressed="false">
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.7-6"/><polyline points="20 4 20 9 15 9"/></svg>
+      <!-- Classic two-arrow "repeat" racetrack glyph (filled, like Play/
+           Stop — not stroke-based like the circular-arrow icon this
+           replaced) — a stadium-shaped outline with a triangular
+           arrowhead breaking each long side, same convention every
+           media-player repeat icon uses. -->
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="7" fill="none" stroke="currentColor" stroke-width="3.4"/><polygon points="16,2.5 22,7 16,11.5" fill="currentColor"/><polygon points="8,21.5 2,17 8,12.5" fill="currentColor"/></svg>
     </button>
     <button type="button" id="tour-stop-btn" class="tour-control-btn" aria-label="Stop tour">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" fill="currentColor"/></svg>
