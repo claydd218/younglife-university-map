@@ -4211,13 +4211,26 @@ async function runTour(divisionKeys) {
         // deliberately not called here for now.
       }
 
+      // Skipped while looping — checked live here, not a value captured
+      // once, since Loop can be toggled mid-tour: turning it off is what
+      // makes the very next one of these actually show, landing the tour
+      // on a natural resting point right as the current division/pass
+      // finishes instead of only ever taking effect on the next full
+      // Play. While looping, this division's own last pin flies straight
+      // into whatever's next (the next division's own tourGoToDivision
+      // arrival for a World tour, still unconditional; straight back into
+      // this same division's first country for a single-division tour,
+      // same as tourGoToDivision already being skipped there every pass)
+      // rather than stepping back to survey the division first. A
+      // non-looping run always shows it — that's this division's (or the
+      // whole tour's, for the last one) own natural conclusion.
       await tourCheckpoint();
-      await tourGoToDivisionOverview(divisionKey);
+      if (!tourController.loop) await tourGoToDivisionOverview(divisionKey);
     }
 
     if (isWorldTour) {
       await tourCheckpoint();
-      await tourGoToWorld();
+      if (!tourController.loop) await tourGoToWorld();
     }
 
     if (!tourController.loop) break;
