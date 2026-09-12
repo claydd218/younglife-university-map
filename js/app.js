@@ -4098,6 +4098,11 @@ function hideTourControlsIfNotPlaying() {
 }
 
 function playTour() {
+  // The settings dialog is only ever reachable while stopped (its own
+  // gear button disables while playing), but it can still be sitting
+  // open the moment Play is pressed — close it here rather than leaving
+  // it up over a tour that's now actually moving.
+  closeTourSettingsDialog();
   if (tourController.state === 'paused') {
     tourController.state = 'playing';
     document.body.classList.add('tour-active');
@@ -4236,13 +4241,14 @@ function wireTourControls() {
 
 // Builds one row of pill buttons (Photo Display Length / Photos Per Pin)
 // — shared since both are "pick one of a fixed list" the same way.
-function renderTourSettingsOptionRow(container, options, currentValue, labelFor, onPick) {
+function renderTourSettingsOptionRow(container, options, currentValue, labelFor, onPick, disabled = false) {
   container.innerHTML = '';
   options.forEach((value) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'tour-settings-option-btn';
     btn.classList.toggle('active', value === currentValue);
+    btn.disabled = disabled;
     btn.textContent = labelFor(value);
     btn.addEventListener('click', () => onPick(value));
     container.appendChild(btn);
@@ -4255,17 +4261,6 @@ function renderTourSettingsOptionRow(container, options, currentValue, labelFor,
 // it was the last time the dialog happened to be open.
 function renderTourSettingsDialog() {
   renderTourSettingsOptionRow(
-    document.getElementById('tour-setting-photo-seconds'),
-    TOUR_PHOTO_SECONDS_OPTIONS,
-    tourSettings.photoSeconds,
-    (v) => `${v}s`,
-    (v) => {
-      tourSettings.photoSeconds = v;
-      saveTourSettings();
-      renderTourSettingsDialog();
-    },
-  );
-  renderTourSettingsOptionRow(
     document.getElementById('tour-setting-photos-per-pin'),
     TOUR_PHOTOS_PER_PIN_OPTIONS,
     tourSettings.photosPerPin,
@@ -4275,6 +4270,22 @@ function renderTourSettingsDialog() {
       saveTourSettings();
       renderTourSettingsDialog();
     },
+  );
+  // Disabled (not hidden) rather than removed — None still has a pause at
+  // each pin (see tourPhotoDwellSeconds' own comment), just no photo to
+  // time, so choosing a length doesn't mean anything to configure right
+  // now even though the stored value keeps quietly governing that pause.
+  renderTourSettingsOptionRow(
+    document.getElementById('tour-setting-photo-seconds'),
+    TOUR_PHOTO_SECONDS_OPTIONS,
+    tourSettings.photoSeconds,
+    (v) => `${v}s`,
+    (v) => {
+      tourSettings.photoSeconds = v;
+      saveTourSettings();
+      renderTourSettingsDialog();
+    },
+    tourSettings.photosPerPin === 'none',
   );
 
   // World tour (more than one division queued) has no per-country picker
@@ -4316,16 +4327,22 @@ function closeTourSettingsDialog() {
   document.getElementById('tour-settings-modal').hidden = true;
 }
 
-// Same backdrop-click/Escape pattern wireDirectoryControls already uses
-// for #directory-modal — kept as its own function (rather than folded
-// into wireTourControls) since it's dialog wiring, not playback control
-// wiring.
+// Escape-to-close pattern wireDirectoryControls already uses for
+// #directory-modal — kept as its own function (rather than folded into
+// wireTourControls) since it's dialog wiring, not playback control
+// wiring. Deliberately no backdrop-click-to-close (unlike the directory
+// modal): the tour controls bar sits above this dialog's own z-index and
+// stays fully live/reachable while it's open (by design — Loop/Stop are
+// still meant to work), so a click anywhere else on screen is a click on
+// the map underneath, not "outside the dialog" in the usual modal sense.
+// The gear button itself toggles, Play (see playTour) closes it, and
+// Escape/the explicit × both still work.
 function wireTourSettingsDialog() {
-  document.getElementById('tour-settings-btn').addEventListener('click', openTourSettingsDialog);
-  document.getElementById('tour-settings-close').addEventListener('click', closeTourSettingsDialog);
-  document.getElementById('tour-settings-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'tour-settings-modal') closeTourSettingsDialog();
+  document.getElementById('tour-settings-btn').addEventListener('click', () => {
+    if (document.getElementById('tour-settings-modal').hidden) openTourSettingsDialog();
+    else closeTourSettingsDialog();
   });
+  document.getElementById('tour-settings-close').addEventListener('click', closeTourSettingsDialog);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !document.getElementById('tour-settings-modal').hidden) closeTourSettingsDialog();
   });

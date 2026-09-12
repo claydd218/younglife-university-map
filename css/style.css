@@ -1735,6 +1735,11 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
   color: var(--parchment);
 }
 
+.tour-settings-option-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .tour-settings-country-actions {
   display: flex;
   gap: 12px;
