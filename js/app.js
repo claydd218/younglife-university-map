@@ -1680,8 +1680,17 @@ function wireMinistryPhotoCarousel() {
   const lightbox = document.getElementById('ministry-lightbox');
   const content = lightbox.querySelector('.lightbox-content');
   const viewport = lightbox.querySelector('.lightbox-viewport');
+  // slideA/slideB are the FRAMEs (position/size/border/fade) — see
+  // .lightbox-slide-frame's own comment in style.css for why the frame
+  // and its <img> are separate elements now. imgA/imgB are each frame's
+  // actual photo content — imgOf(frame) below resolves one to the other
+  // wherever image-specific properties (src, naturalWidth, the Ken Burns
+  // transform) are needed instead of frame-level ones (size, opacity).
   const slideA = lightbox.querySelector('[data-slide="a"]');
   const slideB = lightbox.querySelector('[data-slide="b"]');
+  const imgA = slideA.querySelector('img');
+  const imgB = slideB.querySelector('img');
+  function imgOf(frame) { return frame === slideA ? imgA : imgB; }
   const dotsEl = lightbox.querySelector('.lightbox-dots');
   const prevBtn = lightbox.querySelector('.lightbox-prev');
   const nextBtn = lightbox.querySelector('.lightbox-next');
@@ -1843,7 +1852,13 @@ function wireMinistryPhotoCarousel() {
   // off of. No transition on any of this — it's instant, so there's
   // nothing to read as a box visibly growing.
   function applySlideSize(slide, size) {
+    // Both toggled the same way, one on the frame (clips the pan/zoom to
+    // its own bounds — see .lightbox-slide-frame.motion-crop) and one on
+    // the img (crops the photo's own real ratio to fill that fixed 4:3
+    // frame — see .lightbox-slide.motion-crop), rather than one class
+    // doing double duty across two elements with different selectors.
     slide.classList.toggle('motion-crop', motionModeActive());
+    imgOf(slide).classList.toggle('motion-crop', motionModeActive());
     slide.style.width = `${size.w}px`;
     slide.style.height = `${size.h}px`;
     slide.style.left = `${(window.innerWidth - size.w) / 2}px`;
@@ -1896,19 +1911,27 @@ function wireMinistryPhotoCarousel() {
     }
   }
 
-  // Ken Burns (Motion mode) — a currently-running Web Animations API
-  // Animation per slide, tracked so a later reuse of that same element
-  // (both slides are reused across every pin visit, never recreated) can
-  // .cancel() it first rather than leaving its fill:'forwards' end-state
-  // transform stuck on an element that's about to display an ordinary
-  // Full Size photo instead. Keyed by the slide element itself.
+  // Ken Burns (Motion mode) — animates the <img> itself, never the frame
+  // (see .lightbox-slide-frame's own comment in style.css for why: the
+  // frame is what a visitor perceives as "the photo," and it has to stay
+  // completely still, clipping the img's own pan/zoom to its bounds via
+  // overflow:hidden rather than moving/scaling along with it). A
+  // currently-running Web Animations API Animation per img is tracked so
+  // a later reuse of that same element (both slides — and their imgs —
+  // are reused across every pin visit, never recreated) can .cancel() it
+  // first rather than leaving its fill:'forwards' end-state transform
+  // stuck on an element that's about to display an ordinary Full Size
+  // photo instead. Both functions take the FRAME, same as every other
+  // call site here (applySlideSize, showIndex, open all work in terms of
+  // frames), and resolve to its img via imgOf internally.
   const kenBurnsAnimations = new WeakMap();
 
   function resetKenBurns(slide) {
-    const anim = kenBurnsAnimations.get(slide);
+    const img = imgOf(slide);
+    const anim = kenBurnsAnimations.get(img);
     if (anim) anim.cancel();
-    kenBurnsAnimations.delete(slide);
-    slide.style.transform = '';
+    kenBurnsAnimations.delete(img);
+    img.style.transform = '';
   }
 
   // A gentle, randomized pan+zoom over the photo's own display duration
@@ -1922,6 +1945,7 @@ function wireMinistryPhotoCarousel() {
   // without ever doing that, on every photo this runs on regardless of
   // its own real aspect ratio.
   function applyKenBurns(slide) {
+    const img = imgOf(slide);
     const MIN_SCALE = 1.08;
     const maxScale = MIN_SCALE + 0.06 + Math.random() * 0.08; // 1.14–1.22
     const zoomIn = Math.random() < 0.5;
@@ -1934,7 +1958,7 @@ function wireMinistryPhotoCarousel() {
     const angle = Math.random() * Math.PI * 2;
     const dx = Math.cos(angle) * PAN_PCT;
     const dy = Math.sin(angle) * PAN_PCT;
-    const anim = slide.animate([
+    const anim = img.animate([
       { transform: `scale(${startScale}) translate(${(-dx).toFixed(2)}%, ${(-dy).toFixed(2)}%)` },
       { transform: `scale(${endScale}) translate(${dx.toFixed(2)}%, ${dy.toFixed(2)}%)` },
     ], {
@@ -1942,7 +1966,7 @@ function wireMinistryPhotoCarousel() {
       easing: 'ease-in-out',
       fill: 'forwards',
     });
-    kenBurnsAnimations.set(slide, anim);
+    kenBurnsAnimations.set(img, anim);
   }
 
   function renderDots() {
@@ -1978,15 +2002,16 @@ function wireMinistryPhotoCarousel() {
     resetPinch(); // a fresh photo starts unzoomed, no matter how the last one was left
     const incoming = otherSlide();
     resetKenBurns(incoming); // clear whatever this reused slide was left with from its own last turn
-    incoming.src = urlFor(index);
-    if (!(await whenLoaded(incoming))) {
+    const incomingImg = imgOf(incoming);
+    incomingImg.src = urlFor(index);
+    if (!(await whenLoaded(incomingImg))) {
       // Broken/missing photo file — leave the current slide showing
       // rather than swapping to an empty frame (see whenLoaded's own
       // comment).
       transitioning = false;
       return;
     }
-    const size = computeSlideSize(incoming);
+    const size = computeSlideSize(incomingImg);
     // Hidden for the transition's duration (see .lightbox-content's own
     // comment in style.css) — but only when the box is actually about to
     // resize. Two photos can easily share the same shape (most of a
@@ -2079,9 +2104,10 @@ function wireMinistryPhotoCarousel() {
     resetKenBurns(slideA);
     resetKenBurns(slideB);
     if (photos.length) {
-      incoming.src = urlFor(0);
-      if (await whenLoaded(incoming)) {
-        applySlideSize(incoming, computeSlideSize(incoming));
+      const incomingImg = imgOf(incoming);
+      incomingImg.src = urlFor(0);
+      if (await whenLoaded(incomingImg)) {
+        applySlideSize(incoming, computeSlideSize(incomingImg));
         incoming.classList.add('active');
         activeSlide = incoming;
         if (motionModeActive()) applyKenBurns(incoming);
@@ -2091,7 +2117,7 @@ function wireMinistryPhotoCarousel() {
         // no-photo caption placement below, same as if this pin had no
         // photos listed at all.
         photos = [];
-        incoming.removeAttribute('src');
+        incomingImg.removeAttribute('src');
       }
     }
     if (!photos.length && captionActive) {

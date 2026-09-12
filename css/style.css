@@ -1186,8 +1186,8 @@ img.popup-photo {
   border: 0;
 }
 
-/* Each slide sizes and centers itself independently (width/height/
-   transform set by JS's positionSlide, to the photo's own natural size at
+/* Each slide FRAME sizes and centers itself independently (width/height/
+   left/top set by JS's applySlideSize, to the photo's own natural size at
    the moment it becomes active) rather than stretching to fill a shared
    box. An earlier version had both slides fill .lightbox-viewport at
    100%/100%, so resizing that box for an INCOMING photo also instantly
@@ -1197,10 +1197,15 @@ img.popup-photo {
    like this, an outgoing photo just fades out in place at whatever size
    it already was; only the incoming one (and .lightbox-viewport itself,
    for the arrows/close to anchor to — see that rule's own comment) takes
-   on the new size. Border/shadow are back on each slide rather than the
-   shared viewport, since each now has its own real box to hug. */
-.lightbox-slide {
-  /* position:fixed with JS-computed left/top (positionSlide) — centered
+   on the new size. Border/shadow live on this frame, not the shared
+   viewport, since each now has its own real box to hug — and not on the
+   inner <img> either (see .lightbox-slide below): Motion mode's Ken Burns
+   pan/zoom transforms that img directly, and a border/shadow riding along
+   with it would visibly zoom/pan too, which is exactly the bug this
+   frame/img split exists to fix — the frame is what a visitor actually
+   perceives as "the photo," and it needs to stay completely still. */
+.lightbox-slide-frame {
+  /* position:fixed with JS-computed left/top (applySlideSize) — centered
      against the window directly, not against .lightbox-viewport. That
      box is still resized per active photo (for the arrows/close to
      anchor to — see its own comment), and an earlier version of this
@@ -1218,40 +1223,61 @@ img.popup-photo {
      every pinch handler needing to re-append it. */
   position: fixed;
   display: block;
-  /* fill, not contain — the box's own width/height (computeSlideSize in
-     js/app.js) are already computed to match this image's exact natural
-     ratio, just rounded to whole device pixels for the box itself. That
-     rounding can leave the box's ratio a hair off the image's true one,
-     which is exactly what contain cares about: it'll still "fit" the
-     image within a box like that, leaving a thin gap on whichever axis
-     came up short — visible on some photos, not others, depending on
-     how the rounding happened to land (confirmed live: still there
-     intermittently after rounding computeSlideSize's own output).
-     fill stretches to the box's full size regardless, which for a
-     mismatch this small (sub-pixel) is a distortion nobody could ever
-     actually see, and it guarantees zero gap instead of leaving it to
-     chance. */
-  object-fit: fill;
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 16px rgba(0,0,0,0.5);
   opacity: 0;
   transition: opacity 500ms ease;
+  /* visible, not hidden, by default — a real visitor's own pinch-zoom
+     (Full Size mode only) scales/pans this whole frame (border included)
+     via transform, same as it always has; clipping would cut that off at
+     the frame's original bounds instead of letting the box itself grow. */
+  overflow: visible;
+}
+
+.lightbox-slide-frame.active {
+  opacity: 1;
+}
+
+/* Motion mode only: the frame clips its own <img> to exactly its bounds,
+   which is what actually keeps the pan/zoom looking like it's happening
+   "inside a window" instead of spilling out past it. */
+.lightbox-slide-frame.motion-crop {
+  overflow: hidden;
+}
+
+.lightbox-slide {
+  /* Fills its frame exactly — position/size/border/fade all live on
+     .lightbox-slide-frame above now; this element is purely the visual
+     photo content, absolutely positioned so Motion mode's Ken Burns
+     transform (applyKenBurns in js/app.js) can scale/translate it freely
+     within the frame's own clip without affecting the frame's layout. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* fill, not contain — the frame's own width/height (computeSlideSize in
+     js/app.js) are already computed to match this image's exact natural
+     ratio in Full Size mode, just rounded to whole device pixels for the
+     box itself. That rounding can leave the box's ratio a hair off the
+     image's true one, which is exactly what contain cares about: it'll
+     still "fit" the image within a box like that, leaving a thin gap on
+     whichever axis came up short — visible on some photos, not others,
+     depending on how the rounding happened to land (confirmed live: still
+     there intermittently after rounding computeSlideSize's own output).
+     fill stretches to the box's full size regardless, which for a
+     mismatch this small (sub-pixel) is a distortion nobody could ever
+     actually see, and it guarantees zero gap instead of leaving it to
+     chance. Motion mode overrides this to cover instead — see
+     .lightbox-slide.motion-crop below — since there the frame is a fixed
+     4:3 box independent of the photo's own real ratio, where fill would
+     visibly stretch/distort it. */
+  object-fit: fill;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 }
 
-.lightbox-slide.active {
-  opacity: 1;
-}
-
-/* Motion mode (tour settings' Photo Display) — the slide's own box is a
-   fixed 4:3 frame here (computeSlideSize in js/app.js), not sized to the
-   photo's own ratio like the default `fill` above, so it needs an actual
-   crop instead of a stretch: cover fills the frame from the photo's real
-   aspect ratio, cropping whichever axis overflows, which is also exactly
-   what the Ken Burns pan/zoom (applyKenBurns) needs room to move within
-   without ever exposing an edge. */
 .lightbox-slide.motion-crop {
   object-fit: cover;
 }
