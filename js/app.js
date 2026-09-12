@@ -3031,7 +3031,17 @@ async function init() {
       rowsByCountry.get(name).push(row);
     }
     for (const [name, rows] of rowsByCountry) {
-      state.metricsByCountry.set(name, computeMetrics(rows, { includeCountries: false }));
+      let metrics = computeMetrics(rows, { includeCountries: false });
+      // Hide Staff and Photos mode (listMinistriesPublic's
+      // restricted_staff_mode) already zeroes out this country's own Staff
+      // count for free (staff is blanked server-side), but Universities
+      // would still show a real number — trimmed down to just Ministry
+      // Areas here so this country's overlay doesn't show anything beyond
+      // "how many areas," staff or not.
+      if (rows.some((r) => r.restricted_staff_mode)) {
+        metrics = metrics.filter((m) => m.label.startsWith('Ministry Area'));
+      }
+      state.metricsByCountry.set(name, metrics);
     }
     showMetricsOverlay(state.worldMetrics, null);
     wireMetricsOverlayDismiss();

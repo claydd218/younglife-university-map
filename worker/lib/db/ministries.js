@@ -182,6 +182,11 @@ export async function listMinistriesPublic(env, request) {
     packed.staff = '';
     packed.assigned_staff = '';
     packed.photos = '';
+    // Not part of the legacy packed shape — js/app.js checks this to
+    // reduce this country's own metrics overlay down to just "Ministry
+    // Areas" (staff is already correctly 0 above, but the real
+    // university count would otherwise still show).
+    packed.restricted_staff_mode = 'true';
     rows.push(packed);
   }
   for (const country of highlightedCountries) rows.push(countryHighlightStubRow(country));
