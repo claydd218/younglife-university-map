@@ -720,14 +720,28 @@ function computeMetrics(rowsSubset, { includeCountries = true } = {}) {
 // detached node — nothing to cancel, nothing left visible.
 const METRIC_COUNT_UP_MS = 2800;
 
+// Only ever shortens this, never lengthens it — Fast/Fastest noticeably
+// speed the count-up along with everything else during a tour, but
+// Slow/Slowest leave it at the normal base pace rather than dragging it
+// out too (a slow-counting number reads as sluggish/broken, not
+// deliberate, in a way a slow pan/zoom doesn't). No effect outside an
+// actively playing tour — a regular visitor's own country/division
+// clicks always get the fixed base duration regardless of whatever
+// speed a tour was last set to.
+function metricCountUpMs() {
+  if (tourController.state !== 'playing') return METRIC_COUNT_UP_MS;
+  return METRIC_COUNT_UP_MS * Math.min(1, tourSpeedMultiplier());
+}
+
 function animateCountUp(el, target) {
   if (!target) {
     el.textContent = '0';
     return;
   }
   const start = performance.now();
+  const duration = metricCountUpMs();
   function tick(now) {
-    const t = Math.min(1, (now - start) / METRIC_COUNT_UP_MS);
+    const t = Math.min(1, (now - start) / duration);
     const eased = 1 - (1 - t) ** 3;
     el.textContent = String(Math.round(eased * target));
     if (t < 1) requestAnimationFrame(tick);
