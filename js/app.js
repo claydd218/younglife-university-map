@@ -4366,7 +4366,14 @@ async function runTour(divisionKeys) {
       // than sometimes-honoring one division's own saved picks and not
       // another's, which would read as an unpredictable bug.
       const excluded = isWorldTour ? null : new Set(tourSettings.excludedCountriesByDivision[divisionKey] || []);
-      const countries = countriesInDivisionByProximity(divisionKey).filter((name) => !excluded || !excluded.has(name));
+      const allDivisionCountries = countriesInDivisionByProximity(divisionKey);
+      let countries = allDivisionCountries.filter((name) => !excluded || !excluded.has(name));
+      // The settings dialog itself refuses to save an all-excluded state
+      // now, but this guards any already-saved one from before that fix —
+      // an empty list here would otherwise silently skip this division's
+      // whole country segment (its entire tour, if not a World tour)
+      // rather than visiting nothing was ever actually intended.
+      if (!countries.length) countries = allDivisionCountries;
       for (const countryName of countries) {
         await tourCheckpoint();
         // Tied to Skip Country View rather than its own separate setting
@@ -4724,7 +4731,16 @@ function renderTourSettingsDialog() {
     checkbox.checked = !excluded.has(name);
     checkbox.addEventListener('change', () => {
       const current = new Set(tourSettings.excludedCountriesByDivision[divisionKey] || []);
-      if (checkbox.checked) current.delete(name); else current.add(name);
+      if (checkbox.checked) {
+        current.delete(name);
+      } else if (current.size >= countries.length - 1) {
+        // This is the last remaining checked country — refusing the
+        // uncheck instead of leaving a tour with nothing to visit.
+        checkbox.checked = true;
+        return;
+      } else {
+        current.add(name);
+      }
       tourSettings.excludedCountriesByDivision[divisionKey] = Array.from(current);
       saveTourSettings();
     });
@@ -4773,13 +4789,6 @@ function wireTourSettingsDialog() {
   document.getElementById('tour-settings-countries-all').addEventListener('click', () => {
     if (!currentTourDivisionKeys || currentTourDivisionKeys.length > 1) return;
     delete tourSettings.excludedCountriesByDivision[currentTourDivisionKeys[0]];
-    saveTourSettings();
-    renderTourSettingsDialog();
-  });
-  document.getElementById('tour-settings-countries-none').addEventListener('click', () => {
-    if (!currentTourDivisionKeys || currentTourDivisionKeys.length > 1) return;
-    const divisionKey = currentTourDivisionKeys[0];
-    tourSettings.excludedCountriesByDivision[divisionKey] = countriesInDivisionByProximity(divisionKey).slice();
     saveTourSettings();
     renderTourSettingsDialog();
   });
