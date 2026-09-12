@@ -56,7 +56,7 @@ export async function setRestrictedPassword(env, password) {
 // listMinistriesPublic for what each mode actually reshapes a restricted
 // row into. Ordered here from most to least restrictive; RESTRICTED_MODES
 // is the validation source of truth, exported for restricted-admin.js.
-export const RESTRICTED_MODES = ['full_country', 'country_highlight', 'staff_areas', 'staff'];
+export const RESTRICTED_MODES = ['full_country', 'country_highlight', 'staff'];
 const DEFAULT_RESTRICTED_MODE = 'full_country';
 
 export async function getRestrictedMode(env) {

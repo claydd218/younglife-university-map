@@ -155,12 +155,9 @@ export async function listMinistriesPublic(env, request) {
   //                       synthetic stub per country (see
   //                       countryHighlightStubRow) — the country still
   //                       highlights, nothing else does.
-  //   staff_areas       — real row kept (so its actual pin still places),
-  //                       but city/universities/photos/blurb/video are all
-  //                       blanked alongside staff — a bare, unlabeled pin.
-  //   staff             — real row kept with only staff/assigned_staff
-  //                       blanked — everything else (pins, city, photos,
-  //                       universities) shows normally.
+  //   staff             — real row kept (pin, city, universities all show
+  //                       normally) with staff/assigned_staff and photos
+  //                       blanked.
   const mode = await getRestrictedMode(env);
   const rows = [];
   const highlightedCountries = new Set();
@@ -177,14 +174,7 @@ export async function listMinistriesPublic(env, request) {
     const packed = packMinistryRow(r);
     packed.staff = '';
     packed.assigned_staff = '';
-    if (mode === 'staff_areas') {
-      packed.city = '';
-      packed.universities = '';
-      packed.photos = '';
-      packed.blurb = '';
-      packed.video_url = '';
-      packed.video_label = '';
-    }
+    packed.photos = '';
     rows.push(packed);
   }
   for (const country of highlightedCountries) rows.push(countryHighlightStubRow(country));
