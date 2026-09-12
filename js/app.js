@@ -4426,6 +4426,11 @@ function renderTourSettingsOptionRow(container, options, currentValue, labelFor,
 // whichever division is actually queued up right now rather than whatever
 // it was the last time the dialog happened to be open.
 function renderTourSettingsDialog() {
+  // "World Tour Settings" / "Division Tour Settings" — computed once up
+  // here since the countries-field logic further down needs the exact
+  // same isWorldTour check.
+  const isWorldTour = !currentTourDivisionKeys || currentTourDivisionKeys.length > 1;
+  document.getElementById('tour-settings-title').textContent = `${isWorldTour ? 'World' : 'Division'} Tour Settings`;
   document.getElementById('tour-setting-speed').value = tourSettings.speedStep;
   document.getElementById('tour-setting-speed-value').textContent = TOUR_SPEED_STEPS[tourSettings.speedStep].label;
   renderTourSettingsOptionRow(
@@ -4470,7 +4475,6 @@ function renderTourSettingsDialog() {
   // World tour (more than one division queued) has no per-country picker
   // at all, per spec — hidden outright rather than shown-but-empty.
   const countriesField = document.getElementById('tour-settings-countries-field');
-  const isWorldTour = !currentTourDivisionKeys || currentTourDivisionKeys.length > 1;
   countriesField.hidden = isWorldTour;
   if (isWorldTour) return;
 
