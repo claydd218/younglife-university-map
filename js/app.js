@@ -3848,6 +3848,21 @@ function countryBoundsAndZoom(name) {
 // the division's, on the final zoom-out (tourGoToDivisionOverview).
 const TOUR_LABEL_REVEAL_FRACTION = 0.65;
 
+// Skip Country View setting's own path — the same bookkeeping
+// tourGoToCountry does (un-cluster this country's own pins, highlight
+// its polygon, name it in the metrics label) but with no wide flyTo/
+// dwell of its own, so the very next tourGoToPin call is what actually
+// carries the camera from wherever it was straight to this country's
+// first pin — reads as one continuous pin-to-pin hop across the country
+// boundary instead of a deliberate step back to survey it first. Shown
+// immediately rather than hidden-then-delayed like tourGoToCountry's own
+// reveal, since there's no flight here to time that delay against.
+function tourPrepCountrySkipView(name) {
+  showTourCountryPinsOnly(name);
+  setHighlightedCountry(name);
+  showCountryMetricsOverlay(name);
+}
+
 async function tourGoToCountry(name) {
   showTourCountryPinsOnly(name);
   // Hidden as this flight departs — leaving the division's own metrics
@@ -4057,7 +4072,7 @@ const TOUR_SPEED_STEPS = [
 ];
 const DEFAULT_SPEED_STEP = 2; // 'Normal' — matches every duration constant's own tuned pace as-is
 const TOUR_SETTINGS_STORAGE_KEY = 'tourSettings.v1';
-const DEFAULT_TOUR_SETTINGS = { photoSeconds: 2, photosPerPin: 'all', speedStep: DEFAULT_SPEED_STEP, photoDisplay: 'full' };
+const DEFAULT_TOUR_SETTINGS = { photoSeconds: 2, photosPerPin: 'all', speedStep: DEFAULT_SPEED_STEP, photoDisplay: 'full', skipCountryView: false };
 
 function loadTourSettings() {
   try {
@@ -4068,6 +4083,7 @@ function loadTourSettings() {
       photosPerPin: TOUR_PHOTOS_PER_PIN_OPTIONS.includes(parsed.photosPerPin) ? parsed.photosPerPin : DEFAULT_TOUR_SETTINGS.photosPerPin,
       speedStep: Number.isInteger(parsed.speedStep) && TOUR_SPEED_STEPS[parsed.speedStep] ? parsed.speedStep : DEFAULT_SPEED_STEP,
       photoDisplay: TOUR_PHOTO_DISPLAY_OPTIONS.includes(parsed.photoDisplay) ? parsed.photoDisplay : DEFAULT_TOUR_SETTINGS.photoDisplay,
+      skipCountryView: typeof parsed.skipCountryView === 'boolean' ? parsed.skipCountryView : DEFAULT_TOUR_SETTINGS.skipCountryView,
       excludedCountriesByDivision: (parsed.excludedCountriesByDivision && typeof parsed.excludedCountriesByDivision === 'object') ? parsed.excludedCountriesByDivision : {},
     };
   } catch {
@@ -4174,8 +4190,12 @@ async function runTour(divisionKeys) {
           ? Math.min(countryInfo.targetZoom + 1, map.getMaxZoom())
           : CONFIG.MAX_ZOOM;
         const pins = pinsInCountryByProximity(countryName);
-        await tourGoToCountry(countryName);
-        await tourDwell(tourArrivalDwellSeconds());
+        if (tourSettings.skipCountryView) {
+          tourPrepCountrySkipView(countryName);
+        } else {
+          await tourGoToCountry(countryName);
+          await tourDwell(tourArrivalDwellSeconds());
+        }
         for (const pinEntry of pins) {
           await tourCheckpoint();
           await tourGoToPin(pinEntry, pinZoom);
@@ -4433,6 +4453,7 @@ function renderTourSettingsDialog() {
   document.getElementById('tour-settings-title').textContent = `${isWorldTour ? 'World' : 'Division'} Tour Settings`;
   document.getElementById('tour-setting-speed').value = tourSettings.speedStep;
   document.getElementById('tour-setting-speed-value').textContent = TOUR_SPEED_STEPS[tourSettings.speedStep].label;
+  document.getElementById('tour-setting-skip-country-view').checked = tourSettings.skipCountryView;
   renderTourSettingsOptionRow(
     document.getElementById('tour-setting-photos-per-pin'),
     TOUR_PHOTOS_PER_PIN_OPTIONS,
@@ -4444,6 +4465,11 @@ function renderTourSettingsDialog() {
       renderTourSettingsDialog();
     },
   );
+  // Both disabled (not hidden) rather than removed whenever Photos Per
+  // Pin is None — None means there's no photo to style or time either
+  // way (a photo-less pin's own brief pause is governed by Tour Speed
+  // instead — see tourNoPhotoDwellSeconds), so neither setting means
+  // anything to configure right now.
   renderTourSettingsOptionRow(
     document.getElementById('tour-setting-photo-display'),
     TOUR_PHOTO_DISPLAY_OPTIONS,
@@ -4454,11 +4480,8 @@ function renderTourSettingsDialog() {
       saveTourSettings();
       renderTourSettingsDialog();
     },
+    tourSettings.photosPerPin === 'none',
   );
-  // Disabled (not hidden) rather than removed — None still has a brief
-  // pause at each pin (see tourNoPhotoDwellSeconds), just governed by
-  // Tour Speed instead, so choosing a length doesn't mean anything to
-  // configure right now.
   renderTourSettingsOptionRow(
     document.getElementById('tour-setting-photo-seconds'),
     TOUR_PHOTO_SECONDS_OPTIONS,
@@ -4534,6 +4557,10 @@ function wireTourSettingsDialog() {
     tourSettings.speedStep = Number(e.target.value);
     saveTourSettings();
     document.getElementById('tour-setting-speed-value').textContent = TOUR_SPEED_STEPS[tourSettings.speedStep].label;
+  });
+  document.getElementById('tour-setting-skip-country-view').addEventListener('change', (e) => {
+    tourSettings.skipCountryView = e.target.checked;
+    saveTourSettings();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !document.getElementById('tour-settings-modal').hidden) closeTourSettingsDialog();

@@ -234,6 +234,18 @@
           <div class="tour-settings-slider-ends"><span>Slow</span><span>Fast</span></div>
         </div>
         <div class="tour-settings-field">
+          <!-- When checked, runTour skips tourGoToCountry's own wide
+               zoomed-out flight/dwell entirely (tourPrepCountrySkipView
+               instead) — the very next pin flight is what actually
+               carries the camera across the country boundary, reading as
+               one continuous pin-to-pin hop rather than a deliberate
+               step back to survey the country first. -->
+          <label class="tour-settings-checkbox-label">
+            <input type="checkbox" id="tour-setting-skip-country-view">
+            Skip Country View (go straight from pin to pin)
+          </label>
+        </div>
+        <div class="tour-settings-field">
           <span class="tour-settings-label">Photos Per Pin</span>
           <div class="tour-settings-options" id="tour-setting-photos-per-pin"></div>
         </div>
@@ -241,8 +253,9 @@
           <!-- Full Size = today's behavior (slide sized to the photo's
                own aspect ratio). Motion = a fixed 4:3 frame with a
                subtle randomized Ken Burns pan/zoom — see applyKenBurns
-               in js/app.js. -->
-          <span class="tour-settings-label">Photo Display</span>
+               in js/app.js. Disabled (not hidden) whenever Photos Per
+               Pin is None — see renderTourSettingsDialog. -->
+          <span class="tour-settings-label">Photo Display Style</span>
           <div class="tour-settings-options" id="tour-setting-photo-display"></div>
         </div>
         <div class="tour-settings-field">
