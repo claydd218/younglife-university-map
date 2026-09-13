@@ -71,17 +71,17 @@ const DIVISIONS = {
   },
   africa: {
     label: 'Africa',
-    country: '#efd173',
+    country: '#d7bc68',
     pin: '#c99e00',
   },
   middle_east_central_asia: {
     label: 'Middle East & Central Asia',
-    country: '#eda65f',
+    country: '#d59556',
     pin: '#e0631a',
   },
   asia: {
     label: 'Asia Pacific',
-    country: '#95cba7',
+    country: '#86b796',
     pin: '#158f63',
   },
 };
