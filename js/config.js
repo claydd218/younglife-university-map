@@ -81,7 +81,7 @@ const DIVISIONS = {
   },
   asia: {
     label: 'Asia Pacific',
-    country: '#95cba7',
+    country: '#8ec19f',
     pin: '#158f63',
   },
 };
