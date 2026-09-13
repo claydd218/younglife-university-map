@@ -3990,6 +3990,7 @@ async function renderSiteAccessSection() {
   try {
     const current = await apiFetch('/site-access');
     $('site-access-password').value = current.password || '';
+    $('site-access-disabled').checked = !!current.disabled;
     status.textContent = '';
   } catch (err) {
     status.textContent = err.message || String(err);
@@ -4000,14 +4001,18 @@ async function saveSiteAccess() {
   const status = $('site-access-status');
   const btn = $('site-access-save-btn');
   const password = $('site-access-password').value.trim();
-  if (!password) {
+  const disabled = $('site-access-disabled').checked;
+  // A password is only meaningfully required while the gate is actually
+  // going to use it — checking "not password protected" makes an empty
+  // one harmless.
+  if (!password && !disabled) {
     status.textContent = 'Password is required.';
     return;
   }
   btn.disabled = true;
   status.textContent = 'Saving…';
   try {
-    await apiFetch('/site-access', { method: 'PUT', body: JSON.stringify({ password }) });
+    await apiFetch('/site-access', { method: 'PUT', body: JSON.stringify({ password, disabled }) });
     status.textContent = 'Saved.';
   } catch (err) {
     status.textContent = err.message || String(err);

@@ -4,7 +4,7 @@
 // is_admin gate as worker/routes/users.js.
 
 import { jsonResponse, errorResponse } from '../lib/http.js';
-import { getSitePassword, setSitePassword } from '../lib/db/siteAccess.js';
+import { getSitePassword, setSitePassword, isSiteGateDisabled, setSiteGateDisabled } from '../lib/db/siteAccess.js';
 
 function requireAdmin(user) {
   if (!user || !user.is_admin) return errorResponse(403, 'Admin access required');
@@ -14,9 +14,13 @@ function requireAdmin(user) {
 export async function onRequestGet({ env, user }) {
   const denied = requireAdmin(user);
   if (denied) return denied;
-  return jsonResponse({ password: await getSitePassword(env) });
+  return jsonResponse({ password: await getSitePassword(env), disabled: await isSiteGateDisabled(env) });
 }
 
+// Accepts either or both of {password: "..."} and {disabled: true/false} —
+// password is only required/validated when it's actually present in the
+// body, so toggling the gate on/off doesn't force re-submitting a password
+// that isn't changing.
 export async function onRequestPut({ request, env, user }) {
   const denied = requireAdmin(user);
   if (denied) return denied;
@@ -28,9 +32,14 @@ export async function onRequestPut({ request, env, user }) {
     return errorResponse(400, 'Invalid JSON body');
   }
 
-  const password = typeof body.password === 'string' ? body.password.trim() : '';
-  if (!password) return errorResponse(400, 'Password is required');
+  if (typeof body.password === 'string') {
+    const password = body.password.trim();
+    if (!password) return errorResponse(400, 'Password is required');
+    await setSitePassword(env, password);
+  }
+  if (typeof body.disabled === 'boolean') {
+    await setSiteGateDisabled(env, body.disabled);
+  }
 
-  await setSitePassword(env, password);
-  return jsonResponse({ ok: true, password });
+  return jsonResponse({ ok: true, password: await getSitePassword(env), disabled: await isSiteGateDisabled(env) });
 }

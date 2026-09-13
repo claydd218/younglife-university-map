@@ -43,6 +43,7 @@ import { login, logout } from './routes/login.js';
 import { getSessionUser, createSessionCookie } from './lib/session.js';
 import { siteLogin, siteLogout } from './routes/site-login.js';
 import { hasValidSiteSession, createSiteSessionCookie } from './lib/siteSession.js';
+import { isSiteGateDisabled } from './lib/db/siteAccess.js';
 import { MAINTENANCE_MODE } from './lib/maintenance.js';
 import { restrictedStatus, restrictedUnlock, restrictedLock } from './routes/restricted-access.js';
 import {
@@ -199,7 +200,8 @@ export default {
       // hang and eventually crash the browser session rather than a
       // simple, clean failure. Confirmed live.
       const hasAdminSession = isAdminPath ? sessionValid : !!(await getSessionUser(request, env));
-      const needsSiteSession = !isAdminPath && !PUBLIC_SITE_PATHS.has(pathname) && !hasAdminSession;
+      const siteGateDisabled = isAdminPath ? false : await isSiteGateDisabled(env);
+      const needsSiteSession = !isAdminPath && !siteGateDisabled && !PUBLIC_SITE_PATHS.has(pathname) && !hasAdminSession;
       const siteSessionValid = needsSiteSession && (await hasValidSiteSession(request, env));
       if (needsSiteSession && !siteSessionValid) {
         return withSecurityHeaders(Response.redirect(new URL('/site-login', request.url), 302));
