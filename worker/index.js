@@ -156,8 +156,13 @@ const PUBLIC_ADMIN_PATHS = new Set(['/bigtime/login.html', '/bigtime/login', '/b
 // NOT listed here — they're the same gated public surface
 // data/ministries.csv, images/*, maps/*, and reports/* always were
 // (see worker/routes/public-ministries.js and worker/routes/media.js),
-// just backed by D1/R2 now instead of static files.
-const PUBLIC_SITE_PATHS = new Set(['/site-login.html', '/site-login', '/site-login.js', '/api/site-login', '/api/site-logout']);
+// just backed by D1/R2 now instead of static files. /maps/world.png is
+// the one exception: index.html's own og:image/twitter:image meta tags
+// point at it, and a link-preview crawler (Facebook, Slack, iMessage,
+// etc.) has no session to redirect through — behind the gate it always
+// resolved to the /site-login page instead of an image, so share links
+// never got a preview at all.
+const PUBLIC_SITE_PATHS = new Set(['/site-login.html', '/site-login', '/site-login.js', '/api/site-login', '/api/site-logout', '/maps/world.png']);
 
 export default {
   async fetch(request, env, ctx) {
