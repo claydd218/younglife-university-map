@@ -4174,7 +4174,10 @@ function tourPinAnchorScreenY(willShowPhotos) {
   const controlsRect = document.getElementById('tour-controls').getBoundingClientRect();
   const farLowY = controlsRect.top - 24; // 24px clearance above the controls bar
   if (willShowPhotos) return farLowY;
-  return (map.getSize().y / 2 + farLowY) / 2;
+  // Weighted toward center rather than a plain 50/50 midpoint — nudged up
+  // a bit further per feedback after the initial plain-midpoint version.
+  const centerY = map.getSize().y / 2;
+  return centerY * 0.6 + farLowY * 0.4;
 }
 
 // Whether entry.row's photos will actually show for this pin's stop —
