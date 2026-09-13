@@ -66,7 +66,7 @@ const DIVISIONS = {
   },
   europe: {
     label: 'Europe',
-    country: '#988ba7',
+    country: '#a596b5',
     pin: '#4a3aa7',
   },
   africa: {
