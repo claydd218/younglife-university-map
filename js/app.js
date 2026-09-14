@@ -4043,7 +4043,19 @@ function tourFlyToDivisionBounds(divisionKey) {
     paddingBottomRight: [40, 40],
     duration,
   }), duration);
-  return { promise, duration };
+  return { promise, duration, target };
+}
+
+// Viewport-pixel position of a lat/lng RIGHT NOW — during an in-progress
+// flyTo/flyToBounds, that's wherever the camera's current (mid-animation)
+// interpolated view puts it, not its eventual resting spot. Used to have
+// a tour's metrics pop-in originate from the country/division's own
+// on-screen center at the exact moment it becomes visible, same effect
+// the country-click handler gets from the click point itself.
+function screenPointForLatLng(latlng) {
+  const point = map.latLngToContainerPoint(latlng);
+  const mapRect = map.getContainer().getBoundingClientRect();
+  return { x: mapRect.left + point.x, y: mapRect.top + point.y };
 }
 
 // Reveals at TOUR_LABEL_REVEAL_FRACTION of the flight, same as every
@@ -4061,7 +4073,13 @@ async function tourGoToDivision(divisionKey) {
   // settles into place right as the camera lands rather than on its own
   // shorter, independent clock.
   const remaining = flight ? flight.duration * (1 - TOUR_LABEL_REVEAL_FRACTION) : undefined;
-  const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label), remaining);
+  const reveal = () => showMetricsOverlay(
+    state.metricsByDivision.get(divisionKey) || [],
+    DIVISIONS[divisionKey].pin,
+    escapeHtml(DIVISIONS[divisionKey].label),
+    remaining,
+    flight ? screenPointForLatLng(flight.target) : undefined,
+  );
   if (flight) {
     setTimeout(reveal, flight.duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
     await flight.promise;
@@ -4097,7 +4115,13 @@ async function tourGoToDivisionOverview(divisionKey) {
   const flight = tourFlyToDivisionBounds(divisionKey);
   // See tourGoToDivision's own comment on this same calculation.
   const remaining = flight ? flight.duration * (1 - TOUR_LABEL_REVEAL_FRACTION) : undefined;
-  const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label), remaining);
+  const reveal = () => showMetricsOverlay(
+    state.metricsByDivision.get(divisionKey) || [],
+    DIVISIONS[divisionKey].pin,
+    escapeHtml(DIVISIONS[divisionKey].label),
+    remaining,
+    flight ? screenPointForLatLng(flight.target) : undefined,
+  );
   if (flight) {
     setTimeout(reveal, flight.duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
     await flight.promise;
@@ -4159,7 +4183,10 @@ async function tourGoToCountry(name) {
   const duration = tourCountryLegDuration(info.target, info.targetZoom);
   // See tourGoToDivision's own comment on this same calculation.
   const remaining = duration * (1 - TOUR_LABEL_REVEAL_FRACTION);
-  setTimeout(() => showCountryMetricsOverlay(name, remaining), duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
+  setTimeout(
+    () => showCountryMetricsOverlay(name, remaining, screenPointForLatLng(info.target)),
+    duration * TOUR_LABEL_REVEAL_FRACTION * 1000,
+  );
   await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
 }
 
