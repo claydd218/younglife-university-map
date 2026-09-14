@@ -482,6 +482,9 @@ function buildPopupHtml(row, divisionKey) {
   // The enlarge badge is the only hint that a popup photo is tappable (and,
   // for multi-photo ministries, that there's a carousel behind it) — no
   // hover state to lean on here since this has to read on touch too.
+  // No photos: this section is skipped entirely rather than showing a
+  // placeholder/fallback image — a popup with nothing to show a picture of
+  // just goes straight from the header into whatever content it does have.
   const cityPhoto = photos.length
     ? `<div class="popup-photo-wrap">
         <img
@@ -498,7 +501,7 @@ function buildPopupHtml(row, divisionKey) {
           ${photos.length > 1 ? `<span class="popup-photo-badge-count">${photos.length}</span>` : ''}
         </span>
       </div>`
-    : `<div class="popup-photo popup-photo-fallback" style="--fallback-color:${escapeHtml(div.country)}"><span>${escapeHtml(row.city || '?')}</span></div>`;
+    : '';
 
   // Re-parsed from the stored original URL (not a canonicalized embed URL
   // saved separately) so there's one place — parseVideoEmbedUrl — that
