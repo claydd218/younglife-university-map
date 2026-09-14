@@ -250,18 +250,23 @@ h1, h2, h3, .legend-label, .cluster-badge {
   transform-origin: top center;
 }
 
-/* EXPERIMENTAL: starts larger and lower on screen, then settles into its
-   normal in-header position as the count-up (METRIC_COUNT_UP_MS, js/app.js)
-   finishes — restarted on every renderMetrics call (that function removes
-   then re-adds this class) since the container itself is reused, not
-   recreated. `both` holds the enlarged starting transform for the instant
-   before the animation actually kicks in, and holds identity afterward, so
-   it never snaps to an unstyled state on either end. */
+/* EXPERIMENTAL: starts larger and closer to the middle of the screen, then
+   settles into its normal in-header position as the count-up
+   (METRIC_COUNT_UP_MS, js/app.js) finishes — restarted on every
+   renderMetrics call (that function removes then re-adds this class)
+   since the container itself is reused, not recreated. `both` holds the
+   enlarged starting transform for the instant before the animation
+   actually kicks in, and holds identity afterward, so it never snaps to
+   an unstyled state on either end. Duration is set inline by JS to match
+   whatever camera flight is carrying it there (see renderMetrics'
+   flyDurationSeconds param) when there is one; the 2.8s here is just the
+   fallback for cases with no flight to match (World refresh, a ministry
+   popup opening, etc). */
 .metrics-boxes.metrics-pop-in {
   animation: metrics-pop-in 2.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes metrics-pop-in {
-  from { transform: scale(1.4) translateY(50px); }
+  from { transform: scale(1.8) translateY(140px); }
   to { transform: scale(1) translateY(0); }
 }
 /* Scaling up by the same amount here would push .metrics-boxes' own
@@ -270,7 +275,7 @@ h1, h2, h3, .legend-label, .cluster-badge {
    already close to one-line-wide at their normal size. */
 @media (max-width: 640px) {
   @keyframes metrics-pop-in {
-    from { transform: scale(1.12) translateY(14px); }
+    from { transform: scale(1.35) translateY(48px); }
     to { transform: scale(1) translateY(0); }
   }
 }

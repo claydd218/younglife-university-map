@@ -749,7 +749,14 @@ function animateCountUp(el, target) {
   requestAnimationFrame(tick);
 }
 
-function renderMetrics(metrics, accentColor) {
+// flyDurationSeconds: when the metrics reveal is riding along with a real
+// camera move (a country click's own flyTo, a tour leg), the pop-in
+// animation's own length is set to match it, so the boxes visibly arrive
+// at the same moment the camera does instead of settling into place on
+// their own independent (and usually shorter) 2.8s clock. Omitted for
+// reveals with no flight to match (World refresh, a ministry popup
+// opening) — falls back to style.css's own 2.8s default.
+function renderMetrics(metrics, accentColor, flyDurationSeconds) {
   const container = document.getElementById('metrics-boxes');
   const boxStyle = accentColor ? ` style="border-color:${accentColor}"` : '';
   const textStyle = accentColor ? ` style="color:${accentColor}"` : '';
@@ -762,16 +769,21 @@ function renderMetrics(metrics, accentColor) {
   const numEls = container.querySelectorAll('.metric-box-num');
   metrics.forEach((m, i) => animateCountUp(numEls[i], m.num));
 
-  // EXPERIMENTAL: pops in larger/lower on screen, then settles into its
-  // normal in-header spot as the count-up finishes — see .metrics-boxes'
-  // own animation in style.css (far more modest on narrow phones there,
-  // to stay clear of wrapping). This container is reused, not recreated,
-  // on every metrics update (only its innerHTML above changes), so a
-  // plain CSS animation on it would only ever play once on page load —
-  // removing the class, forcing a reflow, then re-adding it is what
-  // makes it replay every time renderMetrics runs.
+  // EXPERIMENTAL: pops in larger/closer to screen-middle, then settles
+  // into its normal in-header spot as the count-up finishes — see
+  // .metrics-boxes' own animation in style.css (far more modest on narrow
+  // phones there, to stay clear of wrapping). This container is reused,
+  // not recreated, on every metrics update (only its innerHTML above
+  // changes), so a plain CSS animation on it would only ever play once on
+  // page load — removing the class, forcing a reflow, then re-adding it
+  // is what makes it replay every time renderMetrics runs.
   container.classList.remove('metrics-pop-in');
   void container.offsetWidth;
+  // Floored at 1.2s — a short hop between two adjacent countries/pins
+  // would otherwise hand this a fraction-of-a-second flight time, turning
+  // the pop-in into an abrupt jump instead of the eye-catching arrival
+  // it's meant to be.
+  container.style.animationDuration = flyDurationSeconds ? `${Math.max(flyDurationSeconds, 1.2)}s` : '';
   container.classList.add('metrics-pop-in');
 }
 
@@ -793,11 +805,11 @@ function renderMetrics(metrics, accentColor) {
 // there.
 let lastMetricsSignature = null;
 
-function showMetricsOverlay(metrics, accentColor, labelHtml) {
+function showMetricsOverlay(metrics, accentColor, labelHtml, flyDurationSeconds) {
   const signature = JSON.stringify([metrics, accentColor, labelHtml]);
   const alreadyShowing = !state.overlayDismissed && signature === lastMetricsSignature;
   if (!alreadyShowing) {
-    renderMetrics(metrics, accentColor);
+    renderMetrics(metrics, accentColor, flyDurationSeconds);
     lastMetricsSignature = signature;
   }
   const labelEl = document.getElementById('metrics-label');
@@ -825,7 +837,7 @@ function showMetricsOverlay(metrics, accentColor, labelHtml) {
 // country somehow not in countriesWithVisiblePins (shouldn't happen for a
 // real ministry's own country, but the map click handler already guards
 // the same lookup, so this mirrors that rather than assuming).
-function showCountryMetricsOverlay(name) {
+function showCountryMetricsOverlay(name, flyDurationSeconds) {
   const present = state.countriesWithVisiblePins.get(name);
   if (!present || !present.size) return;
   // A country can only ever belong to one division in practice (see the
@@ -837,6 +849,7 @@ function showCountryMetricsOverlay(name) {
     state.metricsByCountry.get(name) || [],
     DIVISIONS[divisionKey].pin,
     `${flag ? `${flag} ` : ''}${escapeHtml(name)}`,
+    flyDurationSeconds,
   );
 }
 
@@ -2729,7 +2742,10 @@ async function init() {
             withSuppressedDismiss(() => {
               flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom, { duration }));
             });
-            showCountryMetricsOverlay(name);
+            // Metrics pop-in animation timed to match this same flyTo, so
+            // the boxes visibly settle into place right as the camera
+            // arrives instead of on their own shorter, independent clock.
+            showCountryMetricsOverlay(name, duration);
           }
         });
       },
@@ -4015,8 +4031,14 @@ function tourFlyToDivisionBounds(divisionKey) {
 async function tourGoToDivision(divisionKey) {
   restoreTourClustering();
   hideMetricsOverlay();
-  const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
   const flight = tourFlyToDivisionBounds(divisionKey);
+  // The pop-in's own animation length is set to whatever flight time is
+  // actually left once it reveals (not the flight's full duration — it
+  // only starts partway through, at TOUR_LABEL_REVEAL_FRACTION), so it
+  // settles into place right as the camera lands rather than on its own
+  // shorter, independent clock.
+  const remaining = flight ? flight.duration * (1 - TOUR_LABEL_REVEAL_FRACTION) : undefined;
+  const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label), remaining);
   if (flight) {
     setTimeout(reveal, flight.duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
     await flight.promise;
@@ -4049,8 +4071,10 @@ async function tourGoToDivisionOverview(divisionKey) {
   restoreTourClustering();
   hideMetricsOverlay();
   setHighlightedCountry(null);
-  const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label));
   const flight = tourFlyToDivisionBounds(divisionKey);
+  // See tourGoToDivision's own comment on this same calculation.
+  const remaining = flight ? flight.duration * (1 - TOUR_LABEL_REVEAL_FRACTION) : undefined;
+  const reveal = () => showMetricsOverlay(state.metricsByDivision.get(divisionKey) || [], DIVISIONS[divisionKey].pin, escapeHtml(DIVISIONS[divisionKey].label), remaining);
   if (flight) {
     setTimeout(reveal, flight.duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
     await flight.promise;
@@ -4110,7 +4134,9 @@ async function tourGoToCountry(name) {
   const info = countryBoundsAndZoom(name);
   if (!info) return;
   const duration = tourCountryLegDuration(info.target, info.targetZoom);
-  setTimeout(() => showCountryMetricsOverlay(name), duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
+  // See tourGoToDivision's own comment on this same calculation.
+  const remaining = duration * (1 - TOUR_LABEL_REVEAL_FRACTION);
+  setTimeout(() => showCountryMetricsOverlay(name, remaining), duration * TOUR_LABEL_REVEAL_FRACTION * 1000);
   await tourFlyToAndWait(() => map.flyTo(info.target, info.targetZoom, { duration }), duration);
 }
 
