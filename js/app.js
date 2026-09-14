@@ -846,6 +846,10 @@ function showMetricsOverlay(metrics, accentColor, labelHtml, flyDurationSeconds,
     labelEl.style.animationDuration = flyDurationSeconds ? `${Math.max(flyDurationSeconds, 1.2)}s` : '';
     labelEl.classList.add('metrics-label-pop-in');
   }
+  // Outline matches the metric boxes' own accent-colored border (see
+  // renderMetrics' boxStyle) instead of the fixed --ink default — '' falls
+  // back to that default for World (accentColor is null there).
+  labelEl.style.borderColor = accentColor || '';
   if (labelHtml) {
     labelEl.innerHTML = labelHtml;
     labelEl.hidden = false;
