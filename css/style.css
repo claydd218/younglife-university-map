@@ -244,6 +244,15 @@ h1, h2, h3, .legend-label, .cluster-badge {
   color: var(--ink);
 }
 
+/* Author CSS beats the UA stylesheet's own [hidden] { display: none }
+   regardless of specificity — the explicit display: inline-block above
+   was silently overriding it, so World's empty label (showMetricsOverlay
+   sets [hidden] when there's no labelHtml) stayed visible as an empty
+   card. Confirmed live. */
+.metrics-label[hidden] {
+  display: none;
+}
+
 /* EXPERIMENTAL: flies in from the same point the metrics boxes pop in
    from (--metrics-pop-x/-y, set on their shared ancestor #metrics-overlay
    — see renderMetrics in js/app.js) alongside them, so the label and the
