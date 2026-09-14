@@ -4197,11 +4197,22 @@ function tourPinWillShowPhotos(row) {
 // tourPinAnchorScreenY. Computed via project/unproject at the target zoom
 // rather than a fixed lat/lng offset, since the same screen-pixel gap
 // means a different real-world distance depending on zoom.
+// markerIcon's own iconAnchor is the needle's tip, off-center toward the
+// icon's left edge — not the round head a visitor actually reads as "the
+// pin." A real Leaflet popup already corrects for this via that same
+// function's popupAnchor: [7, -17], landing back over the head's center
+// instead of the tip. This caption card has no such per-marker anchor
+// system (it's simple screen-centered CSS, not attached to the marker at
+// all), so without the same +7px correction here, flying the needle tip
+// to screen-center left the head — and the card's tip, meant to point at
+// it — visibly off to the left of it instead.
+const TOUR_PIN_HEAD_X_OFFSET_PX = 7;
+
 function tourPinLandingLatLng(target, targetZoom, willShowPhotos) {
   const mapSize = map.getSize();
   const desiredScreenY = tourPinAnchorScreenY(willShowPhotos);
   const targetPoint = map.project(target, targetZoom);
-  const centerPoint = targetPoint.add([0, mapSize.y / 2 - desiredScreenY]);
+  const centerPoint = targetPoint.add([TOUR_PIN_HEAD_X_OFFSET_PX, mapSize.y / 2 - desiredScreenY]);
   return map.unproject(centerPoint, targetZoom);
 }
 
