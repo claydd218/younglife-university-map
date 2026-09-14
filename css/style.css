@@ -270,8 +270,13 @@ h1, h2, h3, .legend-label, .cluster-badge {
   animation: metrics-pop-in 2.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes metrics-pop-in {
-  from { transform: scale(1.8) translate(var(--metrics-pop-x, 0px), var(--metrics-pop-y, 140px)); }
-  to { transform: scale(1) translate(0, 0); }
+  /* translate() before scale() deliberately — the reverse order (as this
+     briefly was) applies the translate inside the already-scaled
+     coordinate system, multiplying the real click-to-box pixel distance
+     by the scale factor and landing well past the actual click point
+     (confirmed live: consistently overshot south of the real click). */
+  from { transform: translate(var(--metrics-pop-x, 0px), var(--metrics-pop-y, 140px)) scale(1.8); }
+  to { transform: translate(0, 0) scale(1); }
 }
 /* Scaling up by the same amount here would push .metrics-boxes' own
    flex-wrap into wrapping the whole time it's enlarged — this stays a
@@ -279,8 +284,8 @@ h1, h2, h3, .legend-label, .cluster-badge {
    already close to one-line-wide at their normal size. */
 @media (max-width: 640px) {
   @keyframes metrics-pop-in {
-    from { transform: scale(1.35) translate(var(--metrics-pop-x, 0px), var(--metrics-pop-y, 48px)); }
-    to { transform: scale(1) translate(0, 0); }
+    from { transform: translate(var(--metrics-pop-x, 0px), var(--metrics-pop-y, 48px)) scale(1.35); }
+    to { transform: translate(0, 0) scale(1); }
   }
 }
 
