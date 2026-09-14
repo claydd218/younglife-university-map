@@ -75,7 +75,7 @@ const DIVISIONS = {
     pin: '#c99e00',
   },
   middle_east_central_asia: {
-    label: 'Middle East & Central Asia',
+    label: 'Middle EurAsia',
     country: '#eda65f',
     pin: '#e0631a',
   },

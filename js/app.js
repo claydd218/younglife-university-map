@@ -3176,7 +3176,7 @@ async function init() {
     // enough to keep them anyway — Norway sits well within 15° of Germany,
     // for instance. These two get a stricter rule: a country counts only
     // if it has its own ministry marker, full stop, no proximity fallback.
-    // Middle East & Central Asia and Latin America & Caribbean keep the
+    // Middle EurAsia and Latin America & Caribbean keep the
     // proximity rule deliberately — most of what makes their maps look
     // right (Turkey/Iran/Saudi Arabia in the former, several Latin
     // American countries in the latter) comes from countries near real
@@ -3349,8 +3349,8 @@ async function init() {
       let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
       // Proximity alone (nearMarker) pulls in whichever direction the
       // nearest neighboring countries happen to sit, which isn't always
-      // where the map should actually extend — Middle East & Central
-      // Asia's markers (Russia, Kazakhstan, Uzbekistan, Kyrgyzstan) are
+      // where the map should actually extend — Middle EurAsia's markers
+      // (Russia, Kazakhstan, Uzbekistan, Kyrgyzstan) are
       // roughly as close to Turkey (worth keeping) as to Iran/Iraq/
       // Afghanistan (not, once they pull the frame's south edge that far
       // down). coreMinLat tracks how far south the anchor/own-marker/

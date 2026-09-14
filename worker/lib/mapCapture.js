@@ -60,8 +60,8 @@ function withTimeout(promise, ms, message) {
 }
 
 // Divisions vary hugely in shape, not just size — Europe is tall and
-// narrow (Iceland to Turkey), Middle East & Central Asia is wide and flat
-// (Turkey to Russia's Pacific coast). Rather than force every division
+// narrow (Iceland to Turkey), Middle EurAsia is wide and flat (Turkey to
+// Russia's Pacific coast). Rather than force every division
 // into the same fixed rectangle (leaving empty ocean padded onto whichever
 // axis doesn't need it), the longer axis is capped at DIVISION_MAX_DIM and
 // the other axis is sized to whatever the division's own bounds need —
