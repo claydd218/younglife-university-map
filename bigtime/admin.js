@@ -3563,17 +3563,37 @@ async function renderRestrictedCountriesSection() {
   const list = $('restricted-countries-list');
   list.innerHTML = '<span class="status-text">Loading…</span>';
   try {
-    const countries = [...new Set(state.rows.map((r) => r.country).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const countries = [...new Set(state.rows.map((r) => r.country).filter(Boolean))];
     const current = await apiFetch('/restricted-access');
     const restricted = new Set(current.countries);
     if (!countries.length) {
       list.innerHTML = '<span class="status-text">No countries found yet — add a ministry area first.</span>';
     } else {
-      list.innerHTML = countries.map((country) => `
-        <label>
-          <input type="checkbox" value="${escapeHtml(country)}" ${restricted.has(country) ? 'checked' : ''}>
-          ${escapeHtml(country)}
-        </label>
+      // Same grouping as the Ministries tab (state.divisionByCountry, from
+      // country-divisions.csv) so this reads the same way — a country not
+      // in that CSV still needs to be reachable to restrict, so it gets
+      // its own uncolored "Other" group rather than being silently dropped.
+      const byDivision = new Map();
+      const other = [];
+      for (const country of countries) {
+        const divisionKey = state.divisionByCountry.get(country);
+        if (!divisionKey) { other.push(country); continue; }
+        if (!byDivision.has(divisionKey)) byDivision.set(divisionKey, []);
+        byDivision.get(divisionKey).push(country);
+      }
+      const groups = Object.keys(DIVISIONS)
+        .filter((key) => byDivision.has(key))
+        .map((key) => ({ label: DIVISIONS[key].label, color: DIVISIONS[key].pin, countries: byDivision.get(key) }));
+      if (other.length) groups.push({ label: 'Other (country not in country-divisions.csv)', color: '#888', countries: other });
+
+      list.innerHTML = groups.map((group) => `
+        <h2 class="division" style="color: ${group.color}; border-bottom-color: ${group.color};">${escapeHtml(group.label)}</h2>
+        ${group.countries.slice().sort((a, b) => a.localeCompare(b)).map((country) => `
+          <label>
+            <input type="checkbox" value="${escapeHtml(country)}" ${restricted.has(country) ? 'checked' : ''}>
+            ${escapeHtml(country)}
+          </label>
+        `).join('')}
       `).join('');
     }
     $('restricted-access-mode').value = current.mode || 'full_country';
