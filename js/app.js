@@ -788,13 +788,18 @@ function renderMetrics(metrics, accentColor, flyDurationSeconds, originPoint) {
   // real resting position, untouched by the pop-in transform itself.
   container.classList.remove('metrics-pop-in');
   void container.offsetWidth;
+  // Set on the shared #metrics-overlay parent, not this container itself
+  // — #metrics-label (a sibling) inherits the same two custom properties
+  // from there, so showMetricsOverlay's own label animation flies in from
+  // this exact same point instead of needing its own separate calculation.
+  const overlayEl = container.parentElement;
   if (originPoint) {
     const rect = container.getBoundingClientRect();
-    container.style.setProperty('--metrics-pop-x', `${originPoint.x - (rect.left + rect.width / 2)}px`);
-    container.style.setProperty('--metrics-pop-y', `${originPoint.y - (rect.top + rect.height / 2)}px`);
+    overlayEl.style.setProperty('--metrics-pop-x', `${originPoint.x - (rect.left + rect.width / 2)}px`);
+    overlayEl.style.setProperty('--metrics-pop-y', `${originPoint.y - (rect.top + rect.height / 2)}px`);
   } else {
-    container.style.removeProperty('--metrics-pop-x');
-    container.style.removeProperty('--metrics-pop-y');
+    overlayEl.style.removeProperty('--metrics-pop-x');
+    overlayEl.style.removeProperty('--metrics-pop-y');
   }
   // Floored at 1.2s — a short hop between two adjacent countries/pins
   // would otherwise hand this a fraction-of-a-second flight time, turning
@@ -825,11 +830,22 @@ let lastMetricsSignature = null;
 function showMetricsOverlay(metrics, accentColor, labelHtml, flyDurationSeconds, originPoint) {
   const signature = JSON.stringify([metrics, accentColor, labelHtml]);
   const alreadyShowing = !state.overlayDismissed && signature === lastMetricsSignature;
+  const labelEl = document.getElementById('metrics-label');
   if (!alreadyShowing) {
     renderMetrics(metrics, accentColor, flyDurationSeconds, originPoint);
     lastMetricsSignature = signature;
+
+    // Flies in alongside the boxes — same shared --metrics-pop-x/-y (set
+    // on their common #metrics-overlay parent, above) and the same
+    // duration, so the two visibly arrive together. No scale here, unlike
+    // the boxes' own enlarge-then-settle treatment — just position/fade.
+    // Restarted the same reflow-forcing way, since this element is reused
+    // too, not recreated.
+    labelEl.classList.remove('metrics-label-pop-in');
+    void labelEl.offsetWidth;
+    labelEl.style.animationDuration = flyDurationSeconds ? `${Math.max(flyDurationSeconds, 1.2)}s` : '';
+    labelEl.classList.add('metrics-label-pop-in');
   }
-  const labelEl = document.getElementById('metrics-label');
   if (labelHtml) {
     labelEl.innerHTML = labelHtml;
     labelEl.hidden = false;

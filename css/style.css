@@ -222,22 +222,41 @@ h1, h2, h3, .legend-label, .cluster-badge {
    its flag) — shown for every view except World, whose metrics are the
    default/ambient state rather than a selection that needs naming (see
    showMetricsOverlay in js/app.js, which leaves this [hidden] for World).
-   Colored the same as the main site title, not the division's own accent
-   — the boxes below it still use the accent (see renderMetrics). */
+   Same card chrome as the tour's own .lightbox-tour-caption (parchment
+   background, ink border, same shadow/font) rather than the old glowing-
+   text treatment, so this reads as the same kind of "place name" label
+   wherever it shows up. inline-block (not the old block + margin:auto) so
+   the card hugs just the text instead of stretching full-width — centered
+   via .site-header's own text-align:center, inherited. */
 .metrics-label {
-  margin: 0 auto 6px;
-  font-family: 'Cinzel', serif;
-  font-size: 24px;
+  display: inline-block;
+  margin: 0 0 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  padding: 6px 16px;
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.35);
+  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-align: center;
-  /* Same parchment glow the main site title now has, not the ocean
-     labels' own coastal blue. */
-  text-shadow: 0 0 8px var(--parchment), 0 0 8px var(--parchment), 0 0 12px var(--parchment), 0 1px 0 rgba(255,255,255,0.5);
-  /* Same color as the main site title (.site-header h1), not the
-     division's own accent — the metric boxes below still use the accent
-     (see renderMetrics), just not this label itself anymore. */
   color: var(--ink);
+}
+
+/* EXPERIMENTAL: flies in from the same point the metrics boxes pop in
+   from (--metrics-pop-x/-y, set on their shared ancestor #metrics-overlay
+   — see renderMetrics in js/app.js) alongside them, so the label and the
+   boxes visibly arrive together. No scale — just position and a fade,
+   unlike the boxes' own enlarge-then-settle treatment. Restarted the same
+   way (class removed then re-added) since this element is reused, not
+   recreated, across updates. */
+.metrics-label.metrics-label-pop-in {
+  animation: metrics-label-pop-in 2.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes metrics-label-pop-in {
+  from { transform: translate(var(--metrics-pop-x, 0px), var(--metrics-pop-y, 140px)); opacity: 0; }
+  to { transform: translate(0, 0); opacity: 1; }
 }
 
 .metrics-boxes {
