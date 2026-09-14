@@ -4992,6 +4992,19 @@ function wireTourSettingsDialog() {
     saveTourSettings();
     renderTourSettingsDialog();
   });
+  document.getElementById('tour-settings-countries-none').addEventListener('click', () => {
+    if (!currentTourDivisionKeys || currentTourDivisionKeys.length > 1) return;
+    const divisionKey = currentTourDivisionKeys[0];
+    const countries = countriesInDivisionByProximity(divisionKey).slice().sort();
+    // Leaves the first country checked rather than true zero — the
+    // per-checkbox change handler already refuses to leave a division
+    // with nothing checked (see renderTourSettingsDialog), so a real
+    // "uncheck everything" button would just fail on its own last click;
+    // this gets to the same "basically none" result without that dead end.
+    tourSettings.excludedCountriesByDivision[divisionKey] = countries.slice(1);
+    saveTourSettings();
+    renderTourSettingsDialog();
+  });
 }
 
 // Lands every visitor in the ready-to-play World tour state on load —
