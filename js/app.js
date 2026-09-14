@@ -756,7 +756,13 @@ function animateCountUp(el, target) {
 // their own independent (and usually shorter) 2.8s clock. Omitted for
 // reveals with no flight to match (World refresh, a ministry popup
 // opening) — falls back to style.css's own 2.8s default.
-function renderMetrics(metrics, accentColor, flyDurationSeconds) {
+// originPoint: {x, y} in viewport pixels — where the triggering click
+// actually happened (see the country click handler's e.originalEvent),
+// so the pop-in visibly rises up from that exact spot instead of a
+// generic fixed offset. Omitted for reveals with nothing to point back to
+// (a tour leg, World refresh, a ministry popup opening) — style.css's own
+// var() fallbacks cover those.
+function renderMetrics(metrics, accentColor, flyDurationSeconds, originPoint) {
   const container = document.getElementById('metrics-boxes');
   const boxStyle = accentColor ? ` style="border-color:${accentColor}"` : '';
   const textStyle = accentColor ? ` style="color:${accentColor}"` : '';
@@ -769,16 +775,27 @@ function renderMetrics(metrics, accentColor, flyDurationSeconds) {
   const numEls = container.querySelectorAll('.metric-box-num');
   metrics.forEach((m, i) => animateCountUp(numEls[i], m.num));
 
-  // EXPERIMENTAL: pops in larger/closer to screen-middle, then settles
-  // into its normal in-header spot as the count-up finishes — see
-  // .metrics-boxes' own animation in style.css (far more modest on narrow
-  // phones there, to stay clear of wrapping). This container is reused,
-  // not recreated, on every metrics update (only its innerHTML above
-  // changes), so a plain CSS animation on it would only ever play once on
-  // page load — removing the class, forcing a reflow, then re-adding it
-  // is what makes it replay every time renderMetrics runs.
+  // EXPERIMENTAL: pops in larger, from wherever the triggering click
+  // happened, then settles into its normal in-header spot as the count-up
+  // finishes — see .metrics-boxes' own animation in style.css (far more
+  // modest on narrow phones there, to stay clear of wrapping). This
+  // container is reused, not recreated, on every metrics update (only its
+  // innerHTML above changes), so a plain CSS animation on it would only
+  // ever play once on page load — removing the class, forcing a reflow,
+  // then re-adding it is what makes it replay every time renderMetrics
+  // runs. The reflow point (class just removed, not yet re-added) is also
+  // exactly when getBoundingClientRect() below reports this container's
+  // real resting position, untouched by the pop-in transform itself.
   container.classList.remove('metrics-pop-in');
   void container.offsetWidth;
+  if (originPoint) {
+    const rect = container.getBoundingClientRect();
+    container.style.setProperty('--metrics-pop-x', `${originPoint.x - (rect.left + rect.width / 2)}px`);
+    container.style.setProperty('--metrics-pop-y', `${originPoint.y - (rect.top + rect.height / 2)}px`);
+  } else {
+    container.style.removeProperty('--metrics-pop-x');
+    container.style.removeProperty('--metrics-pop-y');
+  }
   // Floored at 1.2s — a short hop between two adjacent countries/pins
   // would otherwise hand this a fraction-of-a-second flight time, turning
   // the pop-in into an abrupt jump instead of the eye-catching arrival
@@ -805,11 +822,11 @@ function renderMetrics(metrics, accentColor, flyDurationSeconds) {
 // there.
 let lastMetricsSignature = null;
 
-function showMetricsOverlay(metrics, accentColor, labelHtml, flyDurationSeconds) {
+function showMetricsOverlay(metrics, accentColor, labelHtml, flyDurationSeconds, originPoint) {
   const signature = JSON.stringify([metrics, accentColor, labelHtml]);
   const alreadyShowing = !state.overlayDismissed && signature === lastMetricsSignature;
   if (!alreadyShowing) {
-    renderMetrics(metrics, accentColor, flyDurationSeconds);
+    renderMetrics(metrics, accentColor, flyDurationSeconds, originPoint);
     lastMetricsSignature = signature;
   }
   const labelEl = document.getElementById('metrics-label');
@@ -837,7 +854,7 @@ function showMetricsOverlay(metrics, accentColor, labelHtml, flyDurationSeconds)
 // country somehow not in countriesWithVisiblePins (shouldn't happen for a
 // real ministry's own country, but the map click handler already guards
 // the same lookup, so this mirrors that rather than assuming).
-function showCountryMetricsOverlay(name, flyDurationSeconds) {
+function showCountryMetricsOverlay(name, flyDurationSeconds, originPoint) {
   const present = state.countriesWithVisiblePins.get(name);
   if (!present || !present.size) return;
   // A country can only ever belong to one division in practice (see the
@@ -850,6 +867,7 @@ function showCountryMetricsOverlay(name, flyDurationSeconds) {
     DIVISIONS[divisionKey].pin,
     `${flag ? `${flag} ` : ''}${escapeHtml(name)}`,
     flyDurationSeconds,
+    originPoint,
   );
 }
 
@@ -2742,10 +2760,15 @@ async function init() {
             withSuppressedDismiss(() => {
               flyToWithRedrawWatch(() => map.flyTo(bounds.getCenter(), targetZoom, { duration }));
             });
-            // Metrics pop-in animation timed to match this same flyTo, so
-            // the boxes visibly settle into place right as the camera
-            // arrives instead of on their own shorter, independent clock.
-            showCountryMetricsOverlay(name, duration);
+            // Metrics pop-in animation timed to match this same flyTo, and
+            // set to originate from the actual click point — e.containerPoint
+            // (map-container-relative, works for touch same as mouse) plus
+            // the container's own viewport offset, rather than
+            // e.originalEvent.clientX/Y, which a touch event doesn't
+            // reliably carry.
+            const mapRect = map.getContainer().getBoundingClientRect();
+            const originPoint = { x: mapRect.left + e.containerPoint.x, y: mapRect.top + e.containerPoint.y };
+            showCountryMetricsOverlay(name, duration, originPoint);
           }
         });
       },

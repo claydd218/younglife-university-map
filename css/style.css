@@ -250,24 +250,28 @@ h1, h2, h3, .legend-label, .cluster-badge {
   transform-origin: top center;
 }
 
-/* EXPERIMENTAL: starts larger and closer to the middle of the screen, then
+/* EXPERIMENTAL: starts larger and originating from wherever the triggering
+   click actually happened on screen (a country click, most visibly), then
    settles into its normal in-header position as the count-up
    (METRIC_COUNT_UP_MS, js/app.js) finishes — restarted on every
    renderMetrics call (that function removes then re-adds this class)
    since the container itself is reused, not recreated. `both` holds the
    enlarged starting transform for the instant before the animation
    actually kicks in, and holds identity afterward, so it never snaps to
-   an unstyled state on either end. Duration is set inline by JS to match
-   whatever camera flight is carrying it there (see renderMetrics'
-   flyDurationSeconds param) when there is one; the 2.8s here is just the
-   fallback for cases with no flight to match (World refresh, a ministry
-   popup opening, etc). */
+   an unstyled state on either end. --metrics-pop-x/-y are set inline by
+   JS (renderMetrics' originPoint param) to the click point's own offset
+   from this container's resting position; the var() fallbacks here (0px,
+   140px — generic "rise up from the middle-ish" default) cover every
+   call with no real click to originate from (a tour leg, World refresh,
+   a ministry popup opening). Duration is likewise set inline to match
+   whatever camera flight is carrying it there when there is one; the
+   2.8s here is just that same no-flight fallback. */
 .metrics-boxes.metrics-pop-in {
   animation: metrics-pop-in 2.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes metrics-pop-in {
-  from { transform: scale(1.8) translateY(140px); }
-  to { transform: scale(1) translateY(0); }
+  from { transform: scale(1.8) translate(var(--metrics-pop-x, 0px), var(--metrics-pop-y, 140px)); }
+  to { transform: scale(1) translate(0, 0); }
 }
 /* Scaling up by the same amount here would push .metrics-boxes' own
    flex-wrap into wrapping the whole time it's enlarged — this stays a
@@ -275,8 +279,8 @@ h1, h2, h3, .legend-label, .cluster-badge {
    already close to one-line-wide at their normal size. */
 @media (max-width: 640px) {
   @keyframes metrics-pop-in {
-    from { transform: scale(1.35) translateY(48px); }
-    to { transform: scale(1) translateY(0); }
+    from { transform: scale(1.35) translate(var(--metrics-pop-x, 0px), var(--metrics-pop-y, 48px)); }
+    to { transform: scale(1) translate(0, 0); }
   }
 }
 
