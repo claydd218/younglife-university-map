@@ -1130,6 +1130,15 @@ img.popup-photo {
   padding-top: 0;
 }
 
+/* Without this, the last item's own 12px bottom padding stacked on top of
+   the wrapping .popup-body's 16px bottom padding (28px total) — more
+   trailing space than every other section gets, which stands out now
+   that dividers/spacing are supposed to read consistently across all of
+   them (see buildPopupHtml's own comment). */
+.popup-staff-item:last-child {
+  padding-bottom: 0;
+}
+
 .popup-staff-photo {
   width: 58px;
   height: 58px;
@@ -1596,6 +1605,14 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
 
 .popup-universities li {
   margin: 3px 0;
+}
+
+.popup-universities li:first-child {
+  margin-top: 0;
+}
+
+.popup-universities li:last-child {
+  margin-bottom: 0;
 }
 
 .university-year {
