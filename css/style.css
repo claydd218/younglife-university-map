@@ -1085,6 +1085,16 @@ img.popup-photo {
   padding: 14px 16px 16px;
 }
 
+/* Shared by every optional section after the header (blurb, video, staff,
+   universities) that isn't immediately preceded by the photo — see
+   buildPopupHtml's own comment on the divider rule this implements.
+   Plain border-top rather than each section growing its own bespoke
+   margin/padding/border combo (the old per-section approach, and the
+   source of both the missing- and doubled-divider bugs this replaced). */
+.popup-section-divider {
+  border-top: 1px solid var(--border-soft);
+}
+
 .popup-header-body {
   padding-bottom: 10px;
 }
@@ -1579,9 +1589,8 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
 
 .popup-universities {
   list-style: none;
-  margin: 10px 0 0;
-  padding: 10px 0 0;
-  border-top: 1px solid var(--border-soft);
+  margin: 0;
+  padding: 0;
   font-size: 16px;
 }
 
@@ -1594,17 +1603,14 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
   font-style: italic;
 }
 
-.popup-blurb-body {
-  padding: 12px 16px 0;
-}
-
 /* Leaflet's own stylesheet sets ".leaflet-popup-content p { margin: 18px 0 }"
    at higher specificity than a single class, which was silently winning over
-   margin:0 below and throwing off the top/bottom balance. */
+   margin:0 below and throwing off the top/bottom balance. Spacing/divider
+   around the blurb as a whole comes from its wrapping .popup-body
+   .popup-section-divider (same as every other section) rather than its
+   own bespoke padding/border — see buildPopupHtml's own comment. */
 .popup-card .popup-blurb {
   margin: 0;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-soft);
   font-size: 16px;
   line-height: 1.5;
   font-style: italic;
@@ -1636,16 +1642,6 @@ body.tour-active #ministry-lightbox .lightbox-backdrop {
   fill: currentColor;
 }
 
-/* Same separator (and same whitespace) staff->universities already gets —
-   see .popup-universities above — applied here so it only shows up when a
-   video link is actually the thing directly before staff/universities,
-   rather than unconditionally on .popup-staff itself. */
-.popup-video-link + .popup-staff,
-.popup-video-link + .popup-universities {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-soft);
-}
 
 /* ---------- Leaflet control chrome (zoom + search), matched to the legend ---------- */
 

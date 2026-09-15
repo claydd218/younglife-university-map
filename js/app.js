@@ -524,18 +524,46 @@ function buildPopupHtml(row, divisionKey) {
       </a>`
     : '';
 
+  // Ordered list of everything that can optionally follow the header —
+  // each own its own .popup-body (consistent 14/16/16 padding, same as
+  // the header itself) rather than the old mix of bespoke padding/margin
+  // values per section (.popup-blurb-body's own 12/16/0, .popup-
+  // universities' own 10px margin-top, etc.), which is what made
+  // "consistent white space between every section" hard to actually
+  // guarantee — each section case just built its own spacing by hand.
+  //
+  // Divider rule: every section gets a divider (.popup-section-divider,
+  // a plain border-top) immediately before it, EXCEPT the photo itself
+  // (already bordered top+bottom in .popup-photo, so it doesn't need
+  // this class) or whatever section immediately follows the photo (the
+  // photo's own border-bottom already separates it from that section —
+  // adding this class there too would double up into two dividers back
+  // to back, confirmed live as the original "too many dividers" bug
+  // whenever a photo was immediately followed by a bordered section).
+  // A section with nothing before it but the header (no photo leading)
+  // still needs this class — that's the original "missing dividers" bug,
+  // e.g. no photo + staff-only, since .popup-staff carried no border of
+  // its own at all and nothing else supplied one.
+  const sections = [];
+  if (cityPhoto) sections.push({ isPhoto: true, html: cityPhoto });
+  if (row.blurb) sections.push({ wrapClass: 'popup-blurb-body', html: `<p class="popup-blurb">${escapeHtml(row.blurb)}</p>` });
+  if (videoHtml) sections.push({ wrapClass: 'popup-video-body', html: videoHtml });
+  if (staffHtml) sections.push({ wrapClass: 'popup-staff-body', html: staffHtml });
+  if (universitiesHtml) sections.push({ wrapClass: 'popup-universities-body', html: universitiesHtml });
+
+  const sectionsHtml = sections.map((section, i) => {
+    if (section.isPhoto) return section.html;
+    const followsPhoto = i > 0 && sections[i - 1].isPhoto;
+    const dividerClass = followsPhoto ? '' : ' popup-section-divider';
+    return `<div class="popup-body ${section.wrapClass}${dividerClass}">${section.html}</div>`;
+  }).join('');
+
   return `
     <div class="popup-card">
       <div class="popup-body popup-header-body">
         <h3>${flag ? `${flag} ` : ''}${escapeHtml(row.city)}</h3>
       </div>
-      ${cityPhoto}
-      ${row.blurb ? `<div class="popup-body popup-blurb-body"><p class="popup-blurb">${escapeHtml(row.blurb)}</p></div>` : ''}
-      <div class="popup-body">
-        ${videoHtml}
-        ${staffHtml}
-        ${universitiesHtml}
-      </div>
+      ${sectionsHtml}
     </div>
   `;
 }
