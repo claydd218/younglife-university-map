@@ -8,12 +8,23 @@
 import { jsonResponse, errorResponse } from '../lib/http.js';
 import { checkRestrictedPassword } from '../lib/db/restrictedAccess.js';
 import { createRestrictedUnlockCookie, clearRestrictedUnlockCookie, hasValidRestrictedUnlock } from '../lib/restrictedSession.js';
+import { isRestrictedLockedOut, recordRestrictedFailure, resetRestrictedFailures } from '../lib/restrictedRateLimit.js';
 
 export async function restrictedStatus({ request, env }) {
   return jsonResponse({ unlocked: await hasValidRestrictedUnlock(request, env) });
 }
 
 export async function restrictedUnlock({ request, env }) {
+  // Checked before reading the body at all — same reasoning as
+  // worker/routes/login.js's own isLoginLockedOut check — so a tripped
+  // lockout costs an attacker nothing extra, and a legitimate visitor who
+  // trips it themselves gets a distinct "too many attempts" message
+  // instead of a misleading "incorrect password" on their next (possibly
+  // correct) try.
+  if (await isRestrictedLockedOut(env)) {
+    return errorResponse(429, 'Too many attempts — try again in a few minutes.');
+  }
+
   let body;
   try {
     body = await request.json();
@@ -24,10 +35,14 @@ export async function restrictedUnlock({ request, env }) {
   if (!password) return errorResponse(400, 'Password is required');
 
   const ok = await checkRestrictedPassword(env, password);
-  if (!ok) return errorResponse(401, 'Incorrect password');
+  if (!ok) {
+    await recordRestrictedFailure(env);
+    return errorResponse(401, 'Incorrect password');
+  }
 
   try {
     const cookie = await createRestrictedUnlockCookie(env);
+    await resetRestrictedFailures(env);
     return jsonResponse({ ok: true }, { headers: { 'Set-Cookie': cookie } });
   } catch (err) {
     console.error('Restricted unlock failed after password check passed:', err);
