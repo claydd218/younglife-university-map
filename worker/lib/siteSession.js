@@ -28,6 +28,13 @@ function timingSafeEqual(a, b) {
   return result === 0;
 }
 
+// SameSite=Lax, not Strict (unlike session.js/restrictedSession.js): this
+// cookie gates the top-level page navigation itself, and Strict withholds
+// it on any navigation arriving from another site — tapping a link in
+// Messages/Mail/a search result, which on iPhone is nearly every visit —
+// so the gate looked like it "forgot" the login every time. Lax still
+// sends it on those plain link navigations while keeping it off
+// cross-site POSTs.
 export async function createSiteSessionCookie(env) {
   if (!env.SITE_SESSION_SECRET) {
     throw new Error('SITE_SESSION_SECRET unavailable (mid-deploy?) — try again shortly');
@@ -35,11 +42,11 @@ export async function createSiteSessionCookie(env) {
   const expiresAt = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
   const sig = await hmacHex(env.SITE_SESSION_SECRET, String(expiresAt));
   const value = `${expiresAt}.${sig}`;
-  return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_DAYS * 24 * 60 * 60}`;
+  return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS * 24 * 60 * 60}`;
 }
 
 export function clearSiteSessionCookie() {
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+  return `${COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
 export async function hasValidSiteSession(request, env) {
