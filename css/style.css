@@ -205,14 +205,22 @@ h1, h2, h3, .legend-label, .cluster-badge {
   pointer-events: auto;
   cursor: pointer;
   opacity: 1;
-  transition: opacity 0.5s ease;
+  visibility: visible;
+  transition: opacity 0.5s ease, visibility 0s linear 0s;
 }
 
 /* Added by JS once the user pans, zooms, or opens a popup — see
    hideMetricsOverlay in js/app.js. Only ever removed by explicitly
    choosing "World" from the nav menu, never automatically. */
+/* visibility:hidden (flipped only after the 0.5s fade, via the delayed
+   visibility transition) on top of opacity:0 — iOS Safari was leaving the
+   faded boxes' and label's box-shadow edges painted as stray gray lines
+   across the header with opacity alone; visibility stops painting them
+   entirely. */
 .metrics-overlay.metrics-hidden {
   opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.5s ease, visibility 0s linear 0.5s;
   /* Back to none once faded — otherwise this invisible box would keep
      eating clicks meant for whatever country/marker sits underneath it. */
   pointer-events: none;
